@@ -1,3 +1,6 @@
+# Environment file (contains secrets)
+.env
+
 # Composer binary
 composer.phar
 
