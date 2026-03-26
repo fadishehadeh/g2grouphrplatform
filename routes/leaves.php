@@ -29,6 +29,16 @@ $router->get('/leave/requests', [LeaveController::class, 'requests'], [
     [PermissionMiddleware::class, $leaveVisibilityPermissions],
 ]);
 
+$router->get('/leave/requests/export-excel', [LeaveController::class, 'exportRequestsExcel'], [
+    ...$leaveBaseMiddleware,
+    [PermissionMiddleware::class, $leaveVisibilityPermissions],
+]);
+
+$router->get('/leave/requests/export-pdf', [LeaveController::class, 'exportRequestsPdf'], [
+    ...$leaveBaseMiddleware,
+    [PermissionMiddleware::class, $leaveVisibilityPermissions],
+]);
+
 $router->get('/leave/requests/{id}', [LeaveController::class, 'showRequest'], [
     ...$leaveBaseMiddleware,
     [PermissionMiddleware::class, $leaveVisibilityPermissions],

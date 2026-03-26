@@ -23,6 +23,16 @@ $router->get('/reports/headcount', [ReportController::class, 'headcount'], [
     [PermissionMiddleware::class, ['reports.view_hr', 'reports.view_team']],
 ]);
 
+$router->get('/reports/headcount/export-excel', [ReportController::class, 'exportHeadcountExcel'], [
+    ...$reportsBaseMiddleware,
+    [PermissionMiddleware::class, ['reports.view_hr', 'reports.view_team']],
+]);
+
+$router->get('/reports/headcount/export-pdf', [ReportController::class, 'exportHeadcountPdf'], [
+    ...$reportsBaseMiddleware,
+    [PermissionMiddleware::class, ['reports.view_hr', 'reports.view_team']],
+]);
+
 $router->get('/reports/department', [ReportController::class, 'department'], [
     ...$reportsBaseMiddleware,
     [PermissionMiddleware::class, ['reports.view_hr', 'reports.view_team']],

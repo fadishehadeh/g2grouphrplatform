@@ -317,6 +317,312 @@ final class EmployeeController extends Controller
             && (int) ($user['employee_id'] ?? 0) === $employeeId;
     }
 
+    public function exportExcel(Request $request): void
+    {
+        try {
+            $employees = $this->repository->exportEmployees();
+            $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+            $sheet = $spreadsheet->getActiveSheet();
+            $sheet->setTitle('Employees');
+
+            $headers = ['Employee Code', 'First Name', 'Middle Name', 'Last Name', 'Work Email', 'Personal Email',
+                'Phone', 'Department', 'Job Title', 'Designation', 'Line Manager', 'Company', 'Branch', 'Team',
+                'Employment Type', 'Employee Status', 'Nationality', 'Second Nationality', 'Gender',
+                'Date of Birth', 'Joining Date', 'Marital Status', 'Notes'];
+
+            $sheet->fromArray($headers, null, 'A1');
+            $headerStyle = $sheet->getStyle('A1:W1');
+            $headerStyle->getFont()->setBold(true);
+            $headerStyle->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setRGB('4472C4');
+            $headerStyle->getFont()->getColor()->setRGB('FFFFFF');
+
+            $row = 2;
+            foreach ($employees as $emp) {
+                $sheet->fromArray([
+                    $emp['employee_code'], $emp['first_name'], $emp['middle_name'] ?? '', $emp['last_name'],
+                    $emp['work_email'], $emp['personal_email'] ?? '', $emp['phone'] ?? '',
+                    $emp['department_name'] ?? '', $emp['job_title_name'] ?? '', $emp['designation_name'] ?? '',
+                    $emp['manager_name'] ?? '', $emp['company_name'] ?? '', $emp['branch_name'] ?? '',
+                    $emp['team_name'] ?? '', $emp['employment_type'] ?? '', $emp['employee_status'] ?? '',
+                    $emp['nationality'] ?? '', $emp['second_nationality'] ?? '', $emp['gender'] ?? '',
+                    $emp['date_of_birth'] ?? '', $emp['joining_date'] ?? '', $emp['marital_status'] ?? '',
+                    $emp['notes'] ?? '',
+                ], null, 'A' . $row);
+                $row++;
+            }
+
+            foreach (range('A', 'W') as $col) {
+                $sheet->getColumnDimension($col)->setAutoSize(true);
+            }
+
+            header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            header('Content-Disposition: attachment;filename="employees_' . date('Y-m-d') . '.xlsx"');
+            header('Cache-Control: max-age=0');
+            $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+            $writer->save('php://output');
+            exit;
+        } catch (Throwable $throwable) {
+            $this->app->session()->flash('error', 'Export failed: ' . $throwable->getMessage());
+            $this->redirect('/employees');
+        }
+    }
+
+    public function exportPdf(Request $request): void
+    {
+        try {
+            $employees = $this->repository->exportEmployees();
+            $pdf = new \TCPDF('L', 'mm', 'A3', true, 'UTF-8', false);
+            $pdf->SetCreator('HR System');
+            $pdf->SetTitle('Employee Directory');
+            $pdf->setPrintHeader(false);
+            $pdf->setPrintFooter(true);
+            $pdf->SetAutoPageBreak(true, 15);
+            $pdf->AddPage();
+            $pdf->SetFont('helvetica', 'B', 14);
+            $pdf->Cell(0, 10, 'Employee Directory - ' . date('d M Y'), 0, 1, 'C');
+            $pdf->Ln(4);
+
+            $html = '<table border="1" cellpadding="4" cellspacing="0" style="font-size:8px;">
+            <thead><tr style="background-color:#4472C4;color:#FFFFFF;font-weight:bold;">
+                <th>Code</th><th>Name</th><th>Work Email</th><th>Department</th><th>Job Title</th>
+                <th>Line Manager</th><th>Status</th><th>Joining Date</th><th>Phone</th><th>Nationality</th>
+            </tr></thead><tbody>';
+
+            foreach ($employees as $emp) {
+                $name = trim(($emp['first_name'] ?? '') . ' ' . ($emp['middle_name'] ?? '') . ' ' . ($emp['last_name'] ?? ''));
+                $statusBg = ($emp['employee_status'] ?? '') === 'active' ? '#D4EDDA' : '#F8F9FA';
+                $html .= '<tr>
+                    <td>' . htmlspecialchars($emp['employee_code'] ?? '') . '</td>
+                    <td>' . htmlspecialchars($name) . '</td>
+                    <td>' . htmlspecialchars($emp['work_email'] ?? '') . '</td>
+                    <td>' . htmlspecialchars($emp['department_name'] ?? '—') . '</td>
+                    <td>' . htmlspecialchars($emp['job_title_name'] ?? '—') . '</td>
+                    <td>' . htmlspecialchars($emp['manager_name'] ?? '—') . '</td>
+                    <td style="background-color:' . $statusBg . ';">' . htmlspecialchars($emp['employee_status'] ?? '') . '</td>
+                    <td>' . htmlspecialchars($emp['joining_date'] ?? '—') . '</td>
+                    <td>' . htmlspecialchars($emp['phone'] ?? '—') . '</td>
+                    <td>' . htmlspecialchars($emp['nationality'] ?? '—') . '</td>
+                </tr>';
+            }
+            $html .= '</tbody></table>';
+
+            $pdf->SetFont('helvetica', '', 8);
+            $pdf->writeHTML($html, true, false, true, false, '');
+
+            $pdf->Output('employees_' . date('Y-m-d') . '.pdf', 'D');
+            exit;
+        } catch (Throwable $throwable) {
+            $this->app->session()->flash('error', 'PDF export failed: ' . $throwable->getMessage());
+            $this->redirect('/employees');
+        }
+    }
+
+    public function importForm(Request $request): void
+    {
+        $this->render('employees.import', [
+            'title' => 'Import Employees',
+            'pageTitle' => 'Import Employees',
+        ]);
+    }
+
+    public function downloadTemplate(Request $request): void
+    {
+        try {
+            $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+            $sheet = $spreadsheet->getActiveSheet();
+            $sheet->setTitle('Employee Import Template');
+
+            $headers = ['employee_code', 'first_name', 'middle_name', 'last_name', 'work_email', 'personal_email',
+                'phone', 'department', 'job_title', 'designation', 'manager_employee_code', 'company', 'branch', 'team',
+                'employment_type', 'employee_status', 'nationality', 'second_nationality', 'gender',
+                'date_of_birth', 'joining_date', 'marital_status', 'notes'];
+
+            $sheet->fromArray($headers, null, 'A1');
+            $headerStyle = $sheet->getStyle('A1:W1');
+            $headerStyle->getFont()->setBold(true);
+            $headerStyle->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setRGB('4472C4');
+            $headerStyle->getFont()->getColor()->setRGB('FFFFFF');
+
+            // Add sample row
+            $sheet->fromArray(['EMP-0001', 'John', '', 'Doe', 'john.doe@company.com', '', '+971501234567',
+                'IT', 'Software Engineer', '', '', 'My Company', '', '', 'full_time', 'active',
+                'United Arab Emirates', '', 'male', '1990-01-15', '2025-01-01', 'single', ''], null, 'A2');
+
+            // Add a guide sheet
+            $guide = $spreadsheet->createSheet();
+            $guide->setTitle('Guide');
+            $guide->setCellValue('A1', 'Field');
+            $guide->setCellValue('B1', 'Required');
+            $guide->setCellValue('C1', 'Description');
+            $guide->getStyle('A1:C1')->getFont()->setBold(true);
+
+            $guideData = [
+                ['employee_code', 'YES', 'Unique code e.g. EMP-0001. Must not already exist.'],
+                ['first_name', 'YES', 'Employee first name'],
+                ['middle_name', 'No', 'Employee middle name (optional)'],
+                ['last_name', 'YES', 'Employee last name'],
+                ['work_email', 'YES', 'Unique work email address'],
+                ['personal_email', 'No', 'Personal email (optional)'],
+                ['phone', 'No', 'Phone number (optional)'],
+                ['department', 'No', 'Department name — must match an existing department exactly'],
+                ['job_title', 'No', 'Job title name — must match an existing job title exactly'],
+                ['designation', 'No', 'Designation name — must match an existing designation exactly'],
+                ['manager_employee_code', 'No', 'Employee code of the line manager (e.g. EMP-0001)'],
+                ['company', 'YES', 'Company name — must match an existing company exactly'],
+                ['branch', 'No', 'Branch name — must match an existing branch exactly'],
+                ['team', 'No', 'Team name — must match an existing team exactly'],
+                ['employment_type', 'YES', 'full_time, part_time, contract, intern, temporary'],
+                ['employee_status', 'No', 'draft, active, on_leave, terminated, resigned (default: draft)'],
+                ['nationality', 'No', 'Country name e.g. United Arab Emirates'],
+                ['second_nationality', 'No', 'Second nationality (optional)'],
+                ['gender', 'No', 'male, female, other'],
+                ['date_of_birth', 'No', 'Format: YYYY-MM-DD'],
+                ['joining_date', 'No', 'Format: YYYY-MM-DD'],
+                ['marital_status', 'No', 'single, married, divorced, widowed'],
+                ['notes', 'No', 'Any additional notes'],
+            ];
+            $guide->fromArray($guideData, null, 'A2');
+            foreach (['A', 'B', 'C'] as $col) {
+                $guide->getColumnDimension($col)->setAutoSize(true);
+            }
+
+            $spreadsheet->setActiveSheetIndex(0);
+
+            foreach (range('A', 'W') as $col) {
+                $sheet->getColumnDimension($col)->setAutoSize(true);
+            }
+
+            header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            header('Content-Disposition: attachment;filename="employee_import_template.xlsx"');
+            header('Cache-Control: max-age=0');
+            $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+            $writer->save('php://output');
+            exit;
+        } catch (Throwable $throwable) {
+            $this->app->session()->flash('error', 'Template download failed: ' . $throwable->getMessage());
+            $this->redirect('/employees/import');
+        }
+    }
+
+    public function import(Request $request): void
+    {
+        $this->validateCsrf($request, '/employees/import');
+
+        $file = $request->file('import_file');
+
+        if ($file === null || ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            $this->app->session()->flash('error', 'Please select a valid Excel file to upload.');
+            $this->redirect('/employees/import');
+        }
+
+        $ext = strtolower(pathinfo((string) $file['name'], PATHINFO_EXTENSION));
+        if (!in_array($ext, ['xlsx', 'xls'], true)) {
+            $this->app->session()->flash('error', 'Only .xlsx and .xls files are supported.');
+            $this->redirect('/employees/import');
+        }
+
+        try {
+            $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($file['tmp_name']);
+            $sheet = $spreadsheet->getActiveSheet();
+            $rows = $sheet->toArray(null, true, true, true);
+
+            if (count($rows) < 2) {
+                $this->app->session()->flash('error', 'The file appears to be empty. Please add employee data below the header row.');
+                $this->redirect('/employees/import');
+            }
+
+            // Parse header row
+            $headerRow = array_map(fn($v) => strtolower(trim((string) $v)), $rows[1] ?? []);
+            unset($rows[1]);
+
+            // Build lookup maps
+            $lookups = $this->repository->importLookups();
+
+            $errors = [];
+            $created = 0;
+            $rowNum = 1;
+
+            foreach ($rows as $row) {
+                $rowNum++;
+                $mapped = [];
+                foreach ($headerRow as $col => $field) {
+                    $mapped[$field] = trim((string) ($row[$col] ?? ''));
+                }
+
+                // Validate required fields
+                $reqErrors = [];
+                foreach (['employee_code', 'first_name', 'last_name', 'work_email', 'company', 'employment_type'] as $req) {
+                    if (($mapped[$req] ?? '') === '') {
+                        $reqErrors[] = $req;
+                    }
+                }
+                if ($reqErrors !== []) {
+                    $errors[] = "Row {$rowNum}: Missing required fields: " . implode(', ', $reqErrors);
+                    continue;
+                }
+
+                // Resolve lookups
+                $companyId = $lookups['companies'][strtolower($mapped['company'])] ?? null;
+                if ($companyId === null) {
+                    $errors[] = "Row {$rowNum}: Company \"{$mapped['company']}\" not found.";
+                    continue;
+                }
+
+                $data = [
+                    'employee_code' => $mapped['employee_code'],
+                    'company_id' => $companyId,
+                    'branch_id' => $lookups['branches'][strtolower($mapped['branch'] ?? '')] ?? null,
+                    'department_id' => $lookups['departments'][strtolower($mapped['department'] ?? '')] ?? null,
+                    'team_id' => $lookups['teams'][strtolower($mapped['team'] ?? '')] ?? null,
+                    'job_title_id' => $lookups['job_titles'][strtolower($mapped['job_title'] ?? '')] ?? null,
+                    'designation_id' => $lookups['designations'][strtolower($mapped['designation'] ?? '')] ?? null,
+                    'manager_employee_id' => $lookups['employees'][strtoupper($mapped['manager_employee_code'] ?? '')] ?? null,
+                    'first_name' => $mapped['first_name'],
+                    'middle_name' => $mapped['middle_name'] ?? '',
+                    'last_name' => $mapped['last_name'],
+                    'work_email' => $mapped['work_email'],
+                    'personal_email' => $mapped['personal_email'] ?? '',
+                    'phone' => $mapped['phone'] ?? '',
+                    'alternate_phone' => '',
+                    'date_of_birth' => $mapped['date_of_birth'] ?? '',
+                    'gender' => $mapped['gender'] ?? '',
+                    'marital_status' => $mapped['marital_status'] ?? '',
+                    'nationality' => $mapped['nationality'] ?? '',
+                    'second_nationality' => $mapped['second_nationality'] ?? '',
+                    'employment_type' => $mapped['employment_type'],
+                    'contract_type' => '',
+                    'joining_date' => $mapped['joining_date'] ?? '',
+                    'probation_start_date' => '',
+                    'probation_end_date' => '',
+                    'employee_status' => ($mapped['employee_status'] ?? '') !== '' ? $mapped['employee_status'] : 'draft',
+                    'notes' => $mapped['notes'] ?? '',
+                ];
+
+                try {
+                    $this->repository->createEmployee($data, $this->app->auth()->id());
+                    $created++;
+                } catch (Throwable $e) {
+                    $errors[] = "Row {$rowNum}: " . $e->getMessage();
+                }
+            }
+
+            if ($created > 0) {
+                $this->app->session()->flash('success', "{$created} employee(s) imported successfully." . ($errors !== [] ? ' Some rows had errors.' : ''));
+            }
+            if ($errors !== []) {
+                $this->app->session()->flash('import_errors', $errors);
+                if ($created === 0) {
+                    $this->app->session()->flash('error', 'No employees were imported. Please review the errors below.');
+                }
+            }
+
+            $this->redirect($created > 0 && $errors === [] ? '/employees' : '/employees/import');
+        } catch (Throwable $throwable) {
+            $this->app->session()->flash('error', 'Import failed: ' . $throwable->getMessage());
+            $this->redirect('/employees/import');
+        }
+    }
+
     private function emptyOptions(): array
     {
         return [

@@ -53,6 +53,7 @@ $isArchived = (($employee['archived_at'] ?? null) !== null) || $statusValue === 
                 <div class="col-md-6"><strong>Employment Type:</strong><br><?= e((string) ($employee['employment_type'] ?? '—')); ?></div>
                 <div class="col-md-6"><strong>Birth Date:</strong><br><?= e((string) (($employee['date_of_birth'] ?? '') !== '' ? $employee['date_of_birth'] : '—')); ?></div>
                 <div class="col-md-6"><strong>Nationality:</strong><br><?= e((string) (($employee['nationality'] ?? '') !== '' ? $employee['nationality'] : '—')); ?></div>
+                <div class="col-md-6"><strong>Second Nationality:</strong><br><?= e((string) (($employee['second_nationality'] ?? '') !== '' ? $employee['second_nationality'] : '—')); ?></div>
                 <div class="col-12"><strong>Notes:</strong><br><?= nl2br(e((string) (($employee['notes'] ?? '') !== '' ? $employee['notes'] : 'No notes added.'))); ?></div>
             </div>
         </div></div>

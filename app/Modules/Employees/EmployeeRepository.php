@@ -18,10 +18,12 @@ final class EmployeeRepository
     public function listEmployees(string $search = ''): array
     {
         $sql = "SELECT e.id, e.employee_code, CONCAT_WS(' ', e.first_name, e.middle_name, e.last_name) AS full_name,
-                       e.work_email, d.name AS department_name, jt.name AS job_title_name, e.employee_status, e.joining_date
+                       e.work_email, d.name AS department_name, jt.name AS job_title_name, e.employee_status, e.joining_date,
+                       CONCAT_WS(' ', m.first_name, m.middle_name, m.last_name) AS manager_name
                 FROM employees e
                 LEFT JOIN departments d ON d.id = e.department_id
                 LEFT JOIN job_titles jt ON jt.id = e.job_title_id
+                LEFT JOIN employees m ON m.id = e.manager_employee_id
                 WHERE e.archived_at IS NULL";
         $params = [];
 
@@ -119,17 +121,18 @@ final class EmployeeRepository
     {
         return $this->database->transaction(function (Database $database) use ($data, $actorId): int {
             $payload = $this->persistableData($data, $actorId);
+            $payload['created_by'] = $actorId;
 
             $database->execute(
                 'INSERT INTO employees (
                     employee_code, company_id, branch_id, department_id, team_id, job_title_id, designation_id, manager_employee_id,
                     first_name, middle_name, last_name, work_email, personal_email, phone, alternate_phone, date_of_birth,
-                    gender, marital_status, nationality, employment_type, contract_type, joining_date, probation_start_date,
+                    gender, marital_status, nationality, second_nationality, employment_type, contract_type, joining_date, probation_start_date,
                     probation_end_date, employee_status, notes, created_by, updated_by
                  ) VALUES (
                     :employee_code, :company_id, :branch_id, :department_id, :team_id, :job_title_id, :designation_id, :manager_employee_id,
                     :first_name, :middle_name, :last_name, :work_email, :personal_email, :phone, :alternate_phone, :date_of_birth,
-                    :gender, :marital_status, :nationality, :employment_type, :contract_type, :joining_date, :probation_start_date,
+                    :gender, :marital_status, :nationality, :second_nationality, :employment_type, :contract_type, :joining_date, :probation_start_date,
                     :probation_end_date, :employee_status, :notes, :created_by, :updated_by
                  )',
                 $payload
@@ -183,6 +186,7 @@ final class EmployeeRepository
                     gender = :gender,
                     marital_status = :marital_status,
                     nationality = :nationality,
+                    second_nationality = :second_nationality,
                     employment_type = :employment_type,
                     contract_type = :contract_type,
                     joining_date = :joining_date,
@@ -387,6 +391,7 @@ final class EmployeeRepository
             'gender',
             'marital_status',
             'nationality',
+            'second_nationality',
             'employment_type',
             'contract_type',
             'joining_date',
@@ -451,6 +456,54 @@ final class EmployeeRepository
         );
     }
 
+    public function exportEmployees(): array
+    {
+        return $this->database->fetchAll(
+            "SELECT e.employee_code, e.first_name, e.middle_name, e.last_name, e.work_email, e.personal_email,
+                    e.phone, e.employment_type, e.employee_status, e.nationality, e.second_nationality,
+                    e.gender, e.date_of_birth, e.joining_date, e.marital_status, e.notes,
+                    c.name AS company_name, b.name AS branch_name, d.name AS department_name,
+                    t.name AS team_name, jt.name AS job_title_name, ds.name AS designation_name,
+                    CONCAT_WS(' ', m.first_name, m.middle_name, m.last_name) AS manager_name
+             FROM employees e
+             LEFT JOIN companies c ON c.id = e.company_id
+             LEFT JOIN branches b ON b.id = e.branch_id
+             LEFT JOIN departments d ON d.id = e.department_id
+             LEFT JOIN teams t ON t.id = e.team_id
+             LEFT JOIN job_titles jt ON jt.id = e.job_title_id
+             LEFT JOIN designations ds ON ds.id = e.designation_id
+             LEFT JOIN employees m ON m.id = e.manager_employee_id
+             WHERE e.archived_at IS NULL
+             ORDER BY e.employee_code ASC"
+        );
+    }
+
+    public function importLookups(): array
+    {
+        $build = function (string $sql): array {
+            $map = [];
+            foreach ($this->database->fetchAll($sql) as $row) {
+                $map[strtolower((string) $row['name'])] = (int) $row['id'];
+            }
+            return $map;
+        };
+
+        $employees = [];
+        foreach ($this->database->fetchAll("SELECT id, employee_code FROM employees WHERE archived_at IS NULL") as $row) {
+            $employees[strtoupper((string) $row['employee_code'])] = (int) $row['id'];
+        }
+
+        return [
+            'companies' => $build('SELECT id, name FROM companies ORDER BY name'),
+            'branches' => $build('SELECT id, name FROM branches ORDER BY name'),
+            'departments' => $build("SELECT id, name FROM departments WHERE status = 'active' ORDER BY name"),
+            'teams' => $build("SELECT id, name FROM teams WHERE status = 'active' ORDER BY name"),
+            'job_titles' => $build("SELECT id, name FROM job_titles WHERE status = 'active' ORDER BY name"),
+            'designations' => $build("SELECT id, name FROM designations WHERE status = 'active' ORDER BY name"),
+            'employees' => $employees,
+        ];
+    }
+
     private function persistableData(array $data, ?int $actorId): array
     {
         return [
@@ -473,6 +526,7 @@ final class EmployeeRepository
             'gender' => $this->nullableString($data['gender'] ?? null),
             'marital_status' => $this->nullableString($data['marital_status'] ?? null),
             'nationality' => $this->nullableString($data['nationality'] ?? null),
+            'second_nationality' => $this->nullableString($data['second_nationality'] ?? null),
             'employment_type' => (string) $data['employment_type'],
             'contract_type' => $this->nullableString($data['contract_type'] ?? null),
             'joining_date' => $this->nullableString($data['joining_date'] ?? null),
@@ -480,7 +534,6 @@ final class EmployeeRepository
             'probation_end_date' => $this->nullableString($data['probation_end_date'] ?? null),
             'employee_status' => (string) ($data['employee_status'] ?? 'draft'),
             'notes' => $this->nullableString($data['notes'] ?? null),
-            'created_by' => $actorId,
             'updated_by' => $actorId,
         ];
     }

@@ -28,6 +28,31 @@ $router->post('/employees/create', [EmployeeController::class, 'store'], [
     [PermissionMiddleware::class, ['employee.create']],
 ]);
 
+$router->get('/employees/export-excel', [EmployeeController::class, 'exportExcel'], [
+    ...$employeeBaseMiddleware,
+    [PermissionMiddleware::class, ['employee.view_all']],
+]);
+
+$router->get('/employees/export-pdf', [EmployeeController::class, 'exportPdf'], [
+    ...$employeeBaseMiddleware,
+    [PermissionMiddleware::class, ['employee.view_all']],
+]);
+
+$router->get('/employees/import', [EmployeeController::class, 'importForm'], [
+    ...$employeeBaseMiddleware,
+    [PermissionMiddleware::class, ['employee.create']],
+]);
+
+$router->post('/employees/import', [EmployeeController::class, 'import'], [
+    ...$employeeBaseMiddleware,
+    [PermissionMiddleware::class, ['employee.create']],
+]);
+
+$router->get('/employees/import-template', [EmployeeController::class, 'downloadTemplate'], [
+    ...$employeeBaseMiddleware,
+    [PermissionMiddleware::class, ['employee.create']],
+]);
+
 $router->get('/employees/{id}', [EmployeeController::class, 'show'], [
     ...$employeeBaseMiddleware,
     [PermissionMiddleware::class, ['employee.view_all', 'employee.view_self']],

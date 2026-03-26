@@ -295,6 +295,101 @@ final class ReportController extends Controller
         return min($days, 365);
     }
 
+    public function exportHeadcountExcel(Request $request): void
+    {
+        ['canHr' => $canHr, 'scopeEmployeeId' => $scopeEmployeeId] = $this->reportScope();
+        $search = trim((string) $request->input('q', ''));
+        $status = $this->normalizeEnum($request->input('status', 'all'), self::EMPLOYEE_STATUSES, 'all');
+
+        try {
+            $employees = $this->repository->headcountEmployees($search, $status, $scopeEmployeeId);
+            $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+            $sheet = $spreadsheet->getActiveSheet();
+            $sheet->setTitle('Headcount');
+
+            $headers = ['Employee Code', 'Name', 'Email', 'Department', 'Job Title', 'Joining Date', 'Status'];
+            $sheet->fromArray($headers, null, 'A1');
+            $hs = $sheet->getStyle('A1:G1');
+            $hs->getFont()->setBold(true);
+            $hs->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setRGB('4472C4');
+            $hs->getFont()->getColor()->setRGB('FFFFFF');
+
+            $row = 2;
+            foreach ($employees as $emp) {
+                $sheet->fromArray([
+                    $emp['employee_code'] ?? '', $emp['employee_name'] ?? '', $emp['work_email'] ?? '',
+                    $emp['department_name'] ?? '', $emp['job_title_name'] ?? '',
+                    $emp['joining_date'] ?? '', $emp['employee_status'] ?? '',
+                ], null, 'A' . $row);
+                $row++;
+            }
+
+            foreach (range('A', 'G') as $col) {
+                $sheet->getColumnDimension($col)->setAutoSize(true);
+            }
+
+            header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            header('Content-Disposition: attachment;filename="headcount_report_' . date('Y-m-d') . '.xlsx"');
+            header('Cache-Control: max-age=0');
+
+            $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+            $writer->save('php://output');
+            exit;
+        } catch (\Throwable $throwable) {
+            $this->app->session()->flash('error', 'Export failed: ' . $throwable->getMessage());
+            $this->redirect('/reports/headcount');
+        }
+    }
+
+    public function exportHeadcountPdf(Request $request): void
+    {
+        ['canHr' => $canHr, 'scopeEmployeeId' => $scopeEmployeeId] = $this->reportScope();
+        $search = trim((string) $request->input('q', ''));
+        $status = $this->normalizeEnum($request->input('status', 'all'), self::EMPLOYEE_STATUSES, 'all');
+
+        try {
+            $employees = $this->repository->headcountEmployees($search, $status, $scopeEmployeeId);
+            $pdf = new \TCPDF('L', 'mm', 'A4', true, 'UTF-8', false);
+            $pdf->SetCreator('HR System');
+            $pdf->SetTitle('Headcount Report');
+            $pdf->setPrintHeader(false);
+            $pdf->setPrintFooter(true);
+            $pdf->SetAutoPageBreak(true, 15);
+            $pdf->AddPage();
+            $pdf->SetFont('helvetica', 'B', 14);
+            $pdf->Cell(0, 10, 'Headcount Report - ' . date('d M Y'), 0, 1, 'C');
+            $pdf->Ln(4);
+
+            $html = '<table border="1" cellpadding="4" cellspacing="0" style="font-size:9px;">
+            <thead><tr style="background-color:#4472C4;color:#FFFFFF;font-weight:bold;">
+                <th>Code</th><th>Name</th><th>Email</th><th>Department</th><th>Job Title</th><th>Joined</th><th>Status</th>
+            </tr></thead><tbody>';
+
+            foreach ($employees as $emp) {
+                $sBg = ($emp['employee_status'] ?? '') === 'active' ? '#D4EDDA' : '#F8F9FA';
+                $html .= '<tr>
+                    <td>' . htmlspecialchars($emp['employee_code'] ?? '') . '</td>
+                    <td>' . htmlspecialchars($emp['employee_name'] ?? '') . '</td>
+                    <td>' . htmlspecialchars($emp['work_email'] ?? '') . '</td>
+                    <td>' . htmlspecialchars($emp['department_name'] ?? '') . '</td>
+                    <td>' . htmlspecialchars($emp['job_title_name'] ?? '') . '</td>
+                    <td>' . htmlspecialchars($emp['joining_date'] ?? '—') . '</td>
+                    <td style="background-color:' . $sBg . ';">' . htmlspecialchars(ucwords(str_replace('_', ' ', $emp['employee_status'] ?? ''))) . '</td>
+                </tr>';
+            }
+            $html .= '</tbody></table>';
+
+            $pdf->SetFont('helvetica', '', 8);
+            $pdf->writeHTML($html, true, false, true, false, '');
+
+            $pdf->Output('headcount_report_' . date('Y-m-d') . '.pdf', 'D');
+            exit;
+        } catch (\Throwable $throwable) {
+            $this->app->session()->flash('error', 'PDF export failed: ' . $throwable->getMessage());
+            $this->redirect('/reports/headcount');
+        }
+    }
+
     private function scopeEmployeeId(bool $canHr): ?int
     {
         if ($canHr) {

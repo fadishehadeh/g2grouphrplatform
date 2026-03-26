@@ -1243,6 +1243,106 @@ final class LeaveController extends Controller
         return $number;
     }
 
+    public function exportRequestsExcel(Request $request): void
+    {
+        $scope = $this->leaveScope();
+        $search = trim((string) $request->input('q', ''));
+        $status = $this->normalizeRequestStatus((string) $request->input('status', 'all'), 'all');
+        $leaveTypeId = (int) $request->input('leave_type_id', 0);
+
+        try {
+            $requests = $this->repository->listRequests($scope, $search, $status, $leaveTypeId);
+            $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+            $sheet = $spreadsheet->getActiveSheet();
+            $sheet->setTitle('Leave Requests');
+
+            $headers = ['Employee', 'Code', 'Department', 'Leave Type', 'Start Date', 'End Date',
+                'Days', 'Status', 'Submitted', 'Reason'];
+            $sheet->fromArray($headers, null, 'A1');
+            $headerStyle = $sheet->getStyle('A1:J1');
+            $headerStyle->getFont()->setBold(true);
+            $headerStyle->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setRGB('4472C4');
+            $headerStyle->getFont()->getColor()->setRGB('FFFFFF');
+
+            $row = 2;
+            foreach ($requests as $r) {
+                $sheet->fromArray([
+                    $r['employee_name'] ?? '', $r['employee_code'] ?? '', $r['department_name'] ?? '',
+                    $r['leave_type_name'] ?? '', $r['start_date'] ?? '', $r['end_date'] ?? '',
+                    $r['days_requested'] ?? '', $r['status'] ?? '',
+                    $r['submitted_at'] ?? $r['created_at'] ?? '', $r['reason'] ?? '',
+                ], null, 'A' . $row);
+                $row++;
+            }
+
+            foreach (range('A', 'J') as $col) {
+                $sheet->getColumnDimension($col)->setAutoSize(true);
+            }
+
+            header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            header('Content-Disposition: attachment;filename="leave_requests_' . date('Y-m-d') . '.xlsx"');
+            header('Cache-Control: max-age=0');
+
+            $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+            $writer->save('php://output');
+            exit;
+        } catch (Throwable $throwable) {
+            $this->app->session()->flash('error', 'Export failed: ' . $throwable->getMessage());
+            $this->redirect('/leave/requests');
+        }
+    }
+
+    public function exportRequestsPdf(Request $request): void
+    {
+        $scope = $this->leaveScope();
+        $search = trim((string) $request->input('q', ''));
+        $status = $this->normalizeRequestStatus((string) $request->input('status', 'all'), 'all');
+        $leaveTypeId = (int) $request->input('leave_type_id', 0);
+
+        try {
+            $requests = $this->repository->listRequests($scope, $search, $status, $leaveTypeId);
+            $pdf = new \TCPDF('L', 'mm', 'A4', true, 'UTF-8', false);
+            $pdf->SetCreator('HR System');
+            $pdf->SetTitle('Leave Requests');
+            $pdf->setPrintHeader(false);
+            $pdf->setPrintFooter(true);
+            $pdf->SetAutoPageBreak(true, 15);
+            $pdf->AddPage();
+            $pdf->SetFont('helvetica', 'B', 14);
+            $pdf->Cell(0, 10, 'Leave Requests - ' . date('d M Y'), 0, 1, 'C');
+            $pdf->Ln(4);
+
+            $html = '<table border="1" cellpadding="4" cellspacing="0" style="font-size:8px;">
+            <thead><tr style="background-color:#4472C4;color:#FFFFFF;font-weight:bold;">
+                <th>Employee</th><th>Leave Type</th><th>Start</th><th>End</th>
+                <th>Days</th><th>Status</th><th>Submitted</th>
+            </tr></thead><tbody>';
+
+            foreach ($requests as $r) {
+                $sBg = ($r['status'] ?? '') === 'approved' ? '#D4EDDA' : (in_array($r['status'] ?? '', ['rejected', 'cancelled'], true) ? '#F8D7DA' : '#FFF3CD');
+                $html .= '<tr>
+                    <td>' . htmlspecialchars($r['employee_name'] ?? '') . '</td>
+                    <td>' . htmlspecialchars($r['leave_type_name'] ?? '') . '</td>
+                    <td>' . htmlspecialchars($r['start_date'] ?? '') . '</td>
+                    <td>' . htmlspecialchars($r['end_date'] ?? '') . '</td>
+                    <td>' . htmlspecialchars((string) ($r['days_requested'] ?? '')) . '</td>
+                    <td style="background-color:' . $sBg . ';">' . htmlspecialchars($r['status'] ?? '') . '</td>
+                    <td>' . htmlspecialchars($r['submitted_at'] ?? $r['created_at'] ?? '') . '</td>
+                </tr>';
+            }
+            $html .= '</tbody></table>';
+
+            $pdf->SetFont('helvetica', '', 8);
+            $pdf->writeHTML($html, true, false, true, false, '');
+
+            $pdf->Output('leave_requests_' . date('Y-m-d') . '.pdf', 'D');
+            exit;
+        } catch (Throwable $throwable) {
+            $this->app->session()->flash('error', 'PDF export failed: ' . $throwable->getMessage());
+            $this->redirect('/leave/requests');
+        }
+    }
+
     private function isValidDate(string $value): bool
     {
         $date = DateTimeImmutable::createFromFormat('Y-m-d', $value);

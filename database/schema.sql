@@ -242,6 +242,7 @@ CREATE TABLE IF NOT EXISTS employees (
     gender ENUM('male','female','other','prefer_not_to_say') NULL,
     marital_status ENUM('single','married','divorced','widowed','other') NULL,
     nationality VARCHAR(100) NULL,
+    second_nationality VARCHAR(100) NULL,
     address_line_1 VARCHAR(255) NULL,
     address_line_2 VARCHAR(255) NULL,
     city VARCHAR(100) NULL,
