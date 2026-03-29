@@ -1924,7 +1924,7 @@ CREATE TABLE `users` (
 
 LOCK TABLES `users` WRITE;
 /*!40000 ALTER TABLE `users` DISABLE KEYS */;
-INSERT INTO `users` VALUES (1,1,'admin','admin@system.local','$2y$10$d7bHKbB/TWIviY9gmnQTfO3568FWb4zh4amMru0D/cFZWp5f8AKoy','System','Admin','active',0,NULL,NULL,'2026-03-18 11:26:12','2026-03-23 09:02:24');
+INSERT INTO `users` VALUES (1,1,'admin','admin@system.local','$2y$10$gjpxAEUs1gC6aViaxaKHse58dwL4oXnwjr.IeTqFDvHU.CWl2ljqW','System','Admin','active',0,NULL,'2026-03-29 11:29:19','2026-03-18 11:26:12','2026-03-29 08:29:19');
 /*!40000 ALTER TABLE `users` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -2022,10 +2022,6 @@ LOCK TABLES `work_schedules` WRITE;
 /*!40000 ALTER TABLE `work_schedules` DISABLE KEYS */;
 /*!40000 ALTER TABLE `work_schedules` ENABLE KEYS */;
 UNLOCK TABLES;
-
---
--- Dumping routines for database 'hr_system'
---
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
@@ -2036,4 +2032,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-03-24 10:57:34
+-- Dump completed on 2026-03-29 11:33:27
