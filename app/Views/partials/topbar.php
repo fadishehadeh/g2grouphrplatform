@@ -23,7 +23,7 @@
                 <?= e($user['role_name'] ?? 'User'); ?>
             </button>
             <ul class="dropdown-menu dropdown-menu-end">
-                <li><a class="dropdown-item" href="<?= e($profileUrl); ?>">Profile</a></li>
+                <li><a class="dropdown-item" href="<?= e(url('/profile')); ?>">My Profile</a></li>
                 <li><hr class="dropdown-divider"></li>
                 <li>
                     <form method="post" action="<?= e(url('/logout')); ?>" class="px-3">
