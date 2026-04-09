@@ -36,6 +36,9 @@
         <?php if (!empty($user['employee_id']) && (can('documents.view_self') || can('documents.upload_self'))): ?>
             <a href="<?= e($documentUrl); ?>" class="sidebar-link"><i class="bi bi-folder"></i> My Documents</a>
         <?php endif; ?>
+        <?php if (can('letters.request') || can('letters.manage')): ?>
+            <a href="<?= e(url(can('letters.manage') ? '/letters/admin' : '/letters/my')); ?>" class="sidebar-link"><i class="bi bi-envelope-paper"></i> Letters</a>
+        <?php endif; ?>
         <?php if (can('announcements.view') || can('announcements.manage')): ?>
             <a href="<?= e(url('/announcements')); ?>" class="sidebar-link"><i class="bi bi-megaphone"></i> Announcements</a>
         <?php endif; ?>

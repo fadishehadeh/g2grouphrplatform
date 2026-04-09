@@ -29,6 +29,21 @@ $router->get('/announcements/attachments/{id}', [AnnouncementController::class, 
     [PermissionMiddleware::class, ['announcements.view', 'announcements.manage']],
 ]);
 
+$router->get('/announcements/{id}/edit', [AnnouncementController::class, 'edit'], [
+    ...$communicationsBaseMiddleware,
+    [PermissionMiddleware::class, ['announcements.manage']],
+]);
+
+$router->post('/announcements/{id}/update', [AnnouncementController::class, 'update'], [
+    ...$communicationsBaseMiddleware,
+    [PermissionMiddleware::class, ['announcements.manage']],
+]);
+
+$router->post('/announcements/{id}/send-emails', [AnnouncementController::class, 'sendEmails'], [
+    ...$communicationsBaseMiddleware,
+    [PermissionMiddleware::class, ['announcements.manage']],
+]);
+
 $router->get('/announcements/{id}', [AnnouncementController::class, 'show'], [
     ...$communicationsBaseMiddleware,
     [PermissionMiddleware::class, ['announcements.view', 'announcements.manage']],

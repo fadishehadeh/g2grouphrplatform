@@ -6,7 +6,8 @@
             <div class="card-body p-4">
                 <h5 class="mb-2">Add <?= e($pageTitle ?? $title ?? 'Record'); ?></h5>
                 <p class="text-muted small mb-4"><?= e($description ?? ''); ?></p>
-                <form method="post" action="<?= e(url($formAction)); ?>">
+                <?php $hasFileField = !empty(array_filter($formFields, fn($f) => ($f['type'] ?? '') === 'file')); ?>
+                <form method="post" action="<?= e(url($formAction)); ?>"<?= $hasFileField ? ' enctype="multipart/form-data"' : ''; ?>>
                     <?= csrf_field(); ?>
                     <?php foreach ($formFields as $field): ?>
                         <?php $value = old($field['name'], $field['value'] ?? ''); ?>
@@ -21,6 +22,11 @@
                                 </select>
                             <?php elseif (($field['type'] ?? 'text') === 'textarea'): ?>
                                 <textarea name="<?= e($field['name']); ?>" class="form-control" rows="3"><?= e((string) $value); ?></textarea>
+                            <?php elseif (($field['type'] ?? 'text') === 'file'): ?>
+                                <input type="file" name="<?= e($field['name']); ?>" class="form-control" accept="<?= e($field['accept'] ?? '*/*'); ?>" <?= !empty($field['required']) ? 'required' : ''; ?>>
+                                <?php if (!empty($field['hint'])): ?>
+                                    <div class="form-text"><?= e($field['hint']); ?></div>
+                                <?php endif; ?>
                             <?php else: ?>
                                 <input type="<?= e($field['type'] ?? 'text'); ?>" name="<?= e($field['name']); ?>" class="form-control" value="<?= e((string) $value); ?>" <?= !empty($field['required']) ? 'required' : ''; ?>>
                             <?php endif; ?>

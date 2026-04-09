@@ -2,7 +2,7 @@
 <div class="card border-0 shadow-sm auth-form-card">
     <div class="card-body p-4 p-md-5">
         <h2 class="fw-bold mb-2"><?= e($pageTitle ?? 'Reset Password'); ?></h2>
-        <p class="text-muted mb-4">Enter a strong new password for your account.</p>
+        <p class="text-muted mb-4">Create a strong password to activate your account and sign in.</p>
         <form method="post" action="<?= e(url('/reset-password')); ?>" novalidate>
             <?= csrf_field(); ?>
             <input type="hidden" name="token" value="<?= e((string) ($resetToken ?? '')); ?>">

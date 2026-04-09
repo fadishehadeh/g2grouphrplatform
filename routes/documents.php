@@ -33,6 +33,11 @@ $router->get('/documents/expiring', [DocumentController::class, 'expiring'], [
     [PermissionMiddleware::class, ['documents.manage_all']],
 ]);
 
+$router->post('/documents/send-expiry-alerts', [DocumentController::class, 'sendExpiryAlerts'], [
+    ...$documentBaseMiddleware,
+    [PermissionMiddleware::class, ['documents.manage_all']],
+]);
+
 $router->get('/documents/{id}/download', [DocumentController::class, 'download'], [
     ...$documentBaseMiddleware,
     [PermissionMiddleware::class, ['documents.manage_all', 'documents.view_self', 'documents.upload_self']],

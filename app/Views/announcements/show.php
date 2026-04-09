@@ -48,9 +48,22 @@
         </div>
         <?php endif; ?>
 
-        <div class="mt-4 d-flex gap-2">
+        <div class="mt-4 d-flex flex-wrap gap-2 align-items-center">
             <a href="<?= e(url('/announcements')); ?>" class="btn btn-outline-secondary">Back to Announcements</a>
-            <?php if (($canManage ?? false) === true): ?><span class="text-muted small align-self-center">This record is visible according to its publication status, schedule window, and audience target.</span><?php endif; ?>
+            <?php if (($canManage ?? false) === true): ?>
+                <a href="<?= e(url('/announcements/' . (int) ($announcement['id'] ?? 0) . '/edit')); ?>" class="btn btn-outline-primary"><i class="bi bi-pencil"></i> Edit</a>
+                <?php $emailsSent = (bool) ($emailsAlreadySent ?? false); ?>
+                <form method="post" action="<?= e(url('/announcements/' . (int) ($announcement['id'] ?? 0) . '/send-emails')); ?>" onsubmit="return confirm('Send emails to all targeted recipients now?');">
+                    <?= csrf_field(); ?>
+                    <button type="submit" class="btn btn-outline-<?= $emailsSent ? 'secondary' : 'success'; ?>">
+                        <i class="bi bi-envelope"></i>
+                        <?= $emailsSent ? 'Resend Emails' : 'Send Emails Now'; ?>
+                    </button>
+                </form>
+                <?php if (($announcement['email_send_at'] ?? null) !== null && !$emailsSent): ?>
+                    <span class="text-muted small align-self-center">Scheduled: <?= e((string) $announcement['email_send_at']); ?></span>
+                <?php endif; ?>
+            <?php endif; ?>
         </div>
     </div>
 </div>

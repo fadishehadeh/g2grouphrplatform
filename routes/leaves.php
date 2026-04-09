@@ -24,6 +24,16 @@ $router->get('/leave/balances', [LeaveController::class, 'balances'], [
     [PermissionMiddleware::class, $leaveVisibilityPermissions],
 ]);
 
+$router->post('/admin/leave/balances/assign', [LeaveController::class, 'assignBalances'], [
+    ...$leaveBaseMiddleware,
+    [PermissionMiddleware::class, ['leave.manage_types']],
+]);
+
+$router->post('/admin/leave/balances/adjust', [LeaveController::class, 'adjustBalance'], [
+    ...$leaveBaseMiddleware,
+    [PermissionMiddleware::class, ['leave.manage_types']],
+]);
+
 $router->get('/leave/requests', [LeaveController::class, 'requests'], [
     ...$leaveBaseMiddleware,
     [PermissionMiddleware::class, $leaveVisibilityPermissions],

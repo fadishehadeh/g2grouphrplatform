@@ -23,6 +23,11 @@
                             <div class="col-md-6"><label class="form-label">Starts At</label><input type="datetime-local" name="starts_at" class="form-control" value="<?= e((string) old('starts_at', '')); ?>"></div>
                             <div class="col-md-6"><label class="form-label">Ends At</label><input type="datetime-local" name="ends_at" class="form-control" value="<?= e((string) old('ends_at', '')); ?>"></div>
                         </div>
+                        <div class="mb-3">
+                            <label class="form-label">Send Emails At <span class="text-muted small">(optional)</span></label>
+                            <input type="datetime-local" name="email_send_at" class="form-control" value="<?= e((string) old('email_send_at', '')); ?>">
+                            <div class="form-text">Leave blank to send emails immediately on publish. Set a future time to defer sending.</div>
+                        </div>
                         <div class="mb-3"><label class="form-label">Content *</label><textarea name="content" class="form-control" rows="6" required><?= e((string) old('content', '')); ?></textarea></div>
 
                         <!-- Links -->
@@ -86,7 +91,7 @@
                                         <td><div><?= e((string) (($announcement['starts_at'] ?? null) !== null ? $announcement['starts_at'] : 'Immediate')); ?></div><div class="small text-muted">Until <?= e((string) (($announcement['ends_at'] ?? null) !== null ? $announcement['ends_at'] : 'Open ended')); ?></div></td>
                                         <td><span class="badge <?= e($statusClass); ?>"><?= e(ucfirst((string) $announcement['status'])); ?></span></td>
                                         <td><span class="badge <?= (int) $announcement['is_read'] === 1 ? 'text-bg-success' : 'text-bg-light'; ?>"><?= e((string) ((int) $announcement['is_read'] === 1 ? 'Read' : 'Unread')); ?></span></td>
-                                        <td><a href="<?= e(url('/announcements/' . $announcement['id'])); ?>" class="btn btn-sm btn-outline-primary">View</a></td>
+                                        <td class="d-flex gap-1"><a href="<?= e(url('/announcements/' . $announcement['id'])); ?>" class="btn btn-sm btn-outline-primary">View</a><?php if (($canManage ?? false)): ?><a href="<?= e(url('/announcements/' . $announcement['id'] . '/edit')); ?>" class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil"></i></a><?php endif; ?></td>
                                     </tr>
                                 <?php endforeach; ?>
                                 </tbody>

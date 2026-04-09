@@ -2,15 +2,21 @@
 <?php require base_path('app/Views/partials/document-nav.php'); ?>
 <div class="card content-card mb-4">
     <div class="card-body p-4">
-        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-start gap-3">
             <div>
                 <h5 class="mb-1">Expiring and Expired Documents</h5>
                 <p class="text-muted mb-0">Monitor renewal risk across all current employee documents.</p>
             </div>
-            <form method="get" action="<?= e(url('/documents/expiring')); ?>" class="d-flex gap-2">
-                <select name="days" class="form-select"><?php foreach ([7, 15, 30, 60, 90] as $window): ?><option value="<?= e((string) $window); ?>" <?= (int) ($days ?? 30) === $window ? 'selected' : ''; ?>>Next <?= e((string) $window); ?> days</option><?php endforeach; ?></select>
-                <button type="submit" class="btn btn-outline-secondary">Apply</button>
-            </form>
+            <div class="d-flex flex-wrap gap-2 align-items-start">
+                <form method="get" action="<?= e(url('/documents/expiring')); ?>" class="d-flex gap-2">
+                    <select name="days" class="form-select"><?php foreach ([7, 15, 30, 60, 90] as $window): ?><option value="<?= e((string) $window); ?>" <?= (int) ($days ?? 30) === $window ? 'selected' : ''; ?>>Next <?= e((string) $window); ?> days</option><?php endforeach; ?></select>
+                    <button type="submit" class="btn btn-outline-secondary">Apply</button>
+                </form>
+                <form method="post" action="<?= e(url('/documents/send-expiry-alerts')); ?>" onsubmit="return confirm('Send 30-day expiry alert emails to all HR/Admin users for documents without an existing alert? This cannot be undone.');">
+                    <?= csrf_field(); ?>
+                    <button type="submit" class="btn btn-warning"><i class="bi bi-bell"></i> Send 30-Day Alerts to HR</button>
+                </form>
+            </div>
         </div>
     </div>
 </div>

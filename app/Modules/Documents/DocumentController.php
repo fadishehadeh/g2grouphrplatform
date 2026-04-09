@@ -9,6 +9,7 @@ use App\Core\Controller;
 use App\Core\Request;
 use App\Core\Response;
 use App\Modules\Employees\EmployeeRepository;
+use App\Modules\Notifications\NotificationRepository;
 use DateTimeImmutable;
 use RuntimeException;
 use Throwable;
@@ -121,6 +122,88 @@ final class DocumentController extends Controller
         ]);
     }
 
+    public function sendExpiryAlerts(Request $request): void
+    {
+        if (!$this->app->auth()->hasPermission('documents.manage_all')) {
+            Response::abort(403, 'You do not have permission to send document expiry alerts.');
+        }
+
+        if (!$this->app->csrf()->validate((string) $request->input('_token'))) {
+            $this->app->session()->flash('error', 'Invalid form submission token.');
+            $this->redirect('/documents/expiring');
+        }
+
+        $alertCount = 0;
+
+        try {
+            $documents = $this->repository->documentsNeedingAlerts(30);
+            $recipients = $this->repository->hrAndAdminRecipients();
+
+            if ($documents !== [] && $recipients !== []) {
+                $notifications = new NotificationRepository($this->app->database());
+                $appName = (string) config('app.name', 'HR Management System');
+                $appUrl = rtrim((string) config('app.url', ''), '/');
+
+                foreach ($documents as $doc) {
+                    $docId = (int) $doc['id'];
+                    $employeeName = (string) ($doc['employee_name'] ?? '');
+                    $docTitle = (string) ($doc['title'] ?? '');
+                    $categoryName = (string) ($doc['category_name'] ?? '');
+                    $expiryDate = (string) ($doc['expiry_date'] ?? '');
+                    $daysLeft = (int) ($doc['days_until_expiry'] ?? 0);
+                    $docUrl = $appUrl . '/documents?q=' . urlencode($employeeName);
+
+                    $subject = '[Document Expiry] ' . $docTitle . ' — expires in ' . $daysLeft . ' day' . ($daysLeft !== 1 ? 's' : '');
+
+                    $bodyHtml = '<div style="font-family:Arial,Helvetica,sans-serif;max-width:650px;margin:0 auto;color:#333;">';
+                    $bodyHtml .= '<div style="background:#c0392b;color:#fff;padding:18px 24px;border-radius:6px 6px 0 0;">';
+                    $bodyHtml .= '<h2 style="margin:0;font-size:20px;">&#9888; Document Expiry Alert</h2></div>';
+                    $bodyHtml .= '<div style="padding:20px 24px;border:1px solid #e0e0e0;border-top:none;">';
+                    $bodyHtml .= '<p>The following employee document is expiring within <strong>' . $daysLeft . ' day' . ($daysLeft !== 1 ? 's' : '') . '</strong>.</p>';
+                    $bodyHtml .= '<table style="border-collapse:collapse;width:100%;font-size:14px;">';
+                    $bodyHtml .= '<tr><td style="padding:8px;border:1px solid #ddd;background:#f9f9f9;font-weight:600;">Employee</td><td style="padding:8px;border:1px solid #ddd;">' . e($employeeName) . ' (' . e((string) ($doc['employee_code'] ?? '')) . ')</td></tr>';
+                    $bodyHtml .= '<tr><td style="padding:8px;border:1px solid #ddd;background:#f9f9f9;font-weight:600;">Document</td><td style="padding:8px;border:1px solid #ddd;">' . e($docTitle) . '</td></tr>';
+                    $bodyHtml .= '<tr><td style="padding:8px;border:1px solid #ddd;background:#f9f9f9;font-weight:600;">Category</td><td style="padding:8px;border:1px solid #ddd;">' . e($categoryName) . '</td></tr>';
+                    $bodyHtml .= '<tr><td style="padding:8px;border:1px solid #ddd;background:#f9f9f9;font-weight:600;">Expiry Date</td><td style="padding:8px;border:1px solid #ddd;color:#c0392b;font-weight:600;">' . e($expiryDate) . '</td></tr>';
+                    $bodyHtml .= '</table>';
+                    $bodyHtml .= '<p style="margin:16px 0;"><a href="' . e($docUrl) . '" style="display:inline-block;padding:10px 24px;background:#c0392b;color:#fff;text-decoration:none;border-radius:4px;font-weight:600;">View in Document Center</a></p>';
+                    $bodyHtml .= '<p style="font-size:12px;color:#888;">This is an automated alert from ' . e($appName) . '.</p>';
+                    $bodyHtml .= '</div></div>';
+
+                    $bodyText = 'Document Expiry Alert: ' . $docTitle . "\nEmployee: " . $employeeName . "\nExpiry: " . $expiryDate . " (" . $daysLeft . " days left)";
+
+                    foreach ($recipients as $recipient) {
+                        $recipientEmail = (string) ($recipient['email'] ?? '');
+                        $recipientUserId = isset($recipient['user_id']) ? (int) $recipient['user_id'] : null;
+
+                        if ($recipientEmail === '') {
+                            continue;
+                        }
+
+                        $notifications->deliverEmail($recipientEmail, $subject, $bodyHtml, $bodyText, $recipientUserId, 'employee_document', $docId);
+
+                        if ($recipientUserId !== null) {
+                            $notifications->create($recipientUserId, 'document_expiry', $subject, $bodyText, 'employee_document', $docId, '/documents/expiring');
+                            $this->repository->recordAlertSent($docId, '30_days', $recipientUserId);
+                        }
+                    }
+
+                    $alertCount++;
+                }
+            }
+
+            if ($alertCount === 0) {
+                $this->app->session()->flash('info', 'No new documents require 30-day expiry alerts at this time.');
+            } else {
+                $this->app->session()->flash('success', 'Expiry alerts sent for ' . $alertCount . ' document' . ($alertCount !== 1 ? 's' : '') . '.');
+            }
+        } catch (Throwable $throwable) {
+            $this->app->session()->flash('error', 'Unable to send expiry alerts: ' . $throwable->getMessage());
+        }
+
+        $this->redirect('/documents/expiring');
+    }
+
     public function upload(Request $request, string $id): void
     {
         $employeeId = (int) $id;
@@ -136,8 +219,9 @@ final class DocumentController extends Controller
                 Response::abort(404, 'Employee not found.');
             }
 
+            $viewerRoleCode = (string) ($this->app->auth()->user()['role_code'] ?? 'employee');
             $categories = $this->repository->activeCategories();
-            $documents = $this->repository->employeeDocuments($employeeId);
+            $documents = $this->repository->employeeDocuments($employeeId, $viewerRoleCode);
         } catch (Throwable $throwable) {
             $this->app->session()->flash('error', 'Unable to load employee documents: ' . $throwable->getMessage());
             $this->redirect($this->app->auth()->hasPermission('documents.manage_all') ? '/documents' : '/dashboard');
@@ -214,6 +298,10 @@ final class DocumentController extends Controller
 
             if (!$this->canAccessEmployeeDocuments((int) ($document['employee_id'] ?? 0))) {
                 Response::abort(403, 'You do not have access to this document.');
+            }
+
+            if (!$this->canAccessDocumentByScope($document)) {
+                Response::abort(403, 'This document is not visible to your access level.');
             }
 
             $absolutePath = $this->absoluteDocumentPath((string) ($document['file_path'] ?? ''));
@@ -433,6 +521,46 @@ final class DocumentController extends Controller
         return $currentEmployeeId > 0
             && $currentEmployeeId === $employeeId
             && ($this->app->auth()->hasPermission('documents.view_self') || $this->app->auth()->hasPermission('documents.upload_self'));
+    }
+
+    /**
+     * Determine if the current user can access a specific document based on its visibility_scope.
+     * admin   → super_admin/hr_admin only
+     * hr      → super_admin/hr_admin
+     * manager → super_admin/hr_admin/manager (or manage_all)
+     * employee → anyone with access to the employee's documents
+     */
+    private function canAccessDocumentByScope(array $document): bool
+    {
+        if ($this->app->auth()->hasPermission('documents.manage_all')) {
+            return true;
+        }
+
+        $scope = (string) ($document['visibility_scope'] ?? 'employee');
+        $user = $this->app->auth()->user() ?? [];
+        $roleCode = (string) ($user['role_code'] ?? '');
+
+        if (in_array($roleCode, ['super_admin', 'hr_admin'], true)) {
+            return true;
+        }
+
+        if ($scope === 'admin') {
+            return false;
+        }
+
+        if ($scope === 'hr') {
+            return false;
+        }
+
+        if ($scope === 'manager') {
+            return $roleCode === 'manager';
+        }
+
+        // scope = 'employee' — allowed if they own the document
+        $currentEmployeeId = (int) ($user['employee_id'] ?? 0);
+        $documentEmployeeId = (int) ($document['employee_id'] ?? 0);
+
+        return $currentEmployeeId > 0 && $currentEmployeeId === $documentEmployeeId;
     }
 
     private function canUploadForEmployee(int $employeeId): bool

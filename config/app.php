@@ -26,6 +26,9 @@ return [
         'from_name' => env('MAIL_FROM_NAME', env('APP_NAME', 'HR Management System')),
         'max_attempts' => (int) env('MAIL_MAX_ATTEMPTS', '3'),
     ],
+    'leave' => [
+        'admin_email' => trim((string) env('LEAVE_ADMIN_EMAIL', '')),
+    ],
     'security' => [
         'session_idle_timeout' => (int) env('SESSION_IDLE_TIMEOUT', '7200'),
         'password_reset_expiry_minutes' => (int) env('PASSWORD_RESET_EXPIRY_MINUTES', '60'),

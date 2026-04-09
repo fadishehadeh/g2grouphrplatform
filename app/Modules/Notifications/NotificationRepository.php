@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Notifications;
 
 use App\Core\Database;
+use App\Support\Mailer;
+use Throwable;
 
 final class NotificationRepository
 {
@@ -107,6 +109,49 @@ final class NotificationRepository
                 'related_id' => $relatedId,
             ]
         );
+    }
+
+    /**
+     * Queue an email and try to send it immediately.
+     */
+    public function deliverEmail(
+        string $toEmail,
+        string $subject,
+        string $bodyHtml,
+        ?string $bodyText = null,
+        ?int $userId = null,
+        ?string $relatedType = null,
+        ?int $relatedId = null
+    ): void {
+        $this->queueEmail($toEmail, $subject, $bodyHtml, $bodyText, $userId, $relatedType, $relatedId);
+
+        $emailQueueId = (int) $this->database->lastInsertId();
+        $mailConfig = (array) config('app.mail', []);
+
+        if (!($mailConfig['enabled'] ?? false)) {
+            return;
+        }
+
+        try {
+            (new Mailer($mailConfig))->send($toEmail, $subject, $bodyHtml, $bodyText);
+
+            $this->database->execute(
+                'UPDATE email_queue
+                 SET status = :status, sent_at = NOW(), attempts = attempts + 1, last_error = NULL
+                 WHERE id = :id',
+                ['status' => 'sent', 'id' => $emailQueueId]
+            );
+        } catch (Throwable $throwable) {
+            $this->database->execute(
+                'UPDATE email_queue
+                 SET last_error = :last_error
+                 WHERE id = :id',
+                [
+                    'last_error' => substr($throwable->getMessage(), 0, 500),
+                    'id' => $emailQueueId,
+                ]
+            );
+        }
     }
 
     /**

@@ -58,6 +58,7 @@ final class StructureController extends Controller
                 ['name' => 'postal_code', 'label' => 'Postal Code', 'type' => 'text'],
                 ['name' => 'timezone', 'label' => 'Timezone', 'type' => 'text', 'required' => true, 'value' => 'UTC'],
                 ['name' => 'status', 'label' => 'Status', 'type' => 'select', 'required' => true, 'options' => ['active' => 'Active', 'inactive' => 'Inactive'], 'value' => 'active'],
+                ['name' => 'logo_file', 'label' => 'Company Logo', 'type' => 'file', 'accept' => 'image/png,image/jpeg,image/svg+xml,image/gif', 'hint' => 'PNG, JPG, SVG or GIF — max 2 MB'],
             ],
             fn (string $search): array => $this->repository->listCompanies($search)
         );
@@ -82,6 +83,34 @@ final class StructureController extends Controller
 
         $this->validateCompanyPayload($data, '/admin/companies');
 
+        $logoPath = null;
+        $logoFile = $request->file('logo_file');
+        if (is_array($logoFile) && (int) ($logoFile['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
+            $allowedLogoExtensions = ['png', 'jpg', 'jpeg', 'svg', 'gif'];
+            $ext = strtolower(pathinfo(basename((string) ($logoFile['name'] ?? '')), PATHINFO_EXTENSION));
+            if (!in_array($ext, $allowedLogoExtensions, true)) {
+                $this->app->session()->flash('error', 'Logo must be PNG, JPG, SVG, or GIF.');
+                $this->app->session()->flash('old_input', $data);
+                $this->redirect('/admin/companies');
+            }
+            if ((int) ($logoFile['size'] ?? 0) > 2 * 1024 * 1024) {
+                $this->app->session()->flash('error', 'Logo file must be 2 MB or smaller.');
+                $this->app->session()->flash('old_input', $data);
+                $this->redirect('/admin/companies');
+            }
+            $logoDir = base_path('storage/uploads/logos');
+            if (!is_dir($logoDir) && !mkdir($logoDir, 0775, true) && !is_dir($logoDir)) {
+                throw new \RuntimeException('Unable to create logo directory.');
+            }
+            $storedName = 'company_new_' . date('YmdHis') . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+            $logoPath = 'storage/uploads/logos/' . $storedName;
+            if (!move_uploaded_file((string) ($logoFile['tmp_name'] ?? ''), base_path($logoPath))) {
+                $this->app->session()->flash('error', 'Unable to upload logo file.');
+                $this->app->session()->flash('old_input', $data);
+                $this->redirect('/admin/companies');
+            }
+        }
+
         try {
             $companyId = $this->repository->createCompany([
                 'name' => $data['name'],
@@ -96,6 +125,7 @@ final class StructureController extends Controller
                 'postal_code' => $data['postal_code'] ?: null,
                 'timezone' => $data['timezone'],
                 'status' => $data['status'] ?: 'active',
+                'logo_path' => $logoPath,
             ]);
             $this->app->session()->flash('success', 'Company created successfully.');
             $this->redirect('/admin/companies/' . $companyId);
@@ -164,7 +194,7 @@ final class StructureController extends Controller
         $this->validateCompanyPayload($data, $redirect);
 
         try {
-            $this->repository->updateCompany($companyId, [
+            $updateData = [
                 'name' => $data['name'],
                 'code' => strtoupper($data['code']),
                 'email' => $data['email'] ?: null,
@@ -177,7 +207,34 @@ final class StructureController extends Controller
                 'postal_code' => $data['postal_code'] ?: null,
                 'timezone' => $data['timezone'],
                 'status' => $data['status'] ?: 'active',
-            ]);
+            ];
+
+            // Handle logo upload
+            $logoFile = $request->file('logo_file');
+            if (is_array($logoFile) && (int) ($logoFile['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
+                $allowedLogoExtensions = ['png', 'jpg', 'jpeg', 'svg', 'gif'];
+                $ext = strtolower(pathinfo(basename((string) ($logoFile['name'] ?? '')), PATHINFO_EXTENSION));
+                if (!in_array($ext, $allowedLogoExtensions, true)) {
+                    $this->app->session()->flash('error', 'Logo must be PNG, JPG, SVG, or GIF.');
+                    $this->redirect($redirect);
+                }
+                if ((int) ($logoFile['size'] ?? 0) > 2 * 1024 * 1024) {
+                    $this->app->session()->flash('error', 'Logo file must be 2 MB or smaller.');
+                    $this->redirect($redirect);
+                }
+                $logoDir = base_path('storage/uploads/logos');
+                if (!is_dir($logoDir) && !mkdir($logoDir, 0775, true) && !is_dir($logoDir)) {
+                    throw new \RuntimeException('Unable to create logo directory.');
+                }
+                $storedName = 'company_' . $companyId . '_' . date('YmdHis') . '.' . $ext;
+                $logoPath = 'storage/uploads/logos/' . $storedName;
+                if (!move_uploaded_file((string) ($logoFile['tmp_name'] ?? ''), base_path($logoPath))) {
+                    throw new \RuntimeException('Unable to move uploaded logo file.');
+                }
+                $updateData['logo_path'] = $logoPath;
+            }
+
+            $this->repository->updateCompany($companyId, $updateData);
             $this->app->session()->flash('success', 'Company updated successfully.');
         } catch (Throwable $throwable) {
             $this->app->session()->flash('error', 'Unable to update company: ' . $throwable->getMessage());

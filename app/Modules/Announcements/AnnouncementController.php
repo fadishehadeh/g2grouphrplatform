@@ -93,6 +93,13 @@ final class AnnouncementController extends Controller
         } catch (Throwable $ignored) {
         }
 
+        $emailsAlreadySent = false;
+
+        try {
+            $emailsAlreadySent = $this->repository->emailsAlreadySent($announcementId);
+        } catch (Throwable $ignored) {
+        }
+
         $this->render('announcements.show', [
             'title' => 'Announcement Details',
             'pageTitle' => 'Announcement Details',
@@ -100,6 +107,7 @@ final class AnnouncementController extends Controller
             'canManage' => $canManage,
             'links' => $links,
             'attachments' => $attachments,
+            'emailsAlreadySent' => $emailsAlreadySent,
         ]);
     }
 
@@ -135,6 +143,7 @@ final class AnnouncementController extends Controller
 
         $startsAt = $this->validatedDateTime($data['starts_at'] ?? null, 'start date/time', $redirectPath, $data, false);
         $endsAt = $this->validatedDateTime($data['ends_at'] ?? null, 'end date/time', $redirectPath, $data, false);
+        $emailSendAt = $this->validatedDateTime($data['email_send_at'] ?? null, 'email send time', $redirectPath, $data, false);
 
         if ($startsAt !== null && $endsAt !== null && $endsAt < $startsAt) {
             $this->invalid($redirectPath, $data, 'End date/time cannot be earlier than the start date/time.');
@@ -142,6 +151,7 @@ final class AnnouncementController extends Controller
 
         $data['starts_at'] = $startsAt?->format('Y-m-d H:i:s');
         $data['ends_at'] = $endsAt?->format('Y-m-d H:i:s');
+        $data['email_send_at'] = $emailSendAt?->format('Y-m-d H:i:s');
 
         try {
             $announcementId = $this->repository->createAnnouncement($data, $this->app->auth()->id());
@@ -162,9 +172,10 @@ final class AnnouncementController extends Controller
             // Save uploaded attachments
             $this->handleAttachmentUploads($announcementId);
 
-            // Queue emails to all targeted recipients when published
+            // Send/queue emails when published — immediately if no schedule, or deferred if future schedule
             if (($data['status'] ?? '') === 'published' && (bool) config('app.mail.enabled', false)) {
-                $this->notifyAnnouncementRecipients($announcementId, $data);
+                $sendNow = $emailSendAt === null || $emailSendAt <= new DateTimeImmutable();
+                $this->notifyAnnouncementRecipients($announcementId, $data, $sendNow);
             }
 
             $this->app->session()->flash('success', 'Announcement saved successfully.');
@@ -174,6 +185,150 @@ final class AnnouncementController extends Controller
             $this->app->session()->flash('old_input', $data);
             $this->redirect($redirectPath);
         }
+    }
+
+    public function edit(Request $request, string $id): void
+    {
+        $announcementId = (int) $id;
+        $canManage = $this->app->auth()->hasPermission('announcements.manage');
+
+        if (!$canManage) {
+            Response::abort(403, 'You do not have permission to edit announcements.');
+        }
+
+        try {
+            $announcement = $this->repository->findAnnouncement($announcementId, $this->app->auth()->user() ?? [], true);
+
+            if ($announcement === null) {
+                Response::abort(404, 'Announcement not found.');
+            }
+        } catch (Throwable $throwable) {
+            $this->app->session()->flash('error', 'Unable to load announcement: ' . $throwable->getMessage());
+            $this->redirect('/announcements');
+        }
+
+        $targetOptions = ['roles' => [], 'branches' => [], 'departments' => [], 'employees' => []];
+        $currentTarget = null;
+
+        try {
+            $targetOptions = $this->repository->targetOptions();
+            $currentTarget = $this->repository->announcementFirstTarget($announcementId);
+        } catch (Throwable $ignored) {
+        }
+
+        $this->render('announcements.edit', [
+            'title' => 'Edit Announcement',
+            'pageTitle' => 'Edit Announcement',
+            'announcement' => $announcement,
+            'targetOptions' => $targetOptions,
+            'currentTarget' => $currentTarget,
+        ]);
+    }
+
+    public function update(Request $request, string $id): void
+    {
+        $announcementId = (int) $id;
+        $redirectPath = '/announcements/' . $announcementId . '/edit';
+        $canManage = $this->app->auth()->hasPermission('announcements.manage');
+
+        if (!$canManage) {
+            Response::abort(403, 'You do not have permission to edit announcements.');
+        }
+
+        $this->validateCsrf($request, $redirectPath);
+        $data = $this->sanitized($request);
+
+        if (($data['title'] ?? '') === '' || ($data['content'] ?? '') === '') {
+            $this->invalid($redirectPath, $data, 'Please provide both a title and announcement content.');
+        }
+
+        if (!in_array((string) ($data['priority'] ?? ''), ['low', 'normal', 'high', 'urgent'], true)) {
+            $this->invalid($redirectPath, $data, 'Please choose a valid announcement priority.');
+        }
+
+        if (!in_array((string) ($data['status'] ?? ''), ['draft', 'published', 'archived'], true)) {
+            $this->invalid($redirectPath, $data, 'Please choose a valid announcement status.');
+        }
+
+        $targetType = (string) ($data['target_type'] ?? 'all');
+
+        if (!in_array($targetType, ['all', 'role', 'department', 'branch', 'employee'], true)) {
+            $this->invalid($redirectPath, $data, 'Please choose a valid announcement audience.');
+        }
+
+        $data['target_id'] = $this->selectedTargetId($targetType, $data);
+
+        if ($targetType !== 'all' && (int) ($data['target_id'] ?? 0) <= 0) {
+            $this->invalid($redirectPath, $data, 'Please choose the matching audience item for the selected target type.');
+        }
+
+        $startsAt = $this->validatedDateTime($data['starts_at'] ?? null, 'start date/time', $redirectPath, $data, false);
+        $endsAt = $this->validatedDateTime($data['ends_at'] ?? null, 'end date/time', $redirectPath, $data, false);
+        $emailSendAt = $this->validatedDateTime($data['email_send_at'] ?? null, 'email send time', $redirectPath, $data, false);
+
+        if ($startsAt !== null && $endsAt !== null && $endsAt < $startsAt) {
+            $this->invalid($redirectPath, $data, 'End date/time cannot be earlier than the start date/time.');
+        }
+
+        $data['starts_at'] = $startsAt?->format('Y-m-d H:i:s');
+        $data['ends_at'] = $endsAt?->format('Y-m-d H:i:s');
+        $data['email_send_at'] = $emailSendAt?->format('Y-m-d H:i:s');
+
+        try {
+            $existing = $this->repository->findAnnouncement($announcementId, $this->app->auth()->user() ?? [], true);
+
+            if ($existing === null) {
+                Response::abort(404, 'Announcement not found.');
+            }
+
+            $emailsAlreadySent = $this->repository->emailsAlreadySent($announcementId);
+
+            $this->repository->updateAnnouncement($announcementId, $data, $this->app->auth()->id());
+
+            // Send emails if now published AND emails not yet sent
+            $isNowPublished = ($data['status'] ?? '') === 'published';
+            if ($isNowPublished && !$emailsAlreadySent && (bool) config('app.mail.enabled', false)) {
+                $sendNow = $emailSendAt === null || $emailSendAt <= new DateTimeImmutable();
+                $this->notifyAnnouncementRecipients($announcementId, $data, $sendNow);
+            }
+
+            $this->app->session()->flash('success', 'Announcement updated successfully.');
+            $this->redirect('/announcements/' . $announcementId);
+        } catch (Throwable $throwable) {
+            $this->app->session()->flash('error', 'Unable to update the announcement. ' . $throwable->getMessage());
+            $this->app->session()->flash('old_input', $data);
+            $this->redirect($redirectPath);
+        }
+    }
+
+    public function sendEmails(Request $request, string $id): void
+    {
+        $announcementId = (int) $id;
+        $canManage = $this->app->auth()->hasPermission('announcements.manage');
+
+        if (!$canManage) {
+            Response::abort(403, 'You do not have permission to send announcement emails.');
+        }
+
+        if (!$this->app->csrf()->validate((string) $request->input('_token'))) {
+            $this->app->session()->flash('error', 'Invalid form submission token.');
+            $this->redirect('/announcements/' . $announcementId);
+        }
+
+        try {
+            $announcement = $this->repository->findAnnouncement($announcementId, $this->app->auth()->user() ?? [], true);
+
+            if ($announcement === null) {
+                Response::abort(404, 'Announcement not found.');
+            }
+
+            $this->notifyAnnouncementRecipients($announcementId, $announcement, true);
+            $this->app->session()->flash('success', 'Emails have been sent to all targeted recipients.');
+        } catch (Throwable $throwable) {
+            $this->app->session()->flash('error', 'Unable to send emails: ' . $throwable->getMessage());
+        }
+
+        $this->redirect('/announcements/' . $announcementId);
     }
 
     private function validateCsrf(Request $request, string $redirectPath): void
@@ -319,9 +474,11 @@ final class AnnouncementController extends Controller
     }
 
     /**
-     * Queue notification emails to all targeted recipients of a published announcement.
+     * Queue (and optionally send immediately) notification emails to all targeted recipients.
+     *
+     * @param bool $sendNow true = deliver immediately; false = queue only (deferred)
      */
-    private function notifyAnnouncementRecipients(int $announcementId, array $data): void
+    private function notifyAnnouncementRecipients(int $announcementId, array $data, bool $sendNow = true): void
     {
         try {
             $recipients = $this->repository->targetedRecipients($announcementId);
@@ -342,7 +499,7 @@ final class AnnouncementController extends Controller
 
             $bodyHtml = '<div style="font-family:Arial,Helvetica,sans-serif;max-width:650px;margin:0 auto;color:#333;">';
             $bodyHtml .= '<div style="background:#1a3a5c;color:#fff;padding:18px 24px;border-radius:6px 6px 0 0;">';
-            $bodyHtml .= '<h2 style="margin:0;font-size:20px;">📢 ' . e($title) . '</h2></div>';
+            $bodyHtml .= '<h2 style="margin:0;font-size:20px;">&#128226; ' . e($title) . '</h2></div>';
             $bodyHtml .= '<div style="padding:20px 24px;border:1px solid #e0e0e0;border-top:none;">';
             $bodyHtml .= '<p style="margin:0 0 8px;"><strong>Priority:</strong> <span style="color:' . $pColor . ';font-weight:600;">' . e($priority) . '</span></p>';
             $bodyHtml .= '<div style="background:#f8f9fa;padding:16px;border-radius:6px;margin:12px 0;font-size:14px;line-height:1.6;">' . nl2br(e($content)) . '</div>';
@@ -350,7 +507,7 @@ final class AnnouncementController extends Controller
             $bodyHtml .= '<p style="margin-top:20px;font-size:12px;color:#888;">This is an automated message from ' . e($appName) . '.</p>';
             $bodyHtml .= '</div></div>';
 
-            $subject = '📢 ' . $title;
+            $subject = '[Announcement] ' . $title;
             $bodyText = $title . "\n\nPriority: " . $priority . "\n\n" . $content;
 
             foreach ($recipients as $recipient) {
@@ -366,8 +523,12 @@ final class AnnouncementController extends Controller
                     $notifications->create($userId, 'announcement', $subject, mb_substr($content, 0, 200), 'announcement', $announcementId, '/announcements/' . $announcementId);
                 }
 
-                // Queue email
-                $notifications->queueEmail($email, $subject, $bodyHtml, $bodyText, $userId, 'announcement', $announcementId);
+                // Queue or deliver email
+                if ($sendNow) {
+                    $notifications->deliverEmail($email, $subject, $bodyHtml, $bodyText, $userId, 'announcement', $announcementId);
+                } else {
+                    $notifications->queueEmail($email, $subject, $bodyHtml, $bodyText, $userId, 'announcement', $announcementId);
+                }
             }
         } catch (Throwable $ignored) {
             // Email notification failure should not block announcement creation

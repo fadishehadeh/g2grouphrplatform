@@ -101,9 +101,9 @@ final class AnnouncementRepository
         return $this->database->transaction(function (Database $database) use ($data, $actorId): int {
             $database->execute(
                 'INSERT INTO announcements (
-                    title, content, priority, starts_at, ends_at, status, created_by, updated_by
+                    title, content, priority, starts_at, ends_at, email_send_at, status, created_by, updated_by
                  ) VALUES (
-                    :title, :content, :priority, :starts_at, :ends_at, :status, :created_by, :updated_by
+                    :title, :content, :priority, :starts_at, :ends_at, :email_send_at, :status, :created_by, :updated_by
                  )',
                 [
                     'title' => trim((string) ($data['title'] ?? '')),
@@ -111,6 +111,7 @@ final class AnnouncementRepository
                     'priority' => (string) ($data['priority'] ?? 'normal'),
                     'starts_at' => $this->nullableString($data['starts_at'] ?? null),
                     'ends_at' => $this->nullableString($data['ends_at'] ?? null),
+                    'email_send_at' => $this->nullableString($data['email_send_at'] ?? null),
                     'status' => (string) ($data['status'] ?? 'draft'),
                     'created_by' => $actorId,
                     'updated_by' => $actorId,
@@ -130,6 +131,69 @@ final class AnnouncementRepository
 
             return $announcementId;
         });
+    }
+
+    public function updateAnnouncement(int $announcementId, array $data, ?int $actorId): void
+    {
+        $this->database->transaction(function (Database $database) use ($announcementId, $data, $actorId): void {
+            $database->execute(
+                'UPDATE announcements SET
+                    title = :title, content = :content, priority = :priority,
+                    starts_at = :starts_at, ends_at = :ends_at, email_send_at = :email_send_at,
+                    status = :status, updated_by = :updated_by
+                 WHERE id = :id',
+                [
+                    'title' => trim((string) ($data['title'] ?? '')),
+                    'content' => trim((string) ($data['content'] ?? '')),
+                    'priority' => (string) ($data['priority'] ?? 'normal'),
+                    'starts_at' => $this->nullableString($data['starts_at'] ?? null),
+                    'ends_at' => $this->nullableString($data['ends_at'] ?? null),
+                    'email_send_at' => $this->nullableString($data['email_send_at'] ?? null),
+                    'status' => (string) ($data['status'] ?? 'draft'),
+                    'updated_by' => $actorId,
+                    'id' => $announcementId,
+                ]
+            );
+
+            // Update target: delete old, insert new
+            $database->execute(
+                'DELETE FROM announcement_targets WHERE announcement_id = :id',
+                ['id' => $announcementId]
+            );
+            $database->execute(
+                'INSERT INTO announcement_targets (announcement_id, target_type, target_id)
+                 VALUES (:announcement_id, :target_type, :target_id)',
+                [
+                    'announcement_id' => $announcementId,
+                    'target_type' => (string) ($data['target_type'] ?? 'all'),
+                    'target_id' => $this->nullableInt($data['target_id'] ?? null),
+                ]
+            );
+        });
+    }
+
+    /**
+     * Get the first target row for an announcement (used for pre-filling edit form).
+     */
+    public function announcementFirstTarget(int $announcementId): ?array
+    {
+        return $this->database->fetch(
+            'SELECT target_type, target_id FROM announcement_targets WHERE announcement_id = :id LIMIT 1',
+            ['id' => $announcementId]
+        );
+    }
+
+    /**
+     * Check if emails have already been queued/sent for this announcement.
+     */
+    public function emailsAlreadySent(int $announcementId): bool
+    {
+        $count = $this->database->fetchValue(
+            "SELECT COUNT(*) FROM email_queue WHERE related_type = 'announcement' AND related_id = :id",
+            ['id' => $announcementId]
+        );
+
+        return $count !== false && $count !== null && (int) $count > 0;
     }
 
     public function targetOptions(): array
@@ -153,7 +217,7 @@ final class AnnouncementRepository
 
     private function baseQuery(): string
     {
-        return "SELECT a.id, a.title, a.content, a.priority, a.starts_at, a.ends_at, a.status, a.created_at, a.updated_at,
+        return "SELECT a.id, a.title, a.content, a.priority, a.starts_at, a.ends_at, a.email_send_at, a.status, a.created_at, a.updated_at,
                        COALESCE(NULLIF(TRIM(CONCAT_WS(' ', u.first_name, u.last_name)), ''), 'System') AS created_by_name,
                        CASE WHEN ar.id IS NULL THEN 0 ELSE 1 END AS is_read,
                        COALESCE(
@@ -183,7 +247,7 @@ final class AnnouncementRepository
 
     private function groupingAndOrdering(): string
     {
-        return " GROUP BY a.id, a.title, a.content, a.priority, a.starts_at, a.ends_at, a.status, a.created_at, a.updated_at,
+        return " GROUP BY a.id, a.title, a.content, a.priority, a.starts_at, a.ends_at, a.email_send_at, a.status, a.created_at, a.updated_at,
                           u.first_name, u.last_name, ar.id
                  ORDER BY CASE a.status WHEN 'published' THEN 0 WHEN 'draft' THEN 1 ELSE 2 END ASC,
                           COALESCE(a.starts_at, a.created_at) DESC,

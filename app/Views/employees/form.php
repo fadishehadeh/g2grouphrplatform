@@ -1,7 +1,7 @@
 <?php declare(strict_types=1); ?>
 <?php $employee = $employee ?? []; $options = $options ?? []; ?>
 <?php $countries = ['Afghanistan','Albania','Algeria','Andorra','Angola','Antigua and Barbuda','Argentina','Armenia','Australia','Austria','Azerbaijan','Bahamas','Bahrain','Bangladesh','Barbados','Belarus','Belgium','Belize','Benin','Bhutan','Bolivia','Bosnia and Herzegovina','Botswana','Brazil','Brunei','Bulgaria','Burkina Faso','Burundi','Cabo Verde','Cambodia','Cameroon','Canada','Central African Republic','Chad','Chile','China','Colombia','Comoros','Congo','Costa Rica','Croatia','Cuba','Cyprus','Czech Republic','Denmark','Djibouti','Dominica','Dominican Republic','Ecuador','Egypt','El Salvador','Equatorial Guinea','Eritrea','Estonia','Eswatini','Ethiopia','Fiji','Finland','France','Gabon','Gambia','Georgia','Germany','Ghana','Greece','Grenada','Guatemala','Guinea','Guinea-Bissau','Guyana','Haiti','Honduras','Hungary','Iceland','India','Indonesia','Iran','Iraq','Ireland','Israel','Italy','Ivory Coast','Jamaica','Japan','Jordan','Kazakhstan','Kenya','Kiribati','Kosovo','Kuwait','Kyrgyzstan','Laos','Latvia','Lebanon','Lesotho','Liberia','Libya','Liechtenstein','Lithuania','Luxembourg','Madagascar','Malawi','Malaysia','Maldives','Mali','Malta','Marshall Islands','Mauritania','Mauritius','Mexico','Micronesia','Moldova','Monaco','Mongolia','Montenegro','Morocco','Mozambique','Myanmar','Namibia','Nauru','Nepal','Netherlands','New Zealand','Nicaragua','Niger','Nigeria','North Korea','North Macedonia','Norway','Oman','Pakistan','Palau','Palestine','Panama','Papua New Guinea','Paraguay','Peru','Philippines','Poland','Portugal','Qatar','Romania','Russia','Rwanda','Saint Kitts and Nevis','Saint Lucia','Saint Vincent and the Grenadines','Samoa','San Marino','Sao Tome and Principe','Saudi Arabia','Senegal','Serbia','Seychelles','Sierra Leone','Singapore','Slovakia','Slovenia','Solomon Islands','Somalia','South Africa','South Korea','South Sudan','Spain','Sri Lanka','Sudan','Suriname','Sweden','Switzerland','Syria','Taiwan','Tajikistan','Tanzania','Thailand','Timor-Leste','Togo','Tonga','Trinidad and Tobago','Tunisia','Turkey','Turkmenistan','Tuvalu','Uganda','Ukraine','United Arab Emirates','United Kingdom','United States','Uruguay','Uzbekistan','Vanuatu','Vatican City','Venezuela','Vietnam','Yemen','Zambia','Zimbabwe']; ?>
-<form method="post" action="<?= e(url($formAction)); ?>">
+<form method="post" action="<?= e(url($formAction)); ?>" enctype="multipart/form-data">
     <?= csrf_field(); ?>
     <div class="row g-4">
         <div class="col-xl-8">
@@ -45,6 +45,17 @@
             </div></div>
         </div>
         <div class="col-xl-4">
+            <div class="card content-card mb-4"><div class="card-body p-4">
+                <div class="form-section-title">Profile Photo</div>
+                <?php if (!empty($employee['profile_photo']) && is_file(base_path((string) $employee['profile_photo']))): ?>
+                    <div class="text-center mb-3">
+                        <img src="<?= e(url('/' . ltrim((string) $employee['profile_photo'], '/'))); ?>" alt="Photo"
+                             style="width:100px;height:100px;object-fit:cover;border-radius:50%;border:3px solid #dee2e6;">
+                    </div>
+                <?php endif; ?>
+                <input type="file" name="profile_photo" class="form-control form-control-sm" accept="image/png,image/jpeg,image/jpg,image/gif">
+                <div class="form-text">PNG or JPG — max 2 MB.</div>
+            </div></div>
             <div class="card content-card"><div class="card-body p-4">
                 <h5 class="mb-2"><?= e($isEdit ? 'Update employee record' : 'Create employee record'); ?></h5>
                 <p class="text-muted small mb-4">Capture the master record first. Emergency contacts, documents, and leave history are connected from the profile page.</p>

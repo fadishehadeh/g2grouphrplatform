@@ -29,7 +29,16 @@
                         <div class="row g-3">
                             <div class="col-md-6"><label class="form-label">Issue Date</label><input type="date" name="issue_date" class="form-control" value="<?= e((string) old('issue_date', '')); ?>"></div>
                             <div class="col-md-6"><label class="form-label">Expiry Date</label><input type="date" name="expiry_date" class="form-control" value="<?= e((string) old('expiry_date', '')); ?>"></div>
-                            <div class="col-12"><label class="form-label">Visibility Scope *</label><select name="visibility_scope" class="form-select" required><?php foreach (['employee' => 'Employee', 'manager' => 'Manager', 'hr' => 'HR', 'admin' => 'Admin'] as $value => $label): ?><option value="<?= e($value); ?>" <?= (string) old('visibility_scope', 'hr') === $value ? 'selected' : ''; ?>><?= e($label); ?></option><?php endforeach; ?></select></div>
+                            <div class="col-12">
+                                <label class="form-label">Visibility *</label>
+                                <select name="visibility_scope" class="form-select" required>
+                                    <option value="employee" <?= (string) old('visibility_scope', 'hr') === 'employee' ? 'selected' : ''; ?>>Employee only (employee can see)</option>
+                                    <option value="manager" <?= (string) old('visibility_scope', 'hr') === 'manager' ? 'selected' : ''; ?>>Manager + above</option>
+                                    <option value="hr" <?= (string) old('visibility_scope', 'hr') === 'hr' ? 'selected' : ''; ?>>HR + Admin only</option>
+                                    <option value="admin" <?= (string) old('visibility_scope', 'hr') === 'admin' ? 'selected' : ''; ?>>Admin only</option>
+                                </select>
+                                <div class="form-text">Controls who can view and download this document.</div>
+                            </div>
                             <div class="col-12"><label class="form-label">File *</label><input type="file" name="document_file" class="form-control" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx" required></div>
                         </div>
                         <button type="submit" class="btn btn-primary w-100 mt-4">Upload Document</button>
@@ -61,7 +70,20 @@
                                     <td><div class="fw-semibold"><?= e((string) $document['title']); ?></div><div class="small text-muted"><?= e((string) (($document['document_number'] ?? '') !== '' ? $document['document_number'] : 'No number')); ?></div></td>
                                     <td><div><?= e((string) $document['original_file_name']); ?></div><div class="small text-muted"><?= e(number_format(((int) ($document['file_size'] ?? 0)) / 1024, 1)); ?> KB</div><a href="<?= e(url('/documents/' . $document['id'] . '/download')); ?>" class="btn btn-link btn-sm px-0" target="_blank" rel="noopener">Open / Download</a></td>
                                     <td><?php if (($document['expiry_date'] ?? null) === null): ?><span class="text-muted">—</span><?php else: ?><div><?= e((string) $document['expiry_date']); ?></div><div class="small <?= $days !== null && (int) $days < 0 ? 'text-danger' : 'text-muted'; ?>"><?php if ((int) $days < 0): ?>Expired <?= e((string) abs((int) $days)); ?> day(s) ago<?php else: ?><?= e((string) $days); ?> day(s) left<?php endif; ?></div><?php endif; ?></td>
-                                    <td><?= e(ucwords(str_replace('_', ' ', (string) $document['visibility_scope']))); ?></td>
+                                    <td><?php
+                                        $scopeClass = match ((string) $document['visibility_scope']) {
+                                            'admin' => 'text-bg-danger',
+                                            'hr' => 'text-bg-warning',
+                                            'manager' => 'text-bg-info',
+                                            default => 'text-bg-secondary',
+                                        };
+                                        $scopeLabel = match ((string) $document['visibility_scope']) {
+                                            'admin' => 'Admin only',
+                                            'hr' => 'HR + Admin',
+                                            'manager' => 'Manager+',
+                                            default => 'Employee',
+                                        };
+                                    ?><span class="badge <?= e($scopeClass); ?>"><?= e($scopeLabel); ?></span></td>
                                 </tr>
                             <?php endforeach; ?>
                             </tbody>

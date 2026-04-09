@@ -31,7 +31,7 @@ final class AuthController extends Controller
         $password = (string) $request->input('password');
 
         if ($login === '' || $password === '') {
-            $this->app->session()->flash('error', 'Username/email and password are required.');
+            $this->app->session()->flash('error', 'Email and password are required.');
             $this->app->session()->flash('old_input', ['login' => $login]);
             $this->redirect('/login');
         }
@@ -144,8 +144,8 @@ final class AuthController extends Controller
         }
 
         $this->render('auth.reset-password', [
-            'title' => 'Reset Password',
-            'pageTitle' => 'Choose a new password',
+            'title' => 'Set Password',
+            'pageTitle' => 'Set your password',
             'resetToken' => $token,
             'passwordPolicy' => PasswordPolicy::description(),
         ], 'auth');

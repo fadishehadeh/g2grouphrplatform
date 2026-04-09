@@ -8,6 +8,7 @@ use App\Core\Application;
 use App\Core\Controller;
 use App\Core\Request;
 use App\Core\Response;
+use App\Support\Mailer;
 use Throwable;
 
 final class EmployeeController extends Controller
@@ -72,6 +73,12 @@ final class EmployeeController extends Controller
 
         try {
             $employeeId = $this->repository->createEmployee($data, $this->app->auth()->id());
+
+            $photoPath = $this->handlePhotoUpload($request, $employeeId);
+            if ($photoPath !== null) {
+                $this->repository->updatePhotoPath($employeeId, $photoPath);
+            }
+
             $this->app->session()->flash('success', 'Employee created successfully.');
             $this->redirect('/employees/' . $employeeId);
         } catch (Throwable $throwable) {
@@ -96,19 +103,21 @@ final class EmployeeController extends Controller
                 Response::abort(404, 'Employee not found.');
             }
 
-            $contacts = $this->repository->emergencyContacts($employeeId);
-            $stats = $this->repository->profileStats($employeeId);
+            $contacts  = $this->repository->emergencyContacts($employeeId);
+            $stats     = $this->repository->profileStats($employeeId);
+            $insurance = $this->repository->findInsurance($employeeId);
         } catch (Throwable $throwable) {
             $this->app->session()->flash('error', 'Unable to load employee profile: ' . $throwable->getMessage());
             $this->redirect('/dashboard');
         }
 
         $this->render('employees.show', [
-            'title' => 'Employee Profile',
+            'title'     => 'Employee Profile',
             'pageTitle' => 'Employee Profile',
-            'employee' => $employee,
-            'contacts' => $contacts,
-            'stats' => $stats,
+            'employee'  => $employee,
+            'contacts'  => $contacts,
+            'stats'     => $stats,
+            'insurance' => $insurance ?? null,
         ]);
     }
 
@@ -180,6 +189,12 @@ final class EmployeeController extends Controller
             }
 
             $this->repository->updateEmployee($employeeId, $data, $this->app->auth()->id());
+
+            $photoPath = $this->handlePhotoUpload($request, $employeeId);
+            if ($photoPath !== null) {
+                $this->repository->updatePhotoPath($employeeId, $photoPath);
+            }
+
             $this->app->session()->flash('success', 'Employee updated successfully.');
             $this->redirect('/employees/' . $employeeId);
         } catch (Throwable $throwable) {
@@ -255,6 +270,132 @@ final class EmployeeController extends Controller
             'statusHistory' => $statusHistory,
             'historyLogs' => $historyLogs,
         ]);
+    }
+
+    public function sendAccess(Request $request, string $id): void
+    {
+        $employeeId = (int) $id;
+        $this->validateCsrf($request, '/employees/' . $employeeId);
+
+        try {
+            $employee = $this->repository->findEmployee($employeeId);
+
+            if ($employee === null) {
+                Response::abort(404, 'Employee not found.');
+            }
+
+            $email = (string) ($employee['work_email'] ?? '');
+
+            if ($email === '') {
+                $this->app->session()->flash('error', 'Employee has no work email address. Please add one before sending access.');
+                $this->redirect('/employees/' . $employeeId);
+            }
+
+            $db = $this->app->database();
+            $userId = !empty($employee['user_id']) ? (int) $employee['user_id'] : null;
+
+            if ($userId === null) {
+                // Create user account — username = email, password locked until they set it via link
+                $employeeRole = $db->fetch("SELECT id FROM roles WHERE code = 'employee' LIMIT 1");
+                $roleId = $employeeRole !== null ? (int) $employeeRole['id'] : 4;
+
+                $db->execute(
+                    'INSERT INTO users (role_id, username, email, password_hash, first_name, last_name, status, must_change_password, last_password_change_at)
+                     VALUES (:role_id, :username, :email, :password_hash, :first_name, :last_name, :status, 1, :now)',
+                    [
+                        'role_id' => $roleId,
+                        'username' => $email,
+                        'email' => $email,
+                        'password_hash' => password_hash(bin2hex(random_bytes(32)), PASSWORD_DEFAULT),
+                        'first_name' => (string) ($employee['first_name'] ?? ''),
+                        'last_name' => (string) ($employee['last_name'] ?? ''),
+                        'status' => 'active',
+                        'now' => date('Y-m-d H:i:s'),
+                    ]
+                );
+
+                $userId = (int) $db->lastInsertId();
+
+                $db->execute(
+                    'UPDATE employees SET user_id = :uid, updated_by = :actor WHERE id = :eid',
+                    ['uid' => $userId, 'actor' => $this->app->auth()->id(), 'eid' => $employeeId]
+                );
+            } else {
+                // Ensure username is synced to email
+                $db->execute(
+                    'UPDATE users SET username = :email WHERE id = :id',
+                    ['email' => $email, 'id' => $userId]
+                );
+            }
+
+            // Generate a set-password token (72h expiry)
+            $token = bin2hex(random_bytes(32));
+            $expiresAt = date('Y-m-d H:i:s', strtotime('+72 hours'));
+            $now = date('Y-m-d H:i:s');
+
+            $db->execute(
+                'UPDATE password_resets SET used_at = :now WHERE user_id = :uid AND used_at IS NULL',
+                ['now' => $now, 'uid' => $userId]
+            );
+            $db->execute(
+                'INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES (:uid, :hash, :expires)',
+                ['uid' => $userId, 'hash' => password_hash($token, PASSWORD_DEFAULT), 'expires' => $expiresAt]
+            );
+
+            $setPasswordLink = url('/reset-password/' . $token);
+            $appName = (string) config('app.brand.display_name', config('app.name', 'HR Management System'));
+            $firstName = (string) ($employee['first_name'] ?? 'Employee');
+
+            $bodyHtml = '<div style="font-family:Arial,sans-serif;max-width:600px">'
+                . '<h2>Welcome to ' . e($appName) . '</h2>'
+                . '<p>Hello ' . e($firstName) . ',</p>'
+                . '<p>Your account has been created. Please set your password using the button below to access the system:</p>'
+                . '<table style="margin:16px 0;border-collapse:collapse">'
+                . '<tr><td style="padding:4px 12px 4px 0;font-weight:bold">Login Email</td><td style="padding:4px 0">' . e($email) . '</td></tr>'
+                . '</table>'
+                . '<p style="margin:24px 0"><a href="' . e($setPasswordLink) . '" style="background:#0d6efd;color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold">Set My Password</a></p>'
+                . '<p class="text-muted" style="font-size:13px;color:#888">This link expires in 72 hours. If you did not expect this email, please ignore it.</p>'
+                . '<p>Best regards,<br>' . e($appName) . '</p>'
+                . '</div>';
+
+            $bodyText = "Welcome to {$appName}\n\nHello {$firstName},\n\n"
+                . "Your account has been created. Set your password here:\n{$setPasswordLink}\n\n"
+                . "Your login email: {$email}\n"
+                . "This link expires in 72 hours.\n\nBest regards,\n{$appName}";
+
+            $mailer = new Mailer((array) config('app.mail', []));
+            $mailer->send($email, "Set up your {$appName} account", $bodyHtml, $bodyText);
+
+            $this->app->session()->flash('success', 'Access invitation sent to ' . $email . '. Employee will set their own password via the link.');
+        } catch (Throwable $throwable) {
+            $this->app->session()->flash('error', 'Unable to send access credentials: ' . $throwable->getMessage());
+        }
+
+        $this->redirect('/employees/' . $employeeId);
+    }
+
+    public function saveInsurance(Request $request, string $id): void
+    {
+        $employeeId = (int) $id;
+        $this->validateCsrf($request, '/employees/' . $employeeId);
+
+        if (!$this->app->auth()->hasPermission('employee.edit')) {
+            Response::abort(403, 'You do not have permission to update insurance records.');
+        }
+
+        try {
+            $data = [];
+            foreach ($request->all() as $key => $value) {
+                if ($key === '_token') continue;
+                $data[$key] = is_string($value) ? trim($value) : $value;
+            }
+            $this->repository->saveInsurance($employeeId, $data, $this->app->auth()->id());
+            $this->app->session()->flash('success', 'Insurance details updated.');
+        } catch (Throwable $throwable) {
+            $this->app->session()->flash('error', 'Unable to save insurance: ' . $throwable->getMessage());
+        }
+
+        $this->redirect('/employees/' . $employeeId);
     }
 
     private function validateCsrf(Request $request, string $redirectPath): void
@@ -634,5 +775,39 @@ final class EmployeeController extends Controller
             'designations' => [],
             'managers' => [],
         ];
+    }
+
+    private function handlePhotoUpload(Request $request, int $employeeId): ?string
+    {
+        $file = $request->file('profile_photo');
+
+        if (!is_array($file) || (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            return null;
+        }
+
+        $allowedExt = ['png', 'jpg', 'jpeg', 'gif'];
+        $ext = strtolower(pathinfo(basename((string) ($file['name'] ?? '')), PATHINFO_EXTENSION));
+
+        if (!in_array($ext, $allowedExt, true)) {
+            throw new \RuntimeException('Profile photo must be PNG or JPG.');
+        }
+
+        if ((int) ($file['size'] ?? 0) > 2 * 1024 * 1024) {
+            throw new \RuntimeException('Profile photo must be 2 MB or smaller.');
+        }
+
+        $dir = base_path('storage/uploads/photos');
+        if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
+            throw new \RuntimeException('Unable to create photo directory.');
+        }
+
+        $storedName = 'employee_' . $employeeId . '_' . date('YmdHis') . '.' . $ext;
+        $relativePath = 'storage/uploads/photos/' . $storedName;
+
+        if (!move_uploaded_file((string) ($file['tmp_name'] ?? ''), base_path($relativePath))) {
+            throw new \RuntimeException('Unable to save profile photo.');
+        }
+
+        return $relativePath;
     }
 }

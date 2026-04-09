@@ -336,11 +336,13 @@ final class AdminController extends Controller
 
     private function userPayload(Request $request): array
     {
+        $email = strtolower(trim((string) $request->input('email', '')));
+
         return [
             'role_id' => trim((string) $request->input('role_id', '')),
             'employee_id' => trim((string) $request->input('employee_id', '')),
-            'username' => strtolower(trim((string) $request->input('username', ''))),
-            'email' => strtolower(trim((string) $request->input('email', ''))),
+            'username' => $email,
+            'email' => $email,
             'first_name' => trim((string) $request->input('first_name', '')),
             'last_name' => trim((string) $request->input('last_name', '')),
             'status' => trim((string) $request->input('status', 'active')),
@@ -352,7 +354,7 @@ final class AdminController extends Controller
 
     private function validateUserPayload(array $data, string $redirect, bool $requirePassword): bool
     {
-        $required = ['role_id', 'username', 'email', 'first_name', 'last_name'];
+        $required = ['role_id', 'email', 'first_name', 'last_name'];
 
         foreach ($required as $field) {
             if ($data[$field] === '') {

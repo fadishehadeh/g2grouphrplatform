@@ -549,4 +549,70 @@ final class EmployeeRepository
 
         return $value === null || $value === '' ? null : (string) $value;
     }
+
+    public function updatePhotoPath(int $employeeId, string $path): void
+    {
+        $this->database->execute(
+            'UPDATE employees SET profile_photo = :path, updated_at = NOW() WHERE id = :id',
+            ['path' => $path, 'id' => $employeeId]
+        );
+    }
+
+    public function findInsurance(int $employeeId): ?array
+    {
+        return $this->database->fetch(
+            'SELECT * FROM employee_insurance WHERE employee_id = :employee_id LIMIT 1',
+            ['employee_id' => $employeeId]
+        ) ?: null;
+    }
+
+    public function saveInsurance(int $employeeId, array $data, int $actorId): void
+    {
+        $existing = $this->findInsurance($employeeId);
+        $hasInsurance = isset($data['has_insurance']) ? 1 : 0;
+
+        if ($existing === null) {
+            $this->database->execute(
+                'INSERT INTO employee_insurance
+                 (employee_id, has_insurance, provider_name, policy_number, card_number, member_id, coverage_type, start_date, expiry_date, notes, created_by, updated_by)
+                 VALUES (:employee_id, :has_insurance, :provider_name, :policy_number, :card_number, :member_id, :coverage_type, :start_date, :expiry_date, :notes, :created_by, :updated_by)',
+                [
+                    'employee_id'   => $employeeId,
+                    'has_insurance' => $hasInsurance,
+                    'provider_name' => ($data['provider_name'] ?? '') ?: null,
+                    'policy_number' => ($data['policy_number'] ?? '') ?: null,
+                    'card_number'   => ($data['card_number'] ?? '') ?: null,
+                    'member_id'     => ($data['member_id'] ?? '') ?: null,
+                    'coverage_type' => ($data['coverage_type'] ?? '') ?: null,
+                    'start_date'    => ($data['start_date'] ?? '') ?: null,
+                    'expiry_date'   => ($data['expiry_date'] ?? '') ?: null,
+                    'notes'         => ($data['notes'] ?? '') ?: null,
+                    'created_by'    => $actorId,
+                    'updated_by'    => $actorId,
+                ]
+            );
+        } else {
+            $this->database->execute(
+                'UPDATE employee_insurance SET
+                 has_insurance = :has_insurance, provider_name = :provider_name, policy_number = :policy_number,
+                 card_number = :card_number, member_id = :member_id, coverage_type = :coverage_type,
+                 start_date = :start_date, expiry_date = :expiry_date, notes = :notes,
+                 updated_by = :updated_by, updated_at = NOW()
+                 WHERE employee_id = :employee_id',
+                [
+                    'employee_id'   => $employeeId,
+                    'has_insurance' => $hasInsurance,
+                    'provider_name' => ($data['provider_name'] ?? '') ?: null,
+                    'policy_number' => ($data['policy_number'] ?? '') ?: null,
+                    'card_number'   => ($data['card_number'] ?? '') ?: null,
+                    'member_id'     => ($data['member_id'] ?? '') ?: null,
+                    'coverage_type' => ($data['coverage_type'] ?? '') ?: null,
+                    'start_date'    => ($data['start_date'] ?? '') ?: null,
+                    'expiry_date'   => ($data['expiry_date'] ?? '') ?: null,
+                    'notes'         => ($data['notes'] ?? '') ?: null,
+                    'updated_by'    => $actorId,
+                ]
+            );
+        }
+    }
 }

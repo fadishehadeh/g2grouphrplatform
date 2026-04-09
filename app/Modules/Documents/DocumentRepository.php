@@ -110,8 +110,17 @@ final class DocumentRepository
         return $this->database->fetchAll($sql, $params);
     }
 
-    public function employeeDocuments(int $employeeId): array
+    public function employeeDocuments(int $employeeId, string $viewerRoleCode = 'employee'): array
     {
+        // Build the visibility filter based on role
+        if (in_array($viewerRoleCode, ['super_admin', 'hr_admin'], true)) {
+            $scopeCondition = "1 = 1"; // see all
+        } elseif ($viewerRoleCode === 'manager') {
+            $scopeCondition = "ed.visibility_scope IN ('employee', 'manager', 'hr')";
+        } else {
+            $scopeCondition = "ed.visibility_scope = 'employee'";
+        }
+
         return $this->database->fetchAll(
             "SELECT ed.id, ed.title, ed.document_number, ed.original_file_name, ed.file_size, ed.issue_date, ed.expiry_date,
                     ed.visibility_scope, ed.status, ed.created_at,
@@ -119,7 +128,7 @@ final class DocumentRepository
                     CASE WHEN ed.expiry_date IS NULL THEN NULL ELSE DATEDIFF(ed.expiry_date, CURDATE()) END AS days_until_expiry
              FROM employee_documents ed
              INNER JOIN document_categories dc ON dc.id = ed.category_id
-             WHERE ed.employee_id = :employee_id AND ed.is_current = 1
+             WHERE ed.employee_id = :employee_id AND ed.is_current = 1 AND " . $scopeCondition . "
              ORDER BY CASE WHEN ed.expiry_date IS NULL THEN 1 ELSE 0 END ASC, ed.expiry_date ASC, ed.created_at DESC",
             ['employee_id' => $employeeId]
         );
@@ -129,8 +138,11 @@ final class DocumentRepository
     {
         return $this->database->fetch(
             "SELECT ed.id, ed.employee_id, ed.title, ed.original_file_name, ed.stored_file_name, ed.file_path,
-                    ed.file_extension, ed.mime_type, ed.file_size, ed.visibility_scope, ed.status
+                    ed.file_extension, ed.mime_type, ed.file_size, ed.visibility_scope, ed.status,
+                    CONCAT_WS(' ', e.first_name, e.middle_name, e.last_name) AS employee_name,
+                    e.employee_code
              FROM employee_documents ed
+             INNER JOIN employees e ON e.id = ed.employee_id
              WHERE ed.id = :id AND ed.is_current = 1
              LIMIT 1",
             ['id' => $documentId]
@@ -210,6 +222,63 @@ final class DocumentRepository
 
             return $documentId;
         });
+    }
+
+    /**
+     * Documents expiring within $days days where a 30_days alert has NOT been sent yet.
+     */
+    public function documentsNeedingAlerts(int $days = 30): array
+    {
+        return $this->database->fetchAll(
+            "SELECT ed.id, ed.employee_id, ed.title, ed.document_number, ed.expiry_date,
+                    dc.name AS category_name, e.employee_code, u.email AS employee_email,
+                    CONCAT_WS(' ', e.first_name, e.middle_name, e.last_name) AS employee_name,
+                    DATEDIFF(ed.expiry_date, CURDATE()) AS days_until_expiry
+             FROM employee_documents ed
+             INNER JOIN document_categories dc ON dc.id = ed.category_id
+             INNER JOIN employees e ON e.id = ed.employee_id
+             LEFT JOIN users u ON u.id = e.user_id
+             WHERE ed.is_current = 1
+               AND ed.expiry_date IS NOT NULL
+               AND DATEDIFF(ed.expiry_date, CURDATE()) BETWEEN 0 AND :days
+               AND NOT EXISTS (
+                   SELECT 1 FROM document_alerts da
+                   WHERE da.employee_document_id = ed.id
+                     AND da.alert_type = '30_days'
+                     AND da.status = 'sent'
+               )
+             ORDER BY ed.expiry_date ASC",
+            ['days' => $days]
+        );
+    }
+
+    /**
+     * Get active user IDs and emails for HR admin and Super admin roles.
+     */
+    public function hrAndAdminRecipients(): array
+    {
+        return $this->database->fetchAll(
+            "SELECT u.id AS user_id, u.email
+             FROM users u
+             WHERE u.status = 'active'
+               AND u.role_id IN (
+                   SELECT id FROM roles WHERE code IN ('super_admin', 'hr_admin')
+               )
+               AND u.email IS NOT NULL AND u.email <> ''"
+        );
+    }
+
+    public function recordAlertSent(int $documentId, string $alertType, int $userId): void
+    {
+        $this->database->execute(
+            "INSERT INTO document_alerts (employee_document_id, alert_type, alert_date, sent_to_user_id, status)
+             VALUES (:doc_id, :alert_type, CURDATE(), :user_id, 'sent')",
+            [
+                'doc_id' => $documentId,
+                'alert_type' => $alertType,
+                'user_id' => $userId,
+            ]
+        );
     }
 
     private function nullable(mixed $value): mixed

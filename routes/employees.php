@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Middleware\AccountStatusMiddleware;
 use App\Middleware\AuthMiddleware;
 use App\Middleware\PermissionMiddleware;
+use App\Middleware\RoleMiddleware;
 use App\Modules\Employees\EmployeeController;
 
 $router = $app->router();
@@ -81,4 +82,15 @@ $router->get('/employees/{id}/edit', [EmployeeController::class, 'edit'], [
 $router->post('/employees/{id}/edit', [EmployeeController::class, 'update'], [
     ...$employeeBaseMiddleware,
     [PermissionMiddleware::class, ['employee.edit']],
+]);
+
+$router->post('/employees/{id}/insurance', [EmployeeController::class, 'saveInsurance'], [
+    ...$employeeBaseMiddleware,
+    [PermissionMiddleware::class, ['employee.edit']],
+]);
+
+$router->post('/employees/{id}/send-access', [EmployeeController::class, 'sendAccess'], [
+    AuthMiddleware::class,
+    AccountStatusMiddleware::class,
+    [RoleMiddleware::class, ['super_admin', 'hr_admin']],
 ]);

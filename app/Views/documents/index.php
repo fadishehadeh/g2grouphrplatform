@@ -46,7 +46,20 @@
                                     <div class="small <?= $days !== null && (int) $days < 0 ? 'text-danger' : 'text-muted'; ?>"><?php if ((int) $days < 0): ?>Expired <?= e((string) abs((int) $days)); ?> day(s) ago<?php else: ?><?= e((string) $days); ?> day(s) left<?php endif; ?></div>
                                 <?php endif; ?>
                             </td>
-                            <td><?= e(ucwords(str_replace('_', ' ', (string) $document['visibility_scope']))); ?></td>
+                            <td><?php
+                                $scopeClass = match ((string) $document['visibility_scope']) {
+                                    'admin' => 'text-bg-danger',
+                                    'hr' => 'text-bg-warning',
+                                    'manager' => 'text-bg-info',
+                                    default => 'text-bg-secondary',
+                                };
+                                $scopeLabel = match ((string) $document['visibility_scope']) {
+                                    'admin' => 'Admin only',
+                                    'hr' => 'HR + Admin',
+                                    'manager' => 'Manager+',
+                                    default => 'Employee',
+                                };
+                            ?><span class="badge <?= e($scopeClass); ?>"><?= e($scopeLabel); ?></span></td>
                             <td><div><?= e((string) $document['original_file_name']); ?></div><div class="small text-muted"><?= e(number_format(((int) ($document['file_size'] ?? 0)) / 1024, 1)); ?> KB</div><a href="<?= e(url('/documents/' . $document['id'] . '/download')); ?>" class="btn btn-link btn-sm px-0" target="_blank" rel="noopener">Open / Download</a></td>
                         </tr>
                     <?php endforeach; ?>

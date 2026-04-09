@@ -10,7 +10,7 @@
 <div class="card content-card mb-4">
     <div class="card-body p-4">
         <h5 class="mb-3"><i class="bi bi-pencil-square"></i> Company Details</h5>
-        <form method="post" action="<?= e(url('/admin/companies/' . $cId)); ?>">
+        <form method="post" action="<?= e(url('/admin/companies/' . $cId)); ?>" enctype="multipart/form-data">
             <?= csrf_field(); ?>
             <div class="row g-3">
                 <div class="col-md-4"><label class="form-label">Company Name *</label><input type="text" name="name" class="form-control" value="<?= e(old('name', (string) ($c['name'] ?? ''))); ?>" required></div>
@@ -25,6 +25,14 @@
                 <div class="col-md-2"><label class="form-label">Postal Code</label><input type="text" name="postal_code" class="form-control" value="<?= e(old('postal_code', (string) ($c['postal_code'] ?? ''))); ?>"></div>
                 <div class="col-md-2"><label class="form-label">Timezone *</label><input type="text" name="timezone" class="form-control" value="<?= e(old('timezone', (string) ($c['timezone'] ?? 'UTC'))); ?>" required></div>
                 <div class="col-md-2"><label class="form-label">Status *</label><select name="status" class="form-select" required><option value="active" <?= (old('status', (string) ($c['status'] ?? 'active'))) === 'active' ? 'selected' : ''; ?>>Active</option><option value="inactive" <?= (old('status', (string) ($c['status'] ?? 'active'))) === 'inactive' ? 'selected' : ''; ?>>Inactive</option></select></div>
+                <div class="col-md-4">
+                    <label class="form-label">Company Logo</label>
+                    <?php if (!empty($c['logo_path']) && is_file(base_path((string) $c['logo_path']))): ?>
+                        <div class="mb-2"><img src="<?= e(url('/' . ltrim((string) $c['logo_path'], '/'))); ?>" alt="Logo" style="max-height:60px;max-width:180px;object-fit:contain;border:1px solid #dee2e6;border-radius:4px;padding:4px;background:#fff;"></div>
+                    <?php endif; ?>
+                    <input type="file" name="logo_file" class="form-control form-control-sm" accept="image/png,image/jpeg,image/svg+xml,image/gif">
+                    <div class="form-text">PNG, JPG, SVG — max 2 MB. Used on generated letters.</div>
+                </div>
                 <div class="col-12"><button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> Update Company</button></div>
             </div>
         </form>

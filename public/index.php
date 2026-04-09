@@ -39,5 +39,6 @@ require BASE_PATH . '/routes/offboarding.php';
 require BASE_PATH . '/routes/announcements.php';
 require BASE_PATH . '/routes/reports.php';
 require BASE_PATH . '/routes/settings.php';
+require BASE_PATH . '/routes/letters.php';
 
 $app->run();

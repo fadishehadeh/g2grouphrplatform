@@ -145,7 +145,8 @@ final class LeaveController extends Controller
             $this->app->session()->flash('error', 'Unable to approve leave request: ' . $throwable->getMessage());
         }
 
-        $this->redirect('/leave/approvals');
+        $returnTo = trim((string) $request->input('return_to', ''));
+        $this->redirect($returnTo !== '' ? $returnTo : '/leave/approvals');
     }
 
     public function reject(Request $request, string $id): void
@@ -153,12 +154,13 @@ final class LeaveController extends Controller
         $this->validateCsrf($request, '/leave/approvals');
         $requestId = (int) $id;
         $queue = (string) $request->input('queue', '');
-        $reason = trim((string) $request->input('comments', ''));
+        $reason = trim((string) $request->input('reason', '')) ?: trim((string) $request->input('comments', ''));
         $user = $this->app->auth()->user() ?? [];
+        $returnTo = trim((string) $request->input('return_to', ''));
 
         if ($reason === '') {
             $this->app->session()->flash('error', 'A rejection reason is required.');
-            $this->redirect('/leave/approvals');
+            $this->redirect($returnTo !== '' ? $returnTo : '/leave/approvals');
         }
 
         try {
@@ -183,7 +185,7 @@ final class LeaveController extends Controller
             $this->app->session()->flash('error', 'Unable to reject leave request: ' . $throwable->getMessage());
         }
 
-        $this->redirect('/leave/approvals');
+        $this->redirect($returnTo !== '' ? $returnTo : '/leave/approvals');
     }
 
     public function balances(Request $request): void
@@ -217,6 +219,52 @@ final class LeaveController extends Controller
             'year' => $year,
             'status' => $status,
         ]);
+    }
+
+    public function assignBalances(Request $request): void
+    {
+        if (!$this->app->auth()->hasPermission('leave.manage_types')) {
+            Response::abort(403);
+        }
+
+        $this->validateCsrf($request, '/leave/balances');
+        $year = (int) $request->input('year', date('Y'));
+
+        try {
+            $count = $this->repository->bulkAssignBalances($year);
+            $this->app->session()->flash('success', "Assigned balances for {$year}: {$count} new record(s) created for active employees.");
+        } catch (Throwable $throwable) {
+            $this->app->session()->flash('error', 'Unable to assign balances: ' . $throwable->getMessage());
+        }
+
+        $this->redirect('/leave/balances?year=' . $year);
+    }
+
+    public function adjustBalance(Request $request): void
+    {
+        if (!$this->app->auth()->hasPermission('leave.manage_types')) {
+            Response::abort(403);
+        }
+
+        $this->validateCsrf($request, '/leave/balances');
+        $employeeId = (int) $request->input('employee_id');
+        $leaveTypeId = (int) $request->input('leave_type_id');
+        $year = (int) $request->input('year', date('Y'));
+        $opening = (float) $request->input('opening_balance', 0);
+        $adjustment = (float) $request->input('adjustment', 0);
+
+        try {
+            if ($employeeId <= 0 || $leaveTypeId <= 0) {
+                throw new \InvalidArgumentException('Invalid employee or leave type.');
+            }
+
+            $this->repository->upsertBalance($employeeId, $leaveTypeId, $year, $opening, $adjustment);
+            $this->app->session()->flash('success', 'Leave balance updated successfully.');
+        } catch (Throwable $throwable) {
+            $this->app->session()->flash('error', 'Unable to update balance: ' . $throwable->getMessage());
+        }
+
+        $this->redirect('/leave/balances?year=' . $year);
     }
 
     public function requests(Request $request): void
@@ -271,6 +319,7 @@ final class LeaveController extends Controller
         }
 
         $scope = $this->leaveScope();
+        $user = $this->app->auth()->user() ?? [];
 
         try {
             $leaveRequest = $this->repository->findRequestForScope($requestId, $scope);
@@ -286,6 +335,13 @@ final class LeaveController extends Controller
             $this->redirect('/leave/requests');
         }
 
+        $status = (string) ($leaveRequest['status'] ?? '');
+        $canApproveAsManager = $status === 'pending_manager'
+            && $this->app->auth()->hasPermission('leave.approve_team')
+            && (int) ($user['employee_id'] ?? 0) > 0;
+        $canApproveAsHr = $status === 'pending_hr'
+            && $this->app->auth()->hasPermission('leave.manage_types');
+
         $this->render('leaves.show', [
             'title' => 'Leave Request Detail',
             'pageTitle' => 'Leave Request Detail',
@@ -293,6 +349,8 @@ final class LeaveController extends Controller
             'approvalTrail' => $approvalTrail,
             'attachments' => $attachments,
             'scope' => $scope,
+            'canApprove' => $canApproveAsManager || $canApproveAsHr,
+            'approveQueue' => $canApproveAsHr ? 'hr' : 'manager',
         ]);
     }
 

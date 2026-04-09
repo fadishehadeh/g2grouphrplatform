@@ -168,7 +168,7 @@ final class LeaveRepository
             }
 
             // --- Notifications ---
-            $this->notifyLeaveSubmitted($employee, $requestId, (float) $data['days_requested'], (string) $data['start_date'], (string) $data['end_date']);
+            $this->notifyLeaveRequestStakeholders($employee, $requestId, (float) $data['days_requested'], (string) $data['start_date'], (string) $data['end_date']);
 
             return $requestId;
         });
@@ -239,7 +239,7 @@ final class LeaveRepository
                 );
 
                 // Notify HR users that request is forwarded
-                $this->notifyHrPending((int) $request['id'], (int) $request['employee_id']);
+                $this->notifyHrPendingStakeholders((int) $request['id'], (int) $request['employee_id']);
 
                 return;
             }
@@ -329,7 +329,7 @@ final class LeaveRepository
                 INNER JOIN leave_types lt ON lt.id = lb.leave_type_id
                 WHERE lb.balance_year = :balance_year'
             . $scopeCondition['sql'];
-        $params = ['balance_year' => $year, ...$scopeCondition['params']];
+        $params = array_merge(['balance_year' => $year], $scopeCondition['params']);
 
         if ($status !== 'all') {
             $sql .= ' AND e.employee_status = :employee_status';
@@ -444,7 +444,7 @@ final class LeaveRepository
              WHERE lr.id = :id'
                 . $scopeCondition['sql']
                 . ' LIMIT 1',
-            ['id' => $requestId, ...$scopeCondition['params']]
+            array_merge(['id' => $requestId], $scopeCondition['params'])
         );
     }
 
@@ -496,11 +496,10 @@ final class LeaveRepository
                 INNER JOIN leave_types lt ON lt.id = lr.leave_type_id
                 WHERE lr.end_date >= :range_start AND lr.start_date <= :range_end'
             . $scopeCondition['sql'];
-        $params = [
+        $params = array_merge([
             'range_start' => $startDate,
             'range_end' => $endDate,
-            ...$scopeCondition['params'],
-        ];
+        ], $scopeCondition['params']);
 
         if ($status !== 'all') {
             $sql .= ' AND lr.status = :status';
@@ -952,6 +951,75 @@ final class LeaveRepository
         return $existingId !== null;
     }
 
+    public function activeEmployeesForBalance(): array
+    {
+        return $this->database->fetchAll(
+            "SELECT id, CONCAT_WS(' ', first_name, middle_name, last_name) AS employee_name, employee_code
+             FROM employees
+             WHERE employee_status = 'active' AND archived_at IS NULL
+             ORDER BY first_name ASC, last_name ASC"
+        );
+    }
+
+    public function upsertBalance(int $employeeId, int $leaveTypeId, int $year, float $openingBalance, float $adjustment = 0): void
+    {
+        $existing = $this->database->fetch(
+            'SELECT id, opening_balance, accrued, used_amount, adjusted_amount FROM leave_balances
+             WHERE employee_id = :eid AND leave_type_id = :ltid AND balance_year = :year LIMIT 1',
+            ['eid' => $employeeId, 'ltid' => $leaveTypeId, 'year' => $year]
+        );
+
+        if ($existing === null) {
+            $closing = $openingBalance + $adjustment;
+            $this->database->execute(
+                'INSERT INTO leave_balances (employee_id, leave_type_id, balance_year, opening_balance, accrued, used_amount, adjusted_amount, closing_balance)
+                 VALUES (:eid, :ltid, :year, :opening, 0, 0, :adjusted, :closing)',
+                ['eid' => $employeeId, 'ltid' => $leaveTypeId, 'year' => $year,
+                 'opening' => $openingBalance, 'adjusted' => $adjustment, 'closing' => $closing]
+            );
+        } else {
+            $newOpening = $openingBalance;
+            $newAdjusted = (float) $existing['adjusted_amount'] + $adjustment;
+            $closing = $newOpening + (float) $existing['accrued'] - (float) $existing['used_amount'] + $newAdjusted;
+            $this->database->execute(
+                'UPDATE leave_balances SET opening_balance = :opening, adjusted_amount = :adjusted, closing_balance = :closing
+                 WHERE employee_id = :eid AND leave_type_id = :ltid AND balance_year = :year',
+                ['opening' => $newOpening, 'adjusted' => $newAdjusted, 'closing' => $closing,
+                 'eid' => $employeeId, 'ltid' => $leaveTypeId, 'year' => $year]
+            );
+        }
+    }
+
+    public function bulkAssignBalances(int $year): int
+    {
+        $employees = $this->activeEmployeesForBalance();
+        $leaveTypes = $this->database->fetchAll(
+            "SELECT id, default_days FROM leave_types WHERE status = 'active'"
+        );
+        $count = 0;
+
+        foreach ($employees as $employee) {
+            foreach ($leaveTypes as $lt) {
+                $exists = $this->database->fetchValue(
+                    'SELECT id FROM leave_balances WHERE employee_id = :eid AND leave_type_id = :ltid AND balance_year = :year LIMIT 1',
+                    ['eid' => $employee['id'], 'ltid' => $lt['id'], 'year' => $year]
+                );
+
+                if ($exists === null || $exists === false) {
+                    $days = (float) ($lt['default_days'] ?? 0);
+                    $this->database->execute(
+                        'INSERT INTO leave_balances (employee_id, leave_type_id, balance_year, opening_balance, accrued, used_amount, adjusted_amount, closing_balance)
+                         VALUES (:eid, :ltid, :year, :days, 0, 0, 0, :days)',
+                        ['eid' => $employee['id'], 'ltid' => $lt['id'], 'year' => $year, 'days' => $days]
+                    );
+                    $count++;
+                }
+            }
+        }
+
+        return $count;
+    }
+
     public function createWeekendSetting(array $data): void
     {
         $this->database->execute(
@@ -976,14 +1044,14 @@ final class LeaveRepository
             ['module_code' => 'leave', 'company_id' => $companyId]
         );
 
-        return $workflowId !== null ? (int) $workflowId : null;
+        return ($workflowId !== null && $workflowId !== false) ? (int) $workflowId : null;
     }
 
     private function hrAdminRoleId(): ?int
     {
         $roleId = $this->database->fetchValue('SELECT id FROM roles WHERE code = :code LIMIT 1', ['code' => 'hr_admin']);
 
-        return $roleId !== null ? (int) $roleId : null;
+        return ($roleId !== null && $roleId !== false) ? (int) $roleId : null;
     }
 
     private function pendingApproval(int $requestId): ?array
@@ -1188,6 +1256,11 @@ final class LeaveRepository
         $html .= '<div style="padding:20px 24px;border:1px solid #e0e0e0;border-top:none;">';
         $html .= '<p style="font-size:15px;">' . $bodyIntro . '</p>';
 
+        if ($highlightRequestId !== null) {
+            $requestUrl = $appUrl . '/leave/requests/' . $highlightRequestId;
+            $html .= '<p style="margin:20px 0;"><a href="' . e($requestUrl) . '" style="display:inline-block;background:#1a3a5c;color:#fff;padding:11px 28px;border-radius:5px;text-decoration:none;font-weight:bold;font-size:14px;">&#128196; View &amp; Action This Request</a></p>';
+        }
+
         // Employee info card
         $html .= '<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:13px;">';
         $html .= '<tr><td style="padding:6px 12px;background:#f5f7fa;font-weight:600;width:35%;">Employee</td><td style="padding:6px 12px;">' . $employeeName . ' (' . $empCode . ')</td></tr>';
@@ -1344,36 +1417,199 @@ final class LeaveRepository
     {
         $empRow = $this->employeeContext($employeeId);
         $employeeUserId = $empRow !== null && !empty($empRow['user_id']) ? (int) $empRow['user_id'] : null;
-
-        if ($employeeUserId === null) {
-            return;
-        }
+        $employeeName = $empRow !== null ? (string) ($empRow['employee_name'] ?? 'Employee') : 'Employee';
 
         $status = ucfirst($decision);
-        $title = "Leave Request {$status}";
-        $message = "Your leave request #{$requestId} has been {$decision}.";
+        $employeeTitle = "Leave Request {$status}";
+        $employeeMessage = "Your leave request #{$requestId} has been {$decision}.";
 
         if ($reason !== null && $reason !== '') {
-            $message .= " Reason: {$reason}";
+            $employeeMessage .= " Reason: {$reason}";
         }
 
         $actionUrl = '/leave/requests/' . $requestId;
-
-        $this->notifications->create($employeeUserId, 'leave_decision', $title, $message, 'leave_request', $requestId, $actionUrl);
-
         $mailEnabled = (bool) config('app.mail.enabled', false);
 
-        if ($mailEnabled) {
-            $intro = 'Your leave request <strong>#' . $requestId . '</strong> has been <strong>' . e($decision) . '</strong>.';
-            if ($reason !== null && $reason !== '') {
-                $intro .= ' <em>Reason: ' . e($reason) . '</em>';
-            }
+        // --- Notify the employee ---
+        if ($employeeUserId !== null) {
+            $this->notifications->create($employeeUserId, 'leave_decision', $employeeTitle, $employeeMessage, 'leave_request', $requestId, $actionUrl);
 
-            $bodyHtml = $this->buildLeaveEmailHtml($employeeId, $title, $intro, $requestId);
-            $email = $this->notifications->userEmail($employeeUserId);
-            if ($email !== null) {
-                $this->notifications->queueEmail($email, $title, $bodyHtml, $message, $employeeUserId, 'leave_request', $requestId);
+            if ($mailEnabled) {
+                $intro = 'Your leave request <strong>#' . $requestId . '</strong> has been <strong>' . e($decision) . '</strong>.';
+                if ($reason !== null && $reason !== '') {
+                    $intro .= ' <em>Reason: ' . e($reason) . '</em>';
+                }
+                $bodyHtml = $this->buildLeaveEmailHtml($employeeId, $employeeTitle, $intro, $requestId);
+                $email = $this->notifications->userEmail($employeeUserId);
+                if ($email !== null) {
+                    $this->notifications->deliverEmail($email, $employeeTitle, $bodyHtml, $employeeMessage, $employeeUserId, 'leave_request', $requestId);
+                }
             }
         }
+
+        // --- Notify HR, super admin, manager, and leave admin email ---
+        $stakeholderTitle = "Leave Request {$status}: {$employeeName}";
+        $stakeholderMessage = "{$employeeName}'s leave request #{$requestId} has been {$decision}.";
+        if ($reason !== null && $reason !== '') {
+            $stakeholderMessage .= " Reason: {$reason}";
+        }
+
+        $stakeholderUserIds = $this->leaveHrEscalationUserIds();
+
+        // Also include the employee's direct manager
+        if ($empRow !== null && !empty($empRow['manager_user_id'])) {
+            $stakeholderUserIds[] = (int) $empRow['manager_user_id'];
+            $stakeholderUserIds = array_values(array_unique($stakeholderUserIds));
+        }
+
+        // Exclude the employee themselves from stakeholder list
+        if ($employeeUserId !== null) {
+            $stakeholderUserIds = array_values(array_filter($stakeholderUserIds, fn($uid) => $uid !== $employeeUserId));
+        }
+
+        if ($mailEnabled) {
+            $stakeholderIntro = '<strong>' . e($employeeName) . '</strong>\'s leave request <strong>#' . $requestId . '</strong> has been <strong>' . e($decision) . '</strong>.';
+            if ($reason !== null && $reason !== '') {
+                $stakeholderIntro .= ' <em>Reason: ' . e($reason) . '</em>';
+            }
+            $stakeholderBodyHtml = $this->buildLeaveEmailHtml($employeeId, $stakeholderTitle, $stakeholderIntro, $requestId);
+        } else {
+            $stakeholderBodyHtml = '';
+        }
+
+        foreach ($stakeholderUserIds as $userId) {
+            $this->notifications->create($userId, 'leave_decision', $stakeholderTitle, $stakeholderMessage, 'leave_request', $requestId, '/leave/approvals');
+
+            if ($mailEnabled) {
+                $email = $this->notifications->userEmail($userId);
+                if ($email !== null) {
+                    $this->notifications->deliverEmail($email, $stakeholderTitle, $stakeholderBodyHtml, $stakeholderMessage, $userId, 'leave_request', $requestId);
+                }
+            }
+        }
+
+        // Leave admin email (if configured and not already covered)
+        if ($mailEnabled) {
+            $adminEmail = $this->leaveAdminEmail();
+            if ($adminEmail !== null && !$this->recipientListContainsEmail($stakeholderUserIds, $adminEmail)) {
+                $this->notifications->deliverEmail($adminEmail, $stakeholderTitle, $stakeholderBodyHtml, $stakeholderMessage, null, 'leave_request', $requestId);
+            }
+        }
+    }
+
+    private function notifyLeaveRequestStakeholders(array $employee, int $requestId, float $days, string $startDate, string $endDate): void
+    {
+        $employeeName = (string) ($employee['employee_name'] ?? 'An employee');
+        $title = 'New Leave Request';
+        $message = "{$employeeName} submitted a leave request for {$days} day(s) ({$startDate} - {$endDate}).";
+        $actionUrl = '/leave/approvals';
+        $mailEnabled = (bool) config('app.mail.enabled', false);
+        $bodyHtml = $mailEnabled
+            ? $this->buildLeaveEmailHtml((int) $employee['id'], $title, '<strong>' . e($employeeName) . '</strong> submitted a new leave request for <strong>' . $days . ' day(s)</strong> from <strong>' . e($startDate) . '</strong> to <strong>' . e($endDate) . '</strong>. Please review and take action.', $requestId)
+            : '';
+
+        $recipientUserIds = $this->leaveStakeholderUserIds($employee);
+
+        foreach ($recipientUserIds as $userId) {
+            $this->notifications->create($userId, 'leave_request', $title, $message, 'leave_request', $requestId, $actionUrl);
+
+            if ($mailEnabled) {
+                $email = $this->notifications->userEmail($userId);
+                if ($email !== null) {
+                    $this->notifications->deliverEmail($email, $title, $bodyHtml, $message, $userId, 'leave_request', $requestId);
+                }
+            }
+        }
+
+        $adminEmail = $this->leaveAdminEmail();
+        if ($mailEnabled && $adminEmail !== null && !$this->recipientListContainsEmail($recipientUserIds, $adminEmail)) {
+            $this->notifications->deliverEmail($adminEmail, $title, $bodyHtml, $message, null, 'leave_request', $requestId);
+        }
+    }
+
+    private function notifyHrPendingStakeholders(int $requestId, int $employeeId): void
+    {
+        $empRow = $this->employeeContext($employeeId);
+        $employeeName = $empRow !== null ? (string) ($empRow['employee_name'] ?? 'An employee') : 'An employee';
+        $title = 'Leave Request Awaiting HR Approval';
+        $message = "{$employeeName}'s leave request #{$requestId} requires HR approval.";
+        $actionUrl = '/leave/approvals';
+        $mailEnabled = (bool) config('app.mail.enabled', false);
+        $bodyHtml = $mailEnabled
+            ? $this->buildLeaveEmailHtml($employeeId, $title, '<strong>' . e($employeeName) . '</strong>\'s leave request <strong>#' . $requestId . '</strong> has been forwarded for HR approval. Below is the full leave overview for this employee.')
+            : '';
+
+        $recipientUserIds = $this->leaveHrEscalationUserIds();
+
+        foreach ($recipientUserIds as $userId) {
+            $this->notifications->create($userId, 'leave_request', $title, $message, 'leave_request', $requestId, $actionUrl);
+
+            if ($mailEnabled) {
+                $email = $this->notifications->userEmail($userId);
+                if ($email !== null) {
+                    $this->notifications->deliverEmail($email, $title, $bodyHtml, $message, $userId, 'leave_request', $requestId);
+                }
+            }
+        }
+
+        $adminEmail = $this->leaveAdminEmail();
+        if ($mailEnabled && $adminEmail !== null && !$this->recipientListContainsEmail($recipientUserIds, $adminEmail)) {
+            $this->notifications->deliverEmail($adminEmail, $title, $bodyHtml, $message, null, 'leave_request', $requestId);
+        }
+    }
+
+    private function leaveStakeholderUserIds(array $employee): array
+    {
+        $userIds = $this->leaveHrEscalationUserIds();
+        $managerUserId = !empty($employee['manager_user_id']) ? (int) $employee['manager_user_id'] : null;
+
+        if ($managerUserId !== null) {
+            $userIds[] = $managerUserId;
+        }
+
+        return array_values(array_unique(array_map('intval', $userIds)));
+    }
+
+    private function leaveHrEscalationUserIds(): array
+    {
+        $userIds = [];
+        $hrRoleId = $this->hrAdminRoleId();
+        $superAdminRoleId = $this->superAdminRoleId();
+
+        if ($hrRoleId !== null) {
+            $userIds = [...$userIds, ...$this->notifications->userIdsByRole($hrRoleId)];
+        }
+
+        if ($superAdminRoleId !== null) {
+            $userIds = [...$userIds, ...$this->notifications->userIdsByRole($superAdminRoleId)];
+        }
+
+        return array_values(array_unique(array_map('intval', $userIds)));
+    }
+
+    private function superAdminRoleId(): ?int
+    {
+        $roleId = $this->database->fetchValue('SELECT id FROM roles WHERE code = :code LIMIT 1', ['code' => 'super_admin']);
+
+        return ($roleId !== null && $roleId !== false) ? (int) $roleId : null;
+    }
+
+    private function leaveAdminEmail(): ?string
+    {
+        $email = trim((string) config('app.leave.admin_email', ''));
+
+        return $email !== '' ? $email : null;
+    }
+
+    private function recipientListContainsEmail(array $userIds, string $email): bool
+    {
+        foreach ($userIds as $userId) {
+            $userEmail = $this->notifications->userEmail((int) $userId);
+            if ($userEmail !== null && strcasecmp($userEmail, $email) === 0) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

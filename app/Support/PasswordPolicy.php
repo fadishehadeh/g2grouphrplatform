@@ -54,7 +54,7 @@ final class PasswordPolicy
         $upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
         $lower = 'abcdefghjkmnpqrstuvwxyz';
         $digits = '23456789';
-        $symbols = '!@#$%^&*()-_=+[]{}|;:,.<>?';
+        $symbols = '!@#$%^*()-_=+[]{}|;:,.?';
 
         // Guarantee at least one of each required class
         $password = $upper[random_int(0, strlen($upper) - 1)]
