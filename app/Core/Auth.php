@@ -11,6 +11,9 @@ final class Auth
     private Database $database;
     private Session $session;
 
+    /** In-memory user override for API token auth (does not touch the session). */
+    private ?array $apiUser = null;
+
     public function __construct(
         Database $database,
         Session $session,
@@ -73,8 +76,21 @@ final class Auth
         return true;
     }
 
+    /**
+     * Inject an in-memory user for API token authentication.
+     * Does not write to the session — safe for stateless API requests.
+     */
+    public function setApiUser(array $user): void
+    {
+        $this->apiUser = $user;
+    }
+
     public function user(): ?array
     {
+        if ($this->apiUser !== null) {
+            return $this->apiUser;
+        }
+
         $user = $this->session->get(self::SESSION_KEY);
 
         return is_array($user) ? $user : null;

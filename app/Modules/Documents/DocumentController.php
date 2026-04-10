@@ -227,6 +227,22 @@ final class DocumentController extends Controller
             $this->redirect($this->app->auth()->hasPermission('documents.manage_all') ? '/documents' : '/dashboard');
         }
 
+        // Log a 'view' event for each document visible on this page
+        foreach ($documents as $doc) {
+            try {
+                $this->repository->logAccess(
+                    (int) $doc['id'],
+                    $employeeId,
+                    $this->app->auth()->id(),
+                    'view',
+                    $request->ip(),
+                    $request->userAgent()
+                );
+            } catch (Throwable) {
+                // non-fatal
+            }
+        }
+
         $this->render('documents.upload', [
             'title' => 'Employee Documents',
             'pageTitle' => 'Employee Documents',
@@ -281,6 +297,122 @@ final class DocumentController extends Controller
         }
     }
 
+    /**
+     * Issue a short-lived (15 min) signed download token for a document.
+     * Returns a redirect to the token URL so the download starts automatically.
+     * POST /documents/{id}/token
+     */
+    public function issueToken(Request $request, string $id): void
+    {
+        $documentId = (int) $id;
+
+        if ($documentId <= 0) {
+            Response::abort(404, 'Document not found.');
+        }
+
+        try {
+            $document = $this->repository->findDocument($documentId);
+
+            if ($document === null) {
+                Response::abort(404, 'Document not found.');
+            }
+
+            if (!$this->canAccessEmployeeDocuments((int) ($document['employee_id'] ?? 0))) {
+                Response::abort(403, 'You do not have access to this document.');
+            }
+
+            if (!$this->canAccessDocumentByScope($document)) {
+                Response::abort(403, 'This document is not visible to your access level.');
+            }
+
+            $token = $this->repository->createAccessToken(
+                $documentId,
+                $this->app->auth()->id(),
+                $request->ip()
+            );
+
+            $this->redirect('/documents/dl/' . $token);
+        } catch (Throwable $throwable) {
+            Response::abort(500, 'Unable to generate download token: ' . $throwable->getMessage());
+        }
+    }
+
+    /**
+     * Serve a document using a signed, expiring token.
+     * GET /documents/dl/{token}
+     * No auth check needed — the token IS the proof of authorisation.
+     */
+    public function downloadViaToken(Request $request, string $token): void
+    {
+        if (strlen($token) !== 64 || !ctype_xdigit($token)) {
+            Response::abort(404, 'Invalid or expired download link.');
+        }
+
+        try {
+            $documentId = $this->repository->consumeAccessToken($token);
+
+            if ($documentId === null) {
+                Response::abort(410, 'This download link has expired or has already been used.');
+            }
+
+            $document = $this->repository->findDocument($documentId);
+
+            if ($document === null) {
+                Response::abort(404, 'Document not found.');
+            }
+
+            $absolutePath = $this->absoluteDocumentPath((string) ($document['file_path'] ?? ''));
+
+            if ($absolutePath === null || !is_file($absolutePath) || !is_readable($absolutePath)) {
+                Response::abort(404, 'Document file not found.');
+            }
+
+            // Log the download
+            try {
+                $this->repository->logAccess(
+                    $documentId,
+                    (int) ($document['employee_id'] ?? 0),
+                    $this->app->auth()->id(),
+                    'download',
+                    $request->ip(),
+                    $request->userAgent()
+                );
+            } catch (Throwable) {
+                // non-fatal
+            }
+
+            $mimeType      = (string) ($document['mime_type'] ?? 'application/octet-stream');
+            $fileName      = $this->downloadFileName((string) ($document['original_file_name'] ?? 'document'));
+            $contentLength = (int) ($document['file_size'] ?? 0);
+
+            if ($contentLength <= 0) {
+                $detected      = filesize($absolutePath);
+                $contentLength = $detected !== false ? (int) $detected : 0;
+            }
+
+            while (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+
+            header('Content-Type: ' . $mimeType);
+            header('X-Content-Type-Options: nosniff');
+            header('Cache-Control: private, max-age=0, must-revalidate');
+            header(
+                'Content-Disposition: ' . ($this->shouldDisplayInline($document) ? 'inline' : 'attachment')
+                . '; filename="' . $fileName . '"; filename*=UTF-8\'\'' . rawurlencode($fileName)
+            );
+
+            if ($contentLength > 0) {
+                header('Content-Length: ' . (string) $contentLength);
+            }
+
+            readfile($absolutePath);
+            exit;
+        } catch (Throwable $throwable) {
+            Response::abort(500, 'Unable to serve document: ' . $throwable->getMessage());
+        }
+    }
+
     public function download(Request $request, string $id): void
     {
         $documentId = (int) $id;
@@ -308,6 +440,20 @@ final class DocumentController extends Controller
 
             if ($absolutePath === null || !is_file($absolutePath) || !is_readable($absolutePath)) {
                 Response::abort(404, 'Document file not found.');
+            }
+
+            // Log the download event
+            try {
+                $this->repository->logAccess(
+                    $documentId,
+                    (int) ($document['employee_id'] ?? 0),
+                    $this->app->auth()->id(),
+                    'download',
+                    $request->ip(),
+                    $request->userAgent()
+                );
+            } catch (Throwable) {
+                // non-fatal — don't block the download if logging fails
             }
 
             $mimeType = (string) ($document['mime_type'] ?? 'application/octet-stream');

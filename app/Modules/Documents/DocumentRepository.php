@@ -281,6 +281,129 @@ final class DocumentRepository
         );
     }
 
+    /**
+     * Record a document view or download event in document_access_logs.
+     */
+    public function logAccess(int $documentId, int $employeeId, ?int $userId, string $accessType, string $ipAddress, string $userAgent): void
+    {
+        $this->database->execute(
+            'INSERT INTO document_access_logs (document_id, employee_id, accessed_by_user_id, access_type, ip_address, user_agent)
+             VALUES (:document_id, :employee_id, :user_id, :access_type, :ip_address, :user_agent)',
+            [
+                'document_id' => $documentId,
+                'employee_id' => $employeeId,
+                'user_id'     => $userId,
+                'access_type' => $accessType,
+                'ip_address'  => $ipAddress !== '' ? $ipAddress : null,
+                'user_agent'  => $userAgent !== '' ? substr($userAgent, 0, 255) : null,
+            ]
+        );
+    }
+
+    /**
+     * Return document access log entries, optionally filtered by document or employee.
+     */
+    public function accessLogs(int $documentId = 0, int $employeeId = 0, int $limit = 100): array
+    {
+        $sql = 'SELECT dal.id, dal.access_type, dal.ip_address, dal.created_at,
+                       ed.title AS document_title,
+                       CONCAT_WS(\' \', u.first_name, u.last_name) AS accessed_by_name,
+                       u.email AS accessed_by_email
+                FROM document_access_logs dal
+                LEFT JOIN employee_documents ed ON ed.id = dal.document_id
+                LEFT JOIN users u ON u.id = dal.accessed_by_user_id
+                WHERE 1 = 1';
+        $params = [];
+
+        if ($documentId > 0) {
+            $sql .= ' AND dal.document_id = :document_id';
+            $params['document_id'] = $documentId;
+        }
+
+        if ($employeeId > 0) {
+            $sql .= ' AND dal.employee_id = :employee_id';
+            $params['employee_id'] = $employeeId;
+        }
+
+        $sql .= ' ORDER BY dal.created_at DESC LIMIT ' . max(1, min($limit, 500));
+
+        return $this->database->fetchAll($sql, $params);
+    }
+
+    // ── File access tokens ──────────────────────────────────────────────────
+
+    /**
+     * Generate a signed, single-use, time-limited token for a document download.
+     * Default TTL: 15 minutes.
+     */
+    public function createAccessToken(int $documentId, ?int $userId, string $ipAddress, int $ttlMinutes = 15): string
+    {
+        $token     = bin2hex(random_bytes(32)); // 64 hex chars
+        $expiresAt = date('Y-m-d H:i:s', time() + ($ttlMinutes * 60));
+
+        $this->database->execute(
+            'INSERT INTO file_access_tokens (token, document_id, created_by_user_id, expires_at, ip_address)
+             VALUES (:token, :document_id, :user_id, :expires_at, :ip_address)',
+            [
+                'token'       => $token,
+                'document_id' => $documentId,
+                'user_id'     => $userId,
+                'expires_at'  => $expiresAt,
+                'ip_address'  => $ipAddress !== '' ? $ipAddress : null,
+            ]
+        );
+
+        return $token;
+    }
+
+    /**
+     * Validate and consume a file access token.
+     * Returns the document_id on success, null if invalid/expired/already used.
+     */
+    public function consumeAccessToken(string $token): ?int
+    {
+        $row = $this->database->fetch(
+            'SELECT id, document_id, expires_at, used_at
+             FROM file_access_tokens
+             WHERE token = :token LIMIT 1',
+            ['token' => $token]
+        );
+
+        if ($row === null) {
+            return null;
+        }
+
+        // Already used
+        if ($row['used_at'] !== null) {
+            return null;
+        }
+
+        // Expired
+        if (strtotime((string) $row['expires_at']) < time()) {
+            return null;
+        }
+
+        // Mark as used immediately (single-use)
+        $this->database->execute(
+            'UPDATE file_access_tokens SET used_at = NOW() WHERE id = :id',
+            ['id' => (int) $row['id']]
+        );
+
+        return (int) $row['document_id'];
+    }
+
+    /**
+     * Purge tokens older than 24 hours (housekeeping, call from cron).
+     */
+    public function purgeExpiredTokens(): int
+    {
+        $this->database->execute(
+            'DELETE FROM file_access_tokens WHERE expires_at < DATE_SUB(NOW(), INTERVAL 24 HOUR)'
+        );
+
+        return 1; // affected rows not returned by execute() in this driver
+    }
+
     private function nullable(mixed $value): mixed
     {
         return $value === '' || $value === null ? null : $value;

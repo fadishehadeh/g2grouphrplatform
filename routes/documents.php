@@ -38,6 +38,19 @@ $router->post('/documents/send-expiry-alerts', [DocumentController::class, 'send
     [PermissionMiddleware::class, ['documents.manage_all']],
 ]);
 
+// Token-based download (POST issues a 15-min signed token, GET /dl/{token} serves the file)
+$router->post('/documents/{id}/token', [DocumentController::class, 'issueToken'], [
+    ...$documentBaseMiddleware,
+    [PermissionMiddleware::class, ['documents.manage_all', 'documents.view_self', 'documents.upload_self']],
+]);
+
+// Public token route — no permission middleware, the token IS the auth
+$router->get('/documents/dl/{token}', [DocumentController::class, 'downloadViaToken'], [
+    AuthMiddleware::class,
+    AccountStatusMiddleware::class,
+]);
+
+// Legacy direct download kept for backward compatibility (still auth-gated)
 $router->get('/documents/{id}/download', [DocumentController::class, 'download'], [
     ...$documentBaseMiddleware,
     [PermissionMiddleware::class, ['documents.manage_all', 'documents.view_self', 'documents.upload_self']],

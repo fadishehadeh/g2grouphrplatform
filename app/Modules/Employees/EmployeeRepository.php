@@ -15,7 +15,7 @@ final class EmployeeRepository
         $this->database = $database;
     }
 
-    public function listEmployees(string $search = ''): array
+    public function listEmployees(string $search = '', int $page = 1, int $perPage = 25): array
     {
         $sql = "SELECT e.id, e.employee_code, CONCAT_WS(' ', e.first_name, e.middle_name, e.last_name) AS full_name,
                        e.work_email, d.name AS department_name, jt.name AS job_title_name, e.employee_status, e.joining_date,
@@ -25,25 +25,59 @@ final class EmployeeRepository
                 LEFT JOIN job_titles jt ON jt.id = e.job_title_id
                 LEFT JOIN employees m ON m.id = e.manager_employee_id
                 WHERE e.archived_at IS NULL";
-        $params = [];
+        $params = $this->searchParams($search);
 
         if ($search !== '') {
-            $sql .= " AND (
-                e.employee_code LIKE :search_code OR e.first_name LIKE :search_first_name OR e.last_name LIKE :search_last_name
-                OR e.work_email LIKE :search_email OR d.name LIKE :search_department OR jt.name LIKE :search_job_title
-            )";
-            $searchValue = '%' . $search . '%';
-            $params['search_code'] = $searchValue;
-            $params['search_first_name'] = $searchValue;
-            $params['search_last_name'] = $searchValue;
-            $params['search_email'] = $searchValue;
-            $params['search_department'] = $searchValue;
-            $params['search_job_title'] = $searchValue;
+            $sql .= $this->searchWhereClause();
         }
 
-        $sql .= ' ORDER BY e.created_at DESC';
+        $page    = max(1, $page);
+        $perPage = max(10, min(100, $perPage));
+        $offset  = ($page - 1) * $perPage;
+
+        $sql .= ' ORDER BY e.created_at DESC LIMIT ' . $perPage . ' OFFSET ' . $offset;
 
         return $this->database->fetchAll($sql, $params);
+    }
+
+    public function countEmployees(string $search = ''): int
+    {
+        $sql = 'SELECT COUNT(*) FROM employees e
+                LEFT JOIN departments d ON d.id = e.department_id
+                LEFT JOIN job_titles jt ON jt.id = e.job_title_id
+                WHERE e.archived_at IS NULL';
+
+        if ($search !== '') {
+            $sql .= $this->searchWhereClause();
+        }
+
+        return (int) ($this->database->fetchValue($sql, $this->searchParams($search)) ?? 0);
+    }
+
+    private function searchWhereClause(): string
+    {
+        return " AND (
+            e.employee_code LIKE :search_code OR e.first_name LIKE :search_first_name OR e.last_name LIKE :search_last_name
+            OR e.work_email LIKE :search_email OR d.name LIKE :search_department OR jt.name LIKE :search_job_title
+        )";
+    }
+
+    private function searchParams(string $search): array
+    {
+        if ($search === '') {
+            return [];
+        }
+
+        $v = '%' . $search . '%';
+
+        return [
+            'search_code'       => $v,
+            'search_first_name' => $v,
+            'search_last_name'  => $v,
+            'search_email'      => $v,
+            'search_department' => $v,
+            'search_job_title'  => $v,
+        ];
     }
 
     public function findEmployee(int $id): ?array

@@ -50,6 +50,38 @@
                     </tbody>
                 </table>
             </div>
+
+            <?php
+                $page       = (int) ($page ?? 1);
+                $totalPages = (int) ($totalPages ?? 1);
+                $total      = (int) ($total ?? 0);
+                $perPage    = (int) ($perPage ?? 25);
+                $search     = (string) ($search ?? '');
+                $showing    = min($perPage, $total - ($page - 1) * $perPage);
+                $from       = $total > 0 ? ($page - 1) * $perPage + 1 : 0;
+            ?>
+            <?php if ($totalPages > 1): ?>
+            <div class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
+                <small class="text-muted">Showing <?= $from ?>–<?= $from + $showing - 1 ?> of <?= $total ?> employees</small>
+                <nav>
+                    <ul class="pagination pagination-sm mb-0">
+                        <li class="page-item <?= $page <= 1 ? 'disabled' : ''; ?>">
+                            <a class="page-link" href="<?= e(url('/employees?page=' . ($page - 1) . ($search !== '' ? '&q=' . urlencode($search) : ''))); ?>">‹</a>
+                        </li>
+                        <?php for ($p = max(1, $page - 2); $p <= min($totalPages, $page + 2); $p++): ?>
+                            <li class="page-item <?= $p === $page ? 'active' : ''; ?>">
+                                <a class="page-link" href="<?= e(url('/employees?page=' . $p . ($search !== '' ? '&q=' . urlencode($search) : ''))); ?>"><?= $p; ?></a>
+                            </li>
+                        <?php endfor; ?>
+                        <li class="page-item <?= $page >= $totalPages ? 'disabled' : ''; ?>">
+                            <a class="page-link" href="<?= e(url('/employees?page=' . ($page + 1) . ($search !== '' ? '&q=' . urlencode($search) : ''))); ?>">›</a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+            <?php else: ?>
+            <div class="mt-3"><small class="text-muted"><?= $total ?> employee<?= $total !== 1 ? 's' : ''; ?></small></div>
+            <?php endif; ?>
         <?php endif; ?>
     </div>
 </div>

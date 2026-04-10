@@ -69,7 +69,7 @@ final class LeaveRepository
     public function employeeContext(int $employeeId): ?array
     {
         return $this->database->fetch(
-            "SELECT e.id, e.user_id, e.company_id, e.manager_employee_id,
+            "SELECT e.id, e.user_id, e.company_id, e.department_id, e.manager_employee_id,
                     CONCAT_WS(' ', e.first_name, e.middle_name, e.last_name) AS employee_name,
                     m.user_id AS manager_user_id
              FROM employees e
@@ -104,11 +104,22 @@ final class LeaveRepository
                 throw new \RuntimeException('Invalid leave request context.');
             }
 
-            $hasManager = !empty($employee['manager_employee_id']);
-            $requiresHrApproval = ((int) ($leaveType['requires_hr_approval'] ?? 0) === 1) || !$hasManager;
-            $initialStatus = $hasManager ? 'pending_manager' : 'pending_hr';
-            $workflowId = $this->activeWorkflowId((int) $employee['company_id']);
-            $submittedAt = date('Y-m-d H:i:s');
+            $hasManager     = !empty($employee['manager_employee_id']);
+            $workflowId     = $this->activeWorkflowId(
+                (int) $employee['company_id'],
+                isset($employee['department_id']) && $employee['department_id'] !== null ? (int) $employee['department_id'] : null
+            );
+            $workflowSteps  = $workflowId !== null ? $this->workflowSteps($workflowId) : [];
+            $submittedAt    = date('Y-m-d H:i:s');
+
+            // Determine initial status from the first step (or fall back to legacy logic)
+            if ($workflowSteps !== []) {
+                $firstStep     = $workflowSteps[0];
+                $initialStatus = ($firstStep['approver_type'] === 'manager') ? 'pending_manager' : 'pending_hr';
+            } else {
+                $requiresHrApproval = ((int) ($leaveType['requires_hr_approval'] ?? 0) === 1) || !$hasManager;
+                $initialStatus      = $hasManager ? 'pending_manager' : 'pending_hr';
+            }
 
             $database->execute(
                 'INSERT INTO leave_requests (
@@ -119,52 +130,91 @@ final class LeaveRepository
                     :days_requested, :reason, :status, :current_step_order, :submitted_at
                  )',
                 [
-                    'employee_id' => $employeeId,
-                    'leave_type_id' => (int) $data['leave_type_id'],
-                    'workflow_id' => $workflowId,
-                    'start_date' => (string) $data['start_date'],
-                    'end_date' => (string) $data['end_date'],
-                    'start_session' => (string) $data['start_session'],
-                    'end_session' => (string) $data['end_session'],
-                    'days_requested' => (float) $data['days_requested'],
-                    'reason' => (string) $data['reason'],
-                    'status' => $initialStatus,
-                    'current_step_order' => 1,
-                    'submitted_at' => $submittedAt,
+                    'employee_id'       => $employeeId,
+                    'leave_type_id'     => (int) $data['leave_type_id'],
+                    'workflow_id'       => $workflowId,
+                    'start_date'        => (string) $data['start_date'],
+                    'end_date'          => (string) $data['end_date'],
+                    'start_session'     => (string) $data['start_session'],
+                    'end_session'       => (string) $data['end_session'],
+                    'days_requested'    => (float) $data['days_requested'],
+                    'reason'            => (string) $data['reason'],
+                    'status'            => $initialStatus,
+                    'current_step_order'=> 1,
+                    'submitted_at'      => $submittedAt,
                 ]
             );
 
             $requestId = (int) $database->lastInsertId();
-            $nextStepOrder = 1;
 
-            if ($hasManager) {
-                $database->execute(
-                    'INSERT INTO leave_approvals (leave_request_id, step_order, approver_user_id, approver_role_id, decision)
-                     VALUES (:leave_request_id, :step_order, :approver_user_id, :approver_role_id, :decision)',
-                    [
-                        'leave_request_id' => $requestId,
-                        'step_order' => 1,
-                        'approver_user_id' => $employee['manager_user_id'] !== null ? (int) $employee['manager_user_id'] : null,
-                        'approver_role_id' => null,
-                        'decision' => 'pending',
-                    ]
-                );
+            if ($workflowSteps !== []) {
+                // Dynamic: generate approval rows from workflow step definitions
+                foreach ($workflowSteps as $step) {
+                    $approverUserId = null;
+                    $approverRoleId = null;
 
-                $nextStepOrder = 2;
-            }
+                    switch ((string) $step['approver_type']) {
+                        case 'manager':
+                            // Resolve to the employee's actual manager user_id
+                            $approverUserId = ($hasManager && $employee['manager_user_id'] !== null)
+                                ? (int) $employee['manager_user_id']
+                                : null;
+                            break;
+                        case 'hr_admin':
+                            $approverRoleId = $this->hrAdminRoleId();
+                            break;
+                        case 'specific_role':
+                            $approverRoleId = $step['role_id'] !== null ? (int) $step['role_id'] : null;
+                            break;
+                        case 'specific_user':
+                            $approverUserId = $step['user_id'] !== null ? (int) $step['user_id'] : null;
+                            break;
+                    }
 
-            if ($requiresHrApproval) {
-                $database->execute(
-                    'INSERT INTO leave_approvals (leave_request_id, step_order, approver_user_id, approver_role_id, decision)
-                     VALUES (:leave_request_id, :step_order, :approver_user_id, :approver_role_id, :decision)',
-                    [
-                        'leave_request_id' => $requestId,
-                        'step_order' => $nextStepOrder,
-                        'approver_user_id' => null,
-                        'approver_role_id' => $this->hrAdminRoleId(),
-                        'decision' => 'pending',
-                    ]
-                );
+                    $database->execute(
+                        'INSERT INTO leave_approvals (leave_request_id, step_order, approver_user_id, approver_role_id, decision)
+                         VALUES (:leave_request_id, :step_order, :approver_user_id, :approver_role_id, :decision)',
+                        [
+                            'leave_request_id' => $requestId,
+                            'step_order'       => (int) $step['step_order'],
+                            'approver_user_id' => $approverUserId,
+                            'approver_role_id' => $approverRoleId,
+                            'decision'         => 'pending',
+                        ]
+                    );
+                }
+            } else {
+                // Legacy fallback: hardcoded manager → HR chain
+                $nextStepOrder = 1;
+
+                if ($hasManager) {
+                    $database->execute(
+                        'INSERT INTO leave_approvals (leave_request_id, step_order, approver_user_id, approver_role_id, decision)
+                         VALUES (:leave_request_id, :step_order, :approver_user_id, :approver_role_id, :decision)',
+                        [
+                            'leave_request_id' => $requestId,
+                            'step_order'       => 1,
+                            'approver_user_id' => $employee['manager_user_id'] !== null ? (int) $employee['manager_user_id'] : null,
+                            'approver_role_id' => null,
+                            'decision'         => 'pending',
+                        ]
+                    );
+                    $nextStepOrder = 2;
+                }
+
+                if ((int) ($leaveType['requires_hr_approval'] ?? 0) === 1 || !$hasManager) {
+                    $database->execute(
+                        'INSERT INTO leave_approvals (leave_request_id, step_order, approver_user_id, approver_role_id, decision)
+                         VALUES (:leave_request_id, :step_order, :approver_user_id, :approver_role_id, :decision)',
+                        [
+                            'leave_request_id' => $requestId,
+                            'step_order'       => $nextStepOrder,
+                            'approver_user_id' => null,
+                            'approver_role_id' => $this->hrAdminRoleId(),
+                            'decision'         => 'pending',
+                        ]
+                    );
+                }
             }
 
             // --- Notifications ---
@@ -1034,17 +1084,65 @@ final class LeaveRepository
         );
     }
 
-    private function activeWorkflowId(int $companyId): ?int
+    /**
+     * Resolve the best-matching active leave workflow for an employee.
+     * Priority: department-specific > company-wide > global (no company or department).
+     */
+    private function activeWorkflowId(int $companyId, ?int $departmentId = null): ?int
     {
+        // 1. Department-specific workflow (highest priority)
+        if ($departmentId !== null) {
+            $workflowId = $this->database->fetchValue(
+                'SELECT id FROM approval_workflows
+                 WHERE module_code = :module_code AND is_active = 1
+                   AND company_id = :company_id AND department_id = :department_id
+                 ORDER BY id ASC LIMIT 1',
+                ['module_code' => 'leave', 'company_id' => $companyId, 'department_id' => $departmentId]
+            );
+
+            if ($workflowId !== null && $workflowId !== false) {
+                return (int) $workflowId;
+            }
+        }
+
+        // 2. Company-wide workflow
         $workflowId = $this->database->fetchValue(
             'SELECT id FROM approval_workflows
-             WHERE module_code = :module_code AND is_active = 1 AND (company_id = :company_id OR company_id IS NULL)
-             ORDER BY company_id DESC, id ASC
-             LIMIT 1',
+             WHERE module_code = :module_code AND is_active = 1
+               AND company_id = :company_id AND department_id IS NULL
+             ORDER BY id ASC LIMIT 1',
             ['module_code' => 'leave', 'company_id' => $companyId]
         );
 
+        if ($workflowId !== null && $workflowId !== false) {
+            return (int) $workflowId;
+        }
+
+        // 3. Global fallback (no company or department scoping)
+        $workflowId = $this->database->fetchValue(
+            'SELECT id FROM approval_workflows
+             WHERE module_code = :module_code AND is_active = 1
+               AND company_id IS NULL AND department_id IS NULL
+             ORDER BY id ASC LIMIT 1',
+            ['module_code' => 'leave']
+        );
+
         return ($workflowId !== null && $workflowId !== false) ? (int) $workflowId : null;
+    }
+
+    /**
+     * Return the ordered steps for a workflow.
+     * Each step has: step_order, approver_type, role_id, user_id, is_required
+     */
+    private function workflowSteps(int $workflowId): array
+    {
+        return $this->database->fetchAll(
+            'SELECT step_order, approver_type, role_id, user_id, is_required
+             FROM approval_workflow_steps
+             WHERE workflow_id = :workflow_id
+             ORDER BY step_order ASC',
+            ['workflow_id' => $workflowId]
+        );
     }
 
     private function hrAdminRoleId(): ?int

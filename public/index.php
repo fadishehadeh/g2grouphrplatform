@@ -42,5 +42,6 @@ require BASE_PATH . '/routes/settings.php';
 require BASE_PATH . '/routes/letters.php';
 require BASE_PATH . '/routes/careers.php';
 require BASE_PATH . '/routes/jobs.php';
+require BASE_PATH . '/routes/api.php';
 
 $app->run();

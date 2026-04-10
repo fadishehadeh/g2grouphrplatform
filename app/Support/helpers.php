@@ -113,6 +113,42 @@ function can(string $permission): bool
     return auth()->hasPermission($permission);
 }
 
+/**
+ * Encrypt a sensitive field value for database storage.
+ * Returns null for null / empty input.
+ */
+function encrypt_field(?string $value): ?string
+{
+    if ($value === null || $value === '') {
+        return null;
+    }
+
+    static $enc = null;
+    if ($enc === null) {
+        $enc = new \App\Support\Encryption();
+    }
+
+    return $enc->encrypt($value);
+}
+
+/**
+ * Decrypt a sensitive field value retrieved from the database.
+ * Returns null for null / empty stored value.
+ */
+function decrypt_field(?string $stored): ?string
+{
+    if ($stored === null || $stored === '') {
+        return null;
+    }
+
+    static $enc = null;
+    if ($enc === null) {
+        $enc = new \App\Support\Encryption();
+    }
+
+    return $enc->decrypt($stored);
+}
+
 function notification_unread_count(): int
 {
     if (!auth()->check() || !can('notifications.view_self')) {

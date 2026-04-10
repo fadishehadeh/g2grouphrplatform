@@ -190,6 +190,7 @@ CREATE TABLE IF NOT EXISTS approval_workflows (
     module_code VARCHAR(50) NOT NULL,
     name VARCHAR(150) NOT NULL,
     company_id BIGINT UNSIGNED NULL,
+    department_id BIGINT UNSIGNED NULL,       -- optional: scope workflow to a specific department
     description VARCHAR(255) NULL,
     is_active TINYINT(1) NOT NULL DEFAULT 1,
     created_by BIGINT UNSIGNED NULL,
@@ -197,10 +198,13 @@ CREATE TABLE IF NOT EXISTS approval_workflows (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT fk_approval_workflows_company FOREIGN KEY (company_id) REFERENCES companies(id)
         ON UPDATE CASCADE ON DELETE SET NULL,
+    CONSTRAINT fk_approval_workflows_department FOREIGN KEY (department_id) REFERENCES departments(id)
+        ON UPDATE CASCADE ON DELETE SET NULL,
     CONSTRAINT fk_approval_workflows_created_by FOREIGN KEY (created_by) REFERENCES users(id)
         ON UPDATE CASCADE ON DELETE SET NULL,
     KEY idx_approval_workflows_module_code (module_code),
-    KEY idx_approval_workflows_company_id (company_id)
+    KEY idx_approval_workflows_company_id (company_id),
+    KEY idx_approval_workflows_department_id (department_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS approval_workflow_steps (
@@ -252,8 +256,8 @@ CREATE TABLE IF NOT EXISTS employees (
     state VARCHAR(100) NULL,
     country VARCHAR(100) NULL,
     postal_code VARCHAR(20) NULL,
-    id_number VARCHAR(100) NULL,
-    passport_number VARCHAR(100) NULL,
+    id_number VARCHAR(500) NULL,         -- encrypted via sodium
+    passport_number VARCHAR(500) NULL,   -- encrypted via sodium
     employment_type ENUM('full_time','part_time','contract','intern','temporary') NOT NULL DEFAULT 'full_time',
     contract_type VARCHAR(100) NULL,
     joining_date DATE NULL,
@@ -1067,4 +1071,75 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     KEY idx_audit_logs_entity (entity_type, entity_id),
     KEY idx_audit_logs_action_name (action_name),
     KEY idx_audit_logs_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS document_access_logs (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    document_id BIGINT UNSIGNED NOT NULL,
+    employee_id BIGINT UNSIGNED NOT NULL,
+    accessed_by_user_id BIGINT UNSIGNED NULL,
+    access_type ENUM('view','download') NOT NULL,
+    ip_address VARCHAR(45) NULL,
+    user_agent VARCHAR(255) NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_dal_document_id (document_id),
+    KEY idx_dal_employee_id (employee_id),
+    KEY idx_dal_user_id (accessed_by_user_id),
+    KEY idx_dal_access_type (access_type),
+    KEY idx_dal_created_at (created_at),
+    CONSTRAINT fk_dal_document FOREIGN KEY (document_id) REFERENCES employee_documents(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_dal_employee FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_dal_user FOREIGN KEY (accessed_by_user_id) REFERENCES users(id) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS file_access_tokens (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    token VARCHAR(64) NOT NULL,
+    document_id BIGINT UNSIGNED NOT NULL,
+    created_by_user_id BIGINT UNSIGNED NULL,
+    expires_at DATETIME NOT NULL,
+    used_at DATETIME NULL,
+    ip_address VARCHAR(45) NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_file_access_token (token),
+    KEY idx_fat_document_id (document_id),
+    KEY idx_fat_expires_at (expires_at),
+    KEY idx_fat_user_id (created_by_user_id),
+    CONSTRAINT fk_fat_document FOREIGN KEY (document_id) REFERENCES employee_documents(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_fat_user FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS approval_escalation_rules (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    workflow_id BIGINT UNSIGNED NOT NULL,
+    step_order INT NOT NULL,
+    escalate_after_hours INT NOT NULL DEFAULT 24,
+    escalate_to_type ENUM('hr_admin','specific_role','specific_user') NOT NULL DEFAULT 'hr_admin',
+    escalate_to_role_id BIGINT UNSIGNED NULL,
+    escalate_to_user_id BIGINT UNSIGNED NULL,
+    notify_only TINYINT(1) NOT NULL DEFAULT 0 COMMENT '1 = notify escalation target only, do not reassign',
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    KEY idx_aer_workflow_id (workflow_id),
+    KEY idx_aer_escalate_to_role (escalate_to_role_id),
+    KEY idx_aer_escalate_to_user (escalate_to_user_id),
+    CONSTRAINT fk_aer_workflow FOREIGN KEY (workflow_id) REFERENCES approval_workflows(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_aer_role FOREIGN KEY (escalate_to_role_id) REFERENCES roles(id) ON DELETE SET NULL ON UPDATE CASCADE,
+    CONSTRAINT fk_aer_user FOREIGN KEY (escalate_to_user_id) REFERENCES users(id) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS api_tokens (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    token_hash VARCHAR(64) NOT NULL COMMENT 'SHA-256 of the raw bearer token',
+    name VARCHAR(100) NOT NULL,
+    last_used_at DATETIME NULL,
+    expires_at DATETIME NULL,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_api_token_hash (token_hash),
+    KEY idx_api_tokens_user_id (user_id),
+    KEY idx_api_tokens_is_active (is_active),
+    CONSTRAINT fk_api_tokens_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

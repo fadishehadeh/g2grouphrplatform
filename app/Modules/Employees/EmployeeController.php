@@ -23,20 +23,32 @@ final class EmployeeController extends Controller
 
     public function index(Request $request): void
     {
-        $search = trim((string) $request->input('q', ''));
-        $employees = [];
+        $search  = trim((string) $request->input('q', ''));
+        $page    = max(1, (int) $request->input('page', 1));
+        $perPage = 25;
+
+        $employees  = [];
+        $total      = 0;
+        $totalPages = 1;
 
         try {
-            $employees = $this->repository->listEmployees($search);
+            $total      = $this->repository->countEmployees($search);
+            $totalPages = (int) ceil($total / $perPage);
+            $page       = min($page, max(1, $totalPages));
+            $employees  = $this->repository->listEmployees($search, $page, $perPage);
         } catch (Throwable $throwable) {
             $this->app->session()->flash('error', 'Unable to load employees: ' . $throwable->getMessage());
         }
 
         $this->render('employees.index', [
-            'title' => 'Employees',
-            'pageTitle' => 'Employees',
-            'employees' => $employees,
-            'search' => $search,
+            'title'      => 'Employees',
+            'pageTitle'  => 'Employees',
+            'employees'  => $employees,
+            'search'     => $search,
+            'page'       => $page,
+            'perPage'    => $perPage,
+            'total'      => $total,
+            'totalPages' => $totalPages,
         ]);
     }
 
@@ -110,6 +122,8 @@ final class EmployeeController extends Controller
             $this->app->session()->flash('error', 'Unable to load employee profile: ' . $throwable->getMessage());
             $this->redirect('/dashboard');
         }
+
+        $this->auditLog('employees', 'employee', $employeeId, 'view', $request->ip(), $request->userAgent());
 
         $this->render('employees.show', [
             'title'     => 'Employee Profile',
