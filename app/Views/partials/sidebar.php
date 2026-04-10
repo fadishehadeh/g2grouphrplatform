@@ -48,6 +48,9 @@
         <?php if (can('reports.view_hr') || can('reports.view_team')): ?>
             <a href="<?= e(url('/reports')); ?>" class="sidebar-link"><i class="bi bi-bar-chart"></i> Reports</a>
         <?php endif; ?>
+        <?php if (has_role(['super_admin', 'hr_admin'])): ?>
+            <a href="<?= e(url('/admin/jobs')); ?>" class="sidebar-link"><i class="bi bi-briefcase"></i> Jobs & Careers</a>
+        <?php endif; ?>
         <?php if (can('settings.manage')): ?>
             <a href="<?= e(url('/settings')); ?>" class="sidebar-link"><i class="bi bi-gear"></i> Settings</a>
         <?php endif; ?>
