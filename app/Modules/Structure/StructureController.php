@@ -47,6 +47,9 @@ final class StructureController extends Controller
             ['name' => 'Company', 'code' => 'Code', 'email' => 'Email', 'phone' => 'Phone', 'city' => 'City', 'country' => 'Country', 'status' => 'Status'],
             [
                 ['name' => 'name', 'label' => 'Company Name', 'type' => 'text', 'required' => true],
+                ['name' => 'legal_name', 'label' => 'Legal Name', 'type' => 'text'],
+                ['name' => 'registration_number', 'label' => 'Registration Number', 'type' => 'text'],
+                ['name' => 'tax_number', 'label' => 'Tax Number', 'type' => 'text'],
                 ['name' => 'code', 'label' => 'Code', 'type' => 'text', 'required' => true],
                 ['name' => 'email', 'label' => 'Email', 'type' => 'email'],
                 ['name' => 'phone', 'label' => 'Phone', 'type' => 'text'],
@@ -114,6 +117,9 @@ final class StructureController extends Controller
         try {
             $companyId = $this->repository->createCompany([
                 'name' => $data['name'],
+                'legal_name' => $data['legal_name'] ?: null,
+                'registration_number' => $data['registration_number'] ?: null,
+                'tax_number' => $data['tax_number'] ?: null,
                 'code' => strtoupper($data['code']),
                 'email' => $data['email'] ?: null,
                 'phone' => $data['phone'] ?: null,
@@ -196,6 +202,9 @@ final class StructureController extends Controller
         try {
             $updateData = [
                 'name' => $data['name'],
+                'legal_name' => $data['legal_name'] ?: null,
+                'registration_number' => $data['registration_number'] ?: null,
+                'tax_number' => $data['tax_number'] ?: null,
                 'code' => strtoupper($data['code']),
                 'email' => $data['email'] ?: null,
                 'phone' => $data['phone'] ?: null,

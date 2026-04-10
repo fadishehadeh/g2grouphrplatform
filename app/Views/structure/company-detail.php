@@ -14,7 +14,10 @@
             <?= csrf_field(); ?>
             <div class="row g-3">
                 <div class="col-md-4"><label class="form-label">Company Name *</label><input type="text" name="name" class="form-control" value="<?= e(old('name', (string) ($c['name'] ?? ''))); ?>" required></div>
+                <div class="col-md-4"><label class="form-label">Legal Name</label><input type="text" name="legal_name" class="form-control" value="<?= e(old('legal_name', (string) ($c['legal_name'] ?? ''))); ?>"></div>
                 <div class="col-md-2"><label class="form-label">Code *</label><input type="text" name="code" class="form-control" value="<?= e(old('code', (string) ($c['code'] ?? ''))); ?>" required></div>
+                <div class="col-md-3"><label class="form-label">Registration Number</label><input type="text" name="registration_number" class="form-control" value="<?= e(old('registration_number', (string) ($c['registration_number'] ?? ''))); ?>"></div>
+                <div class="col-md-3"><label class="form-label">Tax Number</label><input type="text" name="tax_number" class="form-control" value="<?= e(old('tax_number', (string) ($c['tax_number'] ?? ''))); ?>"></div>
                 <div class="col-md-3"><label class="form-label">Email</label><input type="email" name="email" class="form-control" value="<?= e(old('email', (string) ($c['email'] ?? ''))); ?>"></div>
                 <div class="col-md-3"><label class="form-label">Phone</label><input type="text" name="phone" class="form-control" value="<?= e(old('phone', (string) ($c['phone'] ?? ''))); ?>"></div>
                 <div class="col-md-6"><label class="form-label">Address Line 1</label><input type="text" name="address_line_1" class="form-control" value="<?= e(old('address_line_1', (string) ($c['address_line_1'] ?? ''))); ?>"></div>

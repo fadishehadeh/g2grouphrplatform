@@ -84,6 +84,9 @@ CREATE TABLE IF NOT EXISTS user_sessions (
 CREATE TABLE IF NOT EXISTS companies (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(150) NOT NULL,
+    legal_name VARCHAR(200) NULL,
+    registration_number VARCHAR(100) NULL,
+    tax_number VARCHAR(100) NULL,
     code VARCHAR(50) NOT NULL UNIQUE,
     email VARCHAR(150) NULL,
     phone VARCHAR(30) NULL,

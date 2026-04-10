@@ -62,7 +62,7 @@ final class MasterDataRepository
     public function findCompany(int $id): ?array
     {
         return $this->database->fetch(
-            'SELECT id, name, code, email, phone, address_line_1, address_line_2, city, state, country, postal_code, timezone, status, logo_path
+            'SELECT id, name, legal_name, registration_number, tax_number, code, email, phone, address_line_1, address_line_2, city, state, country, postal_code, timezone, status, logo_path
              FROM companies WHERE id = :id LIMIT 1',
             ['id' => $id]
         );
@@ -72,24 +72,28 @@ final class MasterDataRepository
     {
         $logoSql = array_key_exists('logo_path', $data) ? ', logo_path = :logo_path' : '';
         $params = array_merge([
-            'id'             => $id,
-            'name'           => $data['name'],
-            'code'           => $data['code'],
-            'email'          => $data['email'],
-            'phone'          => $data['phone'],
-            'address_line_1' => $data['address_line_1'],
-            'address_line_2' => $data['address_line_2'],
-            'city'           => $data['city'],
-            'state'          => $data['state'],
-            'country'        => $data['country'],
-            'postal_code'    => $data['postal_code'],
-            'timezone'       => $data['timezone'],
-            'status'         => $data['status'],
+            'id'                  => $id,
+            'name'                => $data['name'],
+            'legal_name'          => $data['legal_name'],
+            'registration_number' => $data['registration_number'],
+            'tax_number'          => $data['tax_number'],
+            'code'                => $data['code'],
+            'email'               => $data['email'],
+            'phone'               => $data['phone'],
+            'address_line_1'      => $data['address_line_1'],
+            'address_line_2'      => $data['address_line_2'],
+            'city'                => $data['city'],
+            'state'               => $data['state'],
+            'country'             => $data['country'],
+            'postal_code'         => $data['postal_code'],
+            'timezone'            => $data['timezone'],
+            'status'              => $data['status'],
         ], array_key_exists('logo_path', $data) ? ['logo_path' => $data['logo_path']] : []);
 
         $this->database->execute(
             'UPDATE companies SET
-                name = :name, code = :code, email = :email, phone = :phone,
+                name = :name, legal_name = :legal_name, registration_number = :registration_number,
+                tax_number = :tax_number, code = :code, email = :email, phone = :phone,
                 address_line_1 = :address_line_1, address_line_2 = :address_line_2,
                 city = :city, state = :state, country = :country,
                 postal_code = :postal_code, timezone = :timezone, status = :status' . $logoSql . '
@@ -134,9 +138,11 @@ final class MasterDataRepository
     {
         $this->database->execute(
             'INSERT INTO companies (
-                name, code, email, phone, address_line_1, address_line_2, city, state, country, postal_code, timezone, status, logo_path
+                name, legal_name, registration_number, tax_number,
+                code, email, phone, address_line_1, address_line_2, city, state, country, postal_code, timezone, status, logo_path
              ) VALUES (
-                :name, :code, :email, :phone, :address_line_1, :address_line_2, :city, :state, :country, :postal_code, :timezone, :status, :logo_path
+                :name, :legal_name, :registration_number, :tax_number,
+                :code, :email, :phone, :address_line_1, :address_line_2, :city, :state, :country, :postal_code, :timezone, :status, :logo_path
              )',
             $data
         );
