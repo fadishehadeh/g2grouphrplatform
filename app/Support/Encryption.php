@@ -31,9 +31,9 @@ final class Encryption
             );
         }
 
-        $bin = sodium_hex2bin($hex);
+        $bin = \sodium_hex2bin($hex);
 
-        if ($bin === false || strlen($bin) !== SODIUM_CRYPTO_SECRETBOX_KEYBYTES) {
+        if ($bin === false || strlen($bin) !== \SODIUM_CRYPTO_SECRETBOX_KEYBYTES) {
             throw new RuntimeException('ENCRYPTION_KEY is not a valid sodium secretbox key.');
         }
 
@@ -51,11 +51,11 @@ final class Encryption
             return null;
         }
 
-        $nonce = random_bytes(SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
-        $ciphertext = sodium_crypto_secretbox($plaintext, $nonce, $this->key);
+        $nonce = random_bytes(\SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
+        $ciphertext = \sodium_crypto_secretbox($plaintext, $nonce, $this->key);
 
         // wipe plaintext from memory
-        sodium_memzero($plaintext);
+        \sodium_memzero($plaintext);
 
         return base64_encode($nonce . $ciphertext);
     }
@@ -73,14 +73,14 @@ final class Encryption
 
         $decoded = base64_decode($stored, true);
 
-        if ($decoded === false || strlen($decoded) < SODIUM_CRYPTO_SECRETBOX_NONCEBYTES + 1) {
+        if ($decoded === false || strlen($decoded) < \SODIUM_CRYPTO_SECRETBOX_NONCEBYTES + 1) {
             throw new RuntimeException('Encrypted field value is corrupt or truncated.');
         }
 
-        $nonce      = substr($decoded, 0, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
-        $ciphertext = substr($decoded, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
+        $nonce      = substr($decoded, 0, \SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
+        $ciphertext = substr($decoded, \SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
 
-        $plaintext = sodium_crypto_secretbox_open($ciphertext, $nonce, $this->key);
+        $plaintext = \sodium_crypto_secretbox_open($ciphertext, $nonce, $this->key);
 
         if ($plaintext === false) {
             throw new RuntimeException(

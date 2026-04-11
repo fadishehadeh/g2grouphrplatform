@@ -1,4 +1,7 @@
 <?php declare(strict_types=1); ?>
+<?php if (!empty($recaptchaSiteKey)): ?>
+<script src="https://www.google.com/recaptcha/api.js?render=<?= e($recaptchaSiteKey); ?>"></script>
+<?php endif; ?>
 <div class="careers-hero">
     <div class="container" style="max-width:480px">
         <h1 class="mb-1"><i class="bi bi-person-plus me-2"></i>Create Account</h1>
@@ -8,8 +11,11 @@
 
 <div class="container py-5" style="max-width:480px">
     <div class="section-card p-4 p-md-5">
-        <form method="post" action="<?= e(url('/careers/register')); ?>">
+        <form method="post" action="<?= e(url('/careers/register')); ?>" id="careersRegisterForm">
             <?= csrf_field(); ?>
+            <?php if (!empty($recaptchaSiteKey)): ?>
+                <input type="hidden" name="g-recaptcha-response" id="careersRegisterRecaptchaToken">
+            <?php endif; ?>
 
             <div class="mb-3">
                 <label class="form-label fw-semibold">Username *</label>
@@ -45,3 +51,17 @@
         </p>
     </div>
 </div>
+<?php if (!empty($recaptchaSiteKey)): ?>
+<script>
+document.getElementById('careersRegisterForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    var form = this;
+    grecaptcha.ready(function() {
+        grecaptcha.execute('<?= e($recaptchaSiteKey); ?>', {action: 'careers_register'}).then(function(token) {
+            document.getElementById('careersRegisterRecaptchaToken').value = token;
+            form.submit();
+        });
+    });
+});
+</script>
+<?php endif; ?>

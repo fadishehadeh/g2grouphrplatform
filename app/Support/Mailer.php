@@ -97,10 +97,54 @@ final class Mailer
 
         $transport = (string) ($this->config['transport'] ?? 'smtp');
 
-        if ($transport === 'smtp') {
+        if ($transport === 'mailjet') {
+            $this->sendViaMailjetApi($toEmail, $subject, $bodyHtml, $bodyText);
+        } elseif ($transport === 'smtp') {
             $this->sendViaSMTP($toEmail, $subject, $bodyHtml);
         } else {
             $this->sendViaMail($toEmail, $subject, $bodyHtml, $bodyText);
+        }
+    }
+
+    private function sendViaMailjetApi(string $toEmail, string $subject, string $bodyHtml, ?string $bodyText = null): void
+    {
+        $apiKey    = (string) ($this->config['username'] ?? '');
+        $apiSecret = (string) ($this->config['password'] ?? '');
+        $fromAddr  = (string) ($this->config['from_address'] ?? '');
+        $fromName  = (string) ($this->config['from_name'] ?? 'HR System');
+
+        $payload = [
+            'Messages' => [[
+                'From'     => ['Email' => $fromAddr, 'Name' => $fromName],
+                'To'       => [['Email' => $toEmail]],
+                'Subject'  => $subject,
+                'HTMLPart' => $bodyHtml,
+                'TextPart' => $bodyText ?? strip_tags($bodyHtml),
+            ]],
+        ];
+
+        $ch = curl_init('https://api.mailjet.com/v3.1/send');
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => json_encode($payload),
+            CURLOPT_USERPWD        => "{$apiKey}:{$apiSecret}",
+            CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
+            CURLOPT_TIMEOUT        => 15,
+            CURLOPT_CONNECTTIMEOUT => 10,
+        ]);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error    = curl_error($ch);
+        curl_close($ch);
+
+        if ($error !== '') {
+            throw new RuntimeException("Mailjet API request failed: {$error}");
+        }
+
+        if ($httpCode < 200 || $httpCode >= 300) {
+            throw new RuntimeException("Mailjet API returned HTTP {$httpCode}: {$response}");
         }
     }
 

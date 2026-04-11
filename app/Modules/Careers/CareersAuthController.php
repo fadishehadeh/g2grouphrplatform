@@ -30,13 +30,21 @@ final class CareersAuthController extends Controller
 
     public function showRegister(Request $request): void
     {
-        $this->render('careers.auth.register', ['title' => 'Create Account — Careers Portal'], 'careers');
+        $this->render('careers.auth.register', [
+            'title'            => 'Create Account — Careers Portal',
+            'recaptchaSiteKey' => $this->recaptchaSiteKey(),
+        ], 'careers');
     }
 
     public function register(Request $request): void
     {
         if (!$this->app->csrf()->validate((string) $request->input('_token'))) {
             $this->app->session()->flash('error', 'Invalid form token.');
+            $this->redirect('/careers/register');
+        }
+
+        if (!$this->verifyRecaptcha((string) $request->input('g-recaptcha-response', ''))) {
+            $this->app->session()->flash('error', 'CAPTCHA verification failed. Please try again.');
             $this->redirect('/careers/register');
         }
 
@@ -106,13 +114,21 @@ final class CareersAuthController extends Controller
 
     public function showLogin(Request $request): void
     {
-        $this->render('careers.auth.login', ['title' => 'Sign In — Careers Portal'], 'careers');
+        $this->render('careers.auth.login', [
+            'title'            => 'Sign In — Careers Portal',
+            'recaptchaSiteKey' => $this->recaptchaSiteKey(),
+        ], 'careers');
     }
 
     public function login(Request $request): void
     {
         if (!$this->app->csrf()->validate((string) $request->input('_token'))) {
             $this->app->session()->flash('error', 'Invalid form token.');
+            $this->redirect('/careers/login');
+        }
+
+        if (!$this->verifyRecaptcha((string) $request->input('g-recaptcha-response', ''))) {
+            $this->app->session()->flash('error', 'CAPTCHA verification failed. Please try again.');
             $this->redirect('/careers/login');
         }
 
@@ -283,6 +299,40 @@ final class CareersAuthController extends Controller
         }
 
         $this->redirect('/careers/otp');
+    }
+
+    private function recaptchaSiteKey(): string
+    {
+        if (!config('app.recaptcha.enabled', false)) {
+            return '';
+        }
+        return (string) config('app.recaptcha.site_key', '');
+    }
+
+    private function verifyRecaptcha(string $token): bool
+    {
+        if (!config('app.recaptcha.enabled', false)) {
+            return true;
+        }
+
+        $secretKey = (string) config('app.recaptcha.secret_key', '');
+        if ($secretKey === '' || $token === '') {
+            return false;
+        }
+
+        $response = @file_get_contents(
+            'https://www.google.com/recaptcha/api/siteverify?secret=' . urlencode($secretKey) . '&response=' . urlencode($token)
+        );
+
+        if ($response === false) {
+            return true; // Can't reach Google — fail open
+        }
+
+        $data = json_decode($response, true);
+        $minScore = (float) config('app.recaptcha.min_score', 0.5);
+
+        return isset($data['success']) && $data['success'] === true
+            && isset($data['score']) && (float) $data['score'] >= $minScore;
     }
 
     private function otpEmailHtml(string $username, string $code): string

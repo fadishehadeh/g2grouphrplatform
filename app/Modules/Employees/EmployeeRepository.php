@@ -82,7 +82,7 @@ final class EmployeeRepository
 
     public function findEmployee(int $id): ?array
     {
-        return $this->database->fetch(
+        $row = $this->database->fetch(
             "SELECT e.*, c.name AS company_name, b.name AS branch_name, d.name AS department_name, t.name AS team_name,
                     jt.name AS job_title_name, ds.name AS designation_name,
                     CONCAT_WS(' ', m.first_name, m.middle_name, m.last_name) AS manager_name
@@ -98,6 +98,19 @@ final class EmployeeRepository
              LIMIT 1",
             ['id' => $id]
         );
+
+        return $row !== null ? $this->decryptSensitiveFields($row) : null;
+    }
+
+    private function decryptSensitiveFields(array $row): array
+    {
+        foreach (['phone', 'alternate_phone', 'personal_email', 'date_of_birth', 'id_number', 'passport_number'] as $field) {
+            if (isset($row[$field])) {
+                $row[$field] = decrypt_field($row[$field]);
+            }
+        }
+
+        return $row;
     }
 
     public function emergencyContacts(int $employeeId): array
@@ -162,12 +175,12 @@ final class EmployeeRepository
                     employee_code, company_id, branch_id, department_id, team_id, job_title_id, designation_id, manager_employee_id,
                     first_name, middle_name, last_name, work_email, personal_email, phone, alternate_phone, date_of_birth,
                     gender, marital_status, nationality, second_nationality, employment_type, contract_type, joining_date, probation_start_date,
-                    probation_end_date, employee_status, notes, created_by, updated_by
+                    probation_end_date, employee_status, id_number, passport_number, notes, created_by, updated_by
                  ) VALUES (
                     :employee_code, :company_id, :branch_id, :department_id, :team_id, :job_title_id, :designation_id, :manager_employee_id,
                     :first_name, :middle_name, :last_name, :work_email, :personal_email, :phone, :alternate_phone, :date_of_birth,
                     :gender, :marital_status, :nationality, :second_nationality, :employment_type, :contract_type, :joining_date, :probation_start_date,
-                    :probation_end_date, :employee_status, :notes, :created_by, :updated_by
+                    :probation_end_date, :employee_status, :id_number, :passport_number, :notes, :created_by, :updated_by
                  )',
                 $payload
             );
@@ -227,6 +240,8 @@ final class EmployeeRepository
                     probation_start_date = :probation_start_date,
                     probation_end_date = :probation_end_date,
                     employee_status = :employee_status,
+                    id_number = :id_number,
+                    passport_number = :passport_number,
                     notes = :notes,
                     updated_by = :updated_by
                  WHERE id = :id',
@@ -405,6 +420,9 @@ final class EmployeeRepository
 
     private function historyTrackedFields(): array
     {
+        // Encrypted fields (phone, alternate_phone, personal_email, date_of_birth,
+        // id_number, passport_number) are intentionally excluded — logging their
+        // ciphertext in the audit trail would be both useless and confusing.
         return [
             'employee_code',
             'company_id',
@@ -418,10 +436,6 @@ final class EmployeeRepository
             'middle_name',
             'last_name',
             'work_email',
-            'personal_email',
-            'phone',
-            'alternate_phone',
-            'date_of_birth',
             'gender',
             'marital_status',
             'nationality',
@@ -492,7 +506,7 @@ final class EmployeeRepository
 
     public function exportEmployees(): array
     {
-        return $this->database->fetchAll(
+        $rows = $this->database->fetchAll(
             "SELECT e.employee_code, e.first_name, e.middle_name, e.last_name, e.work_email, e.personal_email,
                     e.phone, e.employment_type, e.employee_status, e.nationality, e.second_nationality,
                     e.gender, e.date_of_birth, e.joining_date, e.marital_status, e.notes,
@@ -510,6 +524,8 @@ final class EmployeeRepository
              WHERE e.archived_at IS NULL
              ORDER BY e.employee_code ASC"
         );
+
+        return array_map(fn(array $row) => $this->decryptSensitiveFields($row), $rows);
     }
 
     public function importLookups(): array
@@ -553,10 +569,10 @@ final class EmployeeRepository
             'middle_name' => $this->nullableString($data['middle_name'] ?? null),
             'last_name' => (string) $data['last_name'],
             'work_email' => strtolower((string) $data['work_email']),
-            'personal_email' => $this->nullableString(isset($data['personal_email']) ? strtolower((string) $data['personal_email']) : null),
-            'phone' => $this->nullableString($data['phone'] ?? null),
-            'alternate_phone' => $this->nullableString($data['alternate_phone'] ?? null),
-            'date_of_birth' => $this->nullableString($data['date_of_birth'] ?? null),
+            'personal_email' => encrypt_field($this->nullableString(isset($data['personal_email']) ? strtolower((string) $data['personal_email']) : null)),
+            'phone' => encrypt_field($this->nullableString($data['phone'] ?? null)),
+            'alternate_phone' => encrypt_field($this->nullableString($data['alternate_phone'] ?? null)),
+            'date_of_birth' => encrypt_field($this->nullableString($data['date_of_birth'] ?? null)),
             'gender' => $this->nullableString($data['gender'] ?? null),
             'marital_status' => $this->nullableString($data['marital_status'] ?? null),
             'nationality' => $this->nullableString($data['nationality'] ?? null),
@@ -567,6 +583,8 @@ final class EmployeeRepository
             'probation_start_date' => $this->nullableString($data['probation_start_date'] ?? null),
             'probation_end_date' => $this->nullableString($data['probation_end_date'] ?? null),
             'employee_status' => (string) ($data['employee_status'] ?? 'draft'),
+            'id_number' => encrypt_field($this->nullableString($data['id_number'] ?? null)),
+            'passport_number' => encrypt_field($this->nullableString($data['passport_number'] ?? null)),
             'notes' => $this->nullableString($data['notes'] ?? null),
             'updated_by' => $actorId,
         ];

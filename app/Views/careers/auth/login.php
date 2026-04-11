@@ -1,4 +1,7 @@
 <?php declare(strict_types=1); ?>
+<?php if (!empty($recaptchaSiteKey)): ?>
+<script src="https://www.google.com/recaptcha/api.js?render=<?= e($recaptchaSiteKey); ?>"></script>
+<?php endif; ?>
 <div class="careers-hero">
     <div class="container" style="max-width:480px">
         <h1 class="mb-1"><i class="bi bi-box-arrow-in-right me-2"></i>Sign In</h1>
@@ -8,8 +11,11 @@
 
 <div class="container py-5" style="max-width:480px">
     <div class="section-card p-4 p-md-5">
-        <form method="post" action="<?= e(url('/careers/login')); ?>">
+        <form method="post" action="<?= e(url('/careers/login')); ?>" id="careersLoginForm">
             <?= csrf_field(); ?>
+            <?php if (!empty($recaptchaSiteKey)): ?>
+                <input type="hidden" name="g-recaptcha-response" id="careersRecaptchaToken">
+            <?php endif; ?>
 
             <div class="mb-3">
                 <label class="form-label fw-semibold">Email Address *</label>
@@ -22,8 +28,8 @@
                 <input type="password" name="password" class="form-control" placeholder="Your password" required>
             </div>
 
-            <button type="submit" class="btn btn-danger w-100 fw-semibold py-2">
-                <i class="bi bi-shield-lock me-1"></i> Sign In & Verify
+            <button type="submit" class="btn btn-danger w-100 fw-semibold py-2" id="careersLoginBtn">
+                <i class="bi bi-shield-lock me-1"></i> Sign In &amp; Verify
             </button>
         </form>
         <p class="text-muted small text-center mt-3 mb-0">
@@ -36,3 +42,17 @@
         </p>
     </div>
 </div>
+<?php if (!empty($recaptchaSiteKey)): ?>
+<script>
+document.getElementById('careersLoginForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    var form = this;
+    grecaptcha.ready(function() {
+        grecaptcha.execute('<?= e($recaptchaSiteKey); ?>', {action: 'careers_login'}).then(function(token) {
+            document.getElementById('careersRecaptchaToken').value = token;
+            form.submit();
+        });
+    });
+});
+</script>
+<?php endif; ?>

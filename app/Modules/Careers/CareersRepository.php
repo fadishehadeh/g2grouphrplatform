@@ -83,14 +83,33 @@ final class CareersRepository
 
     public function getProfile(int $seekerId): ?array
     {
-        return $this->db->fetch(
+        $row = $this->db->fetch(
             'SELECT * FROM job_seeker_profiles WHERE job_seeker_id = :id LIMIT 1',
             ['id' => $seekerId]
         );
+
+        if ($row === null) {
+            return null;
+        }
+
+        foreach (['phone', 'mobile', 'whatsapp_number', 'date_of_birth'] as $field) {
+            if (isset($row[$field])) {
+                $row[$field] = decrypt_field($row[$field]);
+            }
+        }
+
+        return $row;
     }
 
     public function updatePersonal(int $seekerId, array $data): void
     {
+        $encrypted = array_merge($data, [
+            'phone'           => encrypt_field($data['phone'] ?? null),
+            'mobile'          => encrypt_field($data['mobile'] ?? null),
+            'whatsapp_number' => encrypt_field($data['whatsapp_number'] ?? null),
+            'date_of_birth'   => encrypt_field($data['date_of_birth'] ?? null),
+        ]);
+
         $this->db->execute(
             'UPDATE job_seeker_profiles SET
                 first_name = :first_name, last_name = :last_name, middle_name = :middle_name,
@@ -102,7 +121,7 @@ final class CareersRepository
                 linkedin_url = :linkedin_url, portfolio_url = :portfolio_url,
                 github_url = :github_url, website_url = :website_url
              WHERE job_seeker_id = :job_seeker_id',
-            array_merge($data, ['job_seeker_id' => $seekerId])
+            array_merge($encrypted, ['job_seeker_id' => $seekerId])
         );
     }
 
