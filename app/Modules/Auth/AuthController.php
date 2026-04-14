@@ -274,8 +274,6 @@ final class AuthController extends Controller
 
                 if ($mailEnabled) {
                     $this->sendPasswordResetEmail((string) $user['email'], $resetLink, $expiresAt);
-                } else {
-                    $this->app->session()->flash('reset_preview_link', $resetLink);
                 }
             }
         } catch (Throwable $exception) {
@@ -283,12 +281,7 @@ final class AuthController extends Controller
             $this->redirect('/forgot-password');
         }
 
-        $this->app->session()->flash(
-            'success',
-            $mailEnabled
-                ? 'If the email exists, a password reset link has been queued for delivery.'
-                : 'If the email exists, a password reset link is ready below for local testing.'
-        );
+        $this->app->session()->flash('success', 'If the email exists, a password reset link has been sent.');
         $this->redirect('/forgot-password');
     }
 
@@ -444,9 +437,6 @@ final class AuthController extends Controller
             } catch (Throwable) {
                 // silently fail — OTP is still saved
             }
-        } else {
-            // Dev mode: expose code in flash so testing is possible without email
-            $this->app->session()->flash('dev_otp', $code);
         }
 
         if ($isResend) {

@@ -33,11 +33,5 @@
             <a href="<?= e(url('/login')); ?>" class="small text-muted">Back to login</a>
         </div>
 
-        <?php $devOtp = $_SESSION['_flash']['dev_otp']['value'] ?? null; ?>
-        <?php if (!empty($devOtp)): ?>
-        <div class="alert alert-warning mt-3 mb-0 small">
-            <strong>Dev mode — OTP:</strong> <?= e((string) $devOtp); ?>
-        </div>
-        <?php endif; ?>
     </div>
 </div>

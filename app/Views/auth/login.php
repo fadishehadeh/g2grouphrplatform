@@ -25,11 +25,6 @@
             </div>
             <button type="submit" class="btn btn-primary w-100" id="loginBtn">Sign In &amp; Verify</button>
         </form>
-        <?php if (!empty($_SESSION['_flash']['dev_otp']['value'])): ?>
-            <div class="alert alert-warning mt-3 mb-0 small">
-                <strong>Dev mode — OTP:</strong> <?= e((string) $_SESSION['_flash']['dev_otp']['value']); ?>
-            </div>
-        <?php endif; ?>
     </div>
 </div>
 <?php if (!empty($recaptchaSiteKey)): ?>
