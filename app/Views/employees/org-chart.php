@@ -20,7 +20,7 @@
 
 <div class="card content-card">
     <div class="card-body p-0">
-        <div id="orgChartContainer" style="overflow:auto; min-height:500px; padding:1.5rem; background:#f8fafc; border-radius:0 0 1rem 1rem;"></div>
+        <div id="orgChartContainer" style="overflow:auto; min-height:500px; background:#f8fafc; border-radius:0 0 1rem 1rem; position:relative;"></div>
     </div>
 </div>
 
@@ -28,59 +28,30 @@
 $nodesJson = json_encode($nodes ?? [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE);
 ?>
 
-<script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@dabeng/orgchart@3.7.0/dist/css/orgchart.min.css">
 <style>
-    .orgchart { background: transparent !important; }
-    .orgchart .node { cursor: pointer; }
-    .orgchart .node .title {
-        background: var(--brand-primary, #e63946);
-        border-radius: .6rem .6rem 0 0;
-        font-size: .78rem;
-        font-weight: 600;
-        padding: .35rem .6rem;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        max-width: 160px;
-    }
-    .orgchart .node .content {
-        border: 2px solid var(--brand-primary, #e63946);
-        border-top: none;
-        border-radius: 0 0 .6rem .6rem;
-        font-size: .75rem;
-        padding: .4rem .6rem;
-        background: #fff;
-        min-width: 140px;
-        max-width: 160px;
-    }
-    .orgchart .node:hover > .title { opacity: .88; }
-    .org-node-inner { display:flex; align-items:center; gap:.5rem; }
-    .org-avatar { width:34px; height:34px; border-radius:50%; object-fit:cover; flex-shrink:0; border:2px solid rgba(255,255,255,.5); }
-    .org-avatar-placeholder { width:34px; height:34px; border-radius:50%; background:rgba(255,255,255,.25); display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:.95rem; color:#fff; }
-    .org-name { font-weight:600; color:#fff; font-size:.8rem; line-height:1.2; }
-    .org-dept { color: #64748b; font-size:.7rem; margin-top:.1rem; }
-    .org-status-dot { display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:.3rem; }
-    .org-status-active { background:#22c55e; }
-    .org-status-other { background:#94a3b8; }
-    .orgchart .node.highlighted > .title { outline: 3px solid #f59e0b; outline-offset:1px; }
+    #orgChartContainer svg { display:block; }
+    .org-link { fill:none; stroke:#cbd5e1; stroke-width:1.5px; }
+    .org-node rect { transition: opacity .15s; }
+    .org-node:hover rect { opacity: .88; }
+    .org-node.highlighted rect { stroke: #f59e0b !important; stroke-width: 3px !important; }
     #orgChartContainer::-webkit-scrollbar { height:6px; width:6px; }
     #orgChartContainer::-webkit-scrollbar-track { background:#f1f5f9; }
     #orgChartContainer::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:3px; }
 </style>
 
-<script src="https://cdn.jsdelivr.net/npm/@dabeng/orgchart@3.7.0/dist/js/orgchart.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
 <script>
-$(function () {
+(function () {
     const rawNodes = <?= $nodesJson ?>;
 
+    // ---------- empty state ----------
     if (!rawNodes.length) {
         document.getElementById('orgChartContainer').innerHTML =
-            '<div class="empty-state p-5 text-center text-muted">No employees found. Add employees and assign managers to build the chart.</div>';
+            '<div class="p-5 text-center text-muted">No employees found. Add employees and assign managers to build the chart.</div>';
         return;
     }
 
-    // ---------- build department filter ----------
+    // ---------- department filter ----------
     const depts = [...new Set(rawNodes.map(n => n.department).filter(Boolean))].sort();
     const deptSel = document.getElementById('orgDeptFilter');
     depts.forEach(d => {
@@ -89,64 +60,162 @@ $(function () {
         deptSel.appendChild(o);
     });
 
-    // ---------- build OrgChart datasource ----------
+    // ---------- constants ----------
+    const NW = 175, NH = 62, HGAP = 18, VGAP = 55;
+    const BRAND = getComputedStyle(document.documentElement).getPropertyValue('--brand-primary').trim() || '#e63946';
+    const ROOT_COLOR = '#475569';
+
+    // ---------- build hierarchy datasource ----------
     function buildDS(nodes) {
         const map = {};
         nodes.forEach(n => { map[n.id] = { ...n, children: [] }; });
         const roots = [];
         nodes.forEach(n => {
-            if (n.pid && map[n.pid]) {
-                map[n.pid].children.push(map[n.id]);
-            } else {
-                roots.push(map[n.id]);
-            }
+            if (n.pid && map[n.pid]) map[n.pid].children.push(map[n.id]);
+            else roots.push(map[n.id]);
         });
         if (roots.length === 1) return roots[0];
-        return { id: 0, name: '<?= e((string) config('app.brand.display_name', config('app.name'))); ?>', title: '', department: '', status: 'active', photo: null, profileUrl: '#', children: roots };
+        return { id: 0, name: '<?= e((string) config('app.brand.display_name', config('app.name'))); ?>', title: 'Organisation', department: '', status: 'active', photo: null, profileUrl: '#', children: roots };
     }
 
-    function escHtml(s) {
-        return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    function truncate(str, max) {
+        return str && str.length > max ? str.slice(0, max - 1) + '…' : (str || '');
     }
 
-    function nodeTemplate(data) {
-        const avatar = data.photo
-            ? `<img class="org-avatar" src="${escHtml(data.photo)}" alt="">`
-            : `<div class="org-avatar-placeholder"><i class="bi bi-person-fill"></i></div>`;
-        const dot = `<span class="org-status-dot ${data.status === 'active' ? 'org-status-active' : 'org-status-other'}"></span>`;
-        return `<div class="org-node-inner">${avatar}<div><div class="org-name">${dot}${escHtml(data.name)}</div></div></div>`;
-    }
-
-    let chart = null;
+    // ---------- main render ----------
+    let svgEl = null;
 
     function render(nodes) {
-        const $container = $('#orgChartContainer');
-        $container.empty();
+        const container = document.getElementById('orgChartContainer');
+        container.innerHTML = '';
+
         const ds = buildDS(nodes);
+        const root = d3.hierarchy(ds);
 
-        $container.orgchart({
-            data:               ds,
-            nodeContent:        'department',
-            nodeTemplate:       nodeTemplate,
-            pan:                true,
-            zoom:               true,
-            toggleSiblingsResp: false,
-            createNode: function ($node, data) {
-                if (data.profileUrl && data.profileUrl !== '#') {
-                    $node.css('cursor', 'pointer').on('click', function () {
-                        window.location.href = data.profileUrl;
-                    });
+        const tree = d3.tree()
+            .nodeSize([NW + HGAP, NH + VGAP])
+            .separation((a, b) => a.parent === b.parent ? 1 : 1.2);
+        tree(root);
+
+        // bounding box
+        let xMin = Infinity, xMax = -Infinity;
+        root.each(d => { if (d.x < xMin) xMin = d.x; if (d.x > xMax) xMax = d.x; });
+
+        const totalW = (xMax - xMin) + NW + 60;
+        const totalH = (root.height + 1) * (NH + VGAP) + 40;
+        const containerW = container.clientWidth || 900;
+        const svgW = Math.max(containerW, totalW);
+
+        const svg = d3.select(container).append('svg')
+            .attr('width', svgW)
+            .attr('height', totalH + 20)
+            .attr('id', 'orgSvg');
+
+        svgEl = svg.node();
+
+        // zoom + pan
+        const g = svg.append('g').attr('id', 'orgG');
+        const initialTx = svgW / 2 - (xMin + xMax) / 2;
+        g.attr('transform', `translate(${initialTx}, 20)`);
+
+        const zoom = d3.zoom()
+            .scaleExtent([0.15, 3])
+            .on('zoom', e => g.attr('transform', e.transform));
+        svg.call(zoom);
+        svg.call(zoom.transform, d3.zoomIdentity.translate(initialTx, 20));
+
+        // links
+        g.selectAll('path.org-link')
+            .data(root.links())
+            .join('path')
+            .attr('class', 'org-link')
+            .attr('d', d => {
+                const sx = d.source.x, sy = d.source.y + NH;
+                const tx = d.target.x, ty = d.target.y;
+                const my = sy + (ty - sy) * 0.5;
+                return `M${sx},${sy} C${sx},${my} ${tx},${my} ${tx},${ty}`;
+            });
+
+        // node groups
+        const nodeG = g.selectAll('g.org-node')
+            .data(root.descendants())
+            .join('g')
+            .attr('class', 'org-node')
+            .attr('data-empid', d => d.data.id)
+            .attr('transform', d => `translate(${d.x - NW / 2}, ${d.y})`)
+            .style('cursor', d => (d.data.profileUrl && d.data.profileUrl !== '#') ? 'pointer' : 'default')
+            .on('click', (e, d) => {
+                if (d.data.profileUrl && d.data.profileUrl !== '#') {
+                    window.location.href = d.data.profileUrl;
                 }
-                if (data.id) $node.attr('data-empid', data.id);
-            }
-        });
+            });
 
-        chart = $container.data('orgchart');
+        // shadow filter
+        const defs = svg.append('defs');
+        const filter = defs.append('filter').attr('id', 'nodeDropShadow').attr('x', '-10%').attr('y', '-10%').attr('width', '120%').attr('height', '130%');
+        filter.append('feDropShadow').attr('dx', 0).attr('dy', 2).attr('stdDeviation', 3).attr('flood-color', 'rgba(0,0,0,0.12)');
+
+        // card background
+        nodeG.append('rect')
+            .attr('width', NW)
+            .attr('height', NH)
+            .attr('rx', 9)
+            .attr('fill', d => d.data.id === 0 ? ROOT_COLOR : BRAND)
+            .attr('filter', 'url(#nodeDropShadow)');
+
+        // bottom department strip
+        nodeG.append('rect')
+            .attr('y', NH - 18)
+            .attr('width', NW)
+            .attr('height', 18)
+            .attr('rx', 9)
+            .attr('fill', 'rgba(0,0,0,0.18)');
+        nodeG.append('rect')
+            .attr('y', NH - 18)
+            .attr('width', NW)
+            .attr('height', 9)
+            .attr('fill', 'rgba(0,0,0,0.18)');
+
+        // status dot
+        nodeG.append('circle')
+            .attr('cx', 14)
+            .attr('cy', 20)
+            .attr('r', 4)
+            .attr('fill', d => d.data.status === 'active' ? '#22c55e' : '#94a3b8');
+
+        // name
+        nodeG.append('text')
+            .attr('x', 26)
+            .attr('y', 24)
+            .attr('fill', '#fff')
+            .attr('font-size', 12)
+            .attr('font-weight', 700)
+            .attr('font-family', 'inherit')
+            .text(d => truncate(d.data.name, 22));
+
+        // job title
+        nodeG.append('text')
+            .attr('x', 26)
+            .attr('y', 38)
+            .attr('fill', 'rgba(255,255,255,0.75)')
+            .attr('font-size', 10)
+            .attr('font-family', 'inherit')
+            .text(d => truncate(d.data.title || '', 26));
+
+        // department strip text
+        nodeG.append('text')
+            .attr('x', NW / 2)
+            .attr('y', NH - 5)
+            .attr('fill', 'rgba(255,255,255,0.65)')
+            .attr('font-size', 9)
+            .attr('font-family', 'inherit')
+            .attr('text-anchor', 'middle')
+            .text(d => truncate(d.data.department || '', 28));
     }
 
     render(rawNodes);
 
-    // ---------- search ----------
+    // ---------- search + filter ----------
     document.getElementById('orgSearch').addEventListener('input', applyFilters);
     deptSel.addEventListener('change', applyFilters);
 
@@ -159,7 +228,6 @@ $(function () {
             n.name.toLowerCase().includes(q) || (n.title || '').toLowerCase().includes(q)
         );
 
-        // Keep ancestors so tree stays connected
         if (q || dept) {
             const keep = new Set(filtered.map(n => n.id));
             rawNodes.forEach(n => {
@@ -176,9 +244,8 @@ $(function () {
 
         render(filtered);
 
-        // highlight matched nodes after render
         if (q) {
-            document.querySelectorAll('#orgChartContainer .node').forEach(el => {
+            document.querySelectorAll('#orgChartContainer .org-node').forEach(el => {
                 const empId = parseInt(el.dataset.empid || 0);
                 const match = rawNodes.find(n => n.id === empId);
                 if (match && (match.name.toLowerCase().includes(q) || (match.title || '').toLowerCase().includes(q))) {
@@ -188,17 +255,54 @@ $(function () {
         }
     }
 
-    // ---------- expand / collapse all ----------
+    // ---------- expand / collapse (zoom fit) ----------
     document.getElementById('orgExpandAll').addEventListener('click', function () {
-        $('#orgChartContainer .node.collapsed').each(function () { $(this).find('> .edge.bottomEdge').trigger('click'); });
+        if (!svgEl) return;
+        const svg = d3.select(svgEl);
+        const g   = svg.select('#orgG');
+        const bbox = g.node().getBBox();
+        const cw  = svgEl.clientWidth, ch = svgEl.clientHeight;
+        const scale = Math.min(0.95, Math.min(cw / bbox.width, ch / bbox.height));
+        const tx = (cw - bbox.width  * scale) / 2 - bbox.x * scale;
+        const ty = (ch - bbox.height * scale) / 2 - bbox.y * scale;
+        svg.transition().duration(400)
+            .call(d3.zoom().transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
     });
     document.getElementById('orgCollapseAll').addEventListener('click', function () {
-        $('#orgChartContainer .node:not(.collapsed) > .edge.bottomEdge').trigger('click');
+        if (!svgEl) return;
+        const svg = d3.select(svgEl);
+        svg.transition().duration(400)
+            .call(d3.zoom().transform, d3.zoomIdentity.translate(
+                svgEl.clientWidth / 2 - (parseFloat(d3.select('#orgChartContainer .org-node').attr('transform')?.match(/translate\(([^,]+)/)?.[1] || 0) + NW / 2),
+                20
+            ).scale(1));
     });
 
-    // ---------- export PNG ----------
+    // ---------- PNG export ----------
     document.getElementById('orgExport').addEventListener('click', function () {
-        if (chart) chart.export('Org-Chart-<?= date('Y-m-d'); ?>');
+        if (!svgEl) return;
+        const svgClone = svgEl.cloneNode(true);
+        // embed font
+        svgClone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+        const bbox = svgEl.getBBox ? svgEl.getBBox() : { x: 0, y: 0, width: svgEl.width.baseVal.value, height: svgEl.height.baseVal.value };
+        const serializer = new XMLSerializer();
+        const svgStr = serializer.serializeToString(svgClone);
+        const canvas = document.createElement('canvas');
+        const scale  = 2;
+        canvas.width  = svgEl.clientWidth  * scale;
+        canvas.height = svgEl.clientHeight * scale;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        const img = new Image();
+        img.onload = () => {
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            const link = document.createElement('a');
+            link.download = 'Org-Chart-<?= date('Y-m-d'); ?>.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        };
+        img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgStr);
     });
-});
+})();
 </script>
