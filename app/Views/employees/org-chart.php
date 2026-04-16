@@ -28,6 +28,7 @@
 $nodesJson = json_encode($nodes ?? [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE);
 ?>
 
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@dabeng/orgchart@3.7.0/dist/css/orgchart.min.css">
 <style>
     .orgchart { background: transparent !important; }
@@ -70,7 +71,7 @@ $nodesJson = json_encode($nodes ?? [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCA
 
 <script src="https://cdn.jsdelivr.net/npm/@dabeng/orgchart@3.7.0/dist/js/orgchart.min.js"></script>
 <script>
-(function () {
+$(function () {
     const rawNodes = <?= $nodesJson ?>;
 
     if (!rawNodes.length) {
@@ -92,7 +93,6 @@ $nodesJson = json_encode($nodes ?? [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCA
     function buildDS(nodes) {
         const map = {};
         nodes.forEach(n => { map[n.id] = { ...n, children: [] }; });
-
         const roots = [];
         nodes.forEach(n => {
             if (n.pid && map[n.pid]) {
@@ -101,75 +101,67 @@ $nodesJson = json_encode($nodes ?? [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCA
                 roots.push(map[n.id]);
             }
         });
-
-        // If multiple roots, wrap them under a virtual top node
         if (roots.length === 1) return roots[0];
         return { id: 0, name: '<?= e((string) config('app.brand.display_name', config('app.name'))); ?>', title: '', department: '', status: 'active', photo: null, profileUrl: '#', children: roots };
-    }
-
-    function nodeTemplate(data) {
-        const avatar = data.photo
-            ? `<img class="org-avatar" src="${data.photo}" alt="">`
-            : `<div class="org-avatar-placeholder"><i class="bi bi-person-fill"></i></div>`;
-        const dot = `<span class="org-status-dot ${data.status === 'active' ? 'org-status-active' : 'org-status-other'}"></span>`;
-        return `<div class="org-node-inner">${avatar}<div><div class="org-name">${dot}${escHtml(data.name)}</div></div></div>`;
     }
 
     function escHtml(s) {
         return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
 
-    let currentNodes = rawNodes;
+    function nodeTemplate(data) {
+        const avatar = data.photo
+            ? `<img class="org-avatar" src="${escHtml(data.photo)}" alt="">`
+            : `<div class="org-avatar-placeholder"><i class="bi bi-person-fill"></i></div>`;
+        const dot = `<span class="org-status-dot ${data.status === 'active' ? 'org-status-active' : 'org-status-other'}"></span>`;
+        return `<div class="org-node-inner">${avatar}<div><div class="org-name">${dot}${escHtml(data.name)}</div></div></div>`;
+    }
+
     let chart = null;
 
     function render(nodes) {
-        const container = document.getElementById('orgChartContainer');
-        container.innerHTML = '';
+        const $container = $('#orgChartContainer');
+        $container.empty();
         const ds = buildDS(nodes);
 
-        chart = new OrgChart(container, {
-            data: ds,
-            nodeContent: 'department',
-            nodeTemplate: nodeTemplate,
-            pan: true,
-            zoom: true,
+        $container.orgchart({
+            data:               ds,
+            nodeContent:        'department',
+            nodeTemplate:       nodeTemplate,
+            pan:                true,
+            zoom:               true,
             toggleSiblingsResp: false,
-            initCompleted: function (ctx) {
-                // make nodes clickable
-                ctx.$chart.querySelectorAll('.node').forEach(el => {
-                    el.addEventListener('click', function () {
-                        const nId = parseInt(this.dataset.nodeid || this.id?.replace('node', '') || 0);
-                        const match = rawNodes.find(n => n.id === nId);
-                        if (match && match.profileUrl && match.profileUrl !== '#') {
-                            window.location.href = match.profileUrl;
-                        }
+            createNode: function ($node, data) {
+                if (data.profileUrl && data.profileUrl !== '#') {
+                    $node.css('cursor', 'pointer').on('click', function () {
+                        window.location.href = data.profileUrl;
                     });
-                });
+                }
+                if (data.id) $node.attr('data-empid', data.id);
             }
         });
+
+        chart = $container.data('orgchart');
     }
 
-    render(currentNodes);
+    render(rawNodes);
 
     // ---------- search ----------
-    document.getElementById('orgSearch').addEventListener('input', function () {
-        applyFilters();
-    });
-
-    // ---------- dept filter ----------
+    document.getElementById('orgSearch').addEventListener('input', applyFilters);
     deptSel.addEventListener('change', applyFilters);
 
     function applyFilters() {
-        const q = document.getElementById('orgSearch').value.toLowerCase().trim();
+        const q    = document.getElementById('orgSearch').value.toLowerCase().trim();
         const dept = deptSel.value;
         let filtered = rawNodes;
         if (dept) filtered = filtered.filter(n => n.department === dept);
-        if (q)    filtered = filtered.filter(n => n.name.toLowerCase().includes(q) || (n.title||'').toLowerCase().includes(q));
+        if (q)    filtered = filtered.filter(n =>
+            n.name.toLowerCase().includes(q) || (n.title || '').toLowerCase().includes(q)
+        );
 
         // Keep ancestors so tree stays connected
         if (q || dept) {
             const keep = new Set(filtered.map(n => n.id));
-            // walk up to root for each kept node
             rawNodes.forEach(n => {
                 if (keep.has(n.id)) {
                     let cur = n;
@@ -184,12 +176,12 @@ $nodesJson = json_encode($nodes ?? [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCA
 
         render(filtered);
 
-        // highlight matched nodes
+        // highlight matched nodes after render
         if (q) {
             document.querySelectorAll('#orgChartContainer .node').forEach(el => {
-                const nId = parseInt(el.dataset.nodeid || 0);
-                const match = rawNodes.find(n => n.id === nId);
-                if (match && (match.name.toLowerCase().includes(q) || (match.title||'').toLowerCase().includes(q))) {
+                const empId = parseInt(el.dataset.empid || 0);
+                const match = rawNodes.find(n => n.id === empId);
+                if (match && (match.name.toLowerCase().includes(q) || (match.title || '').toLowerCase().includes(q))) {
                     el.classList.add('highlighted');
                 }
             });
@@ -198,16 +190,15 @@ $nodesJson = json_encode($nodes ?? [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCA
 
     // ---------- expand / collapse all ----------
     document.getElementById('orgExpandAll').addEventListener('click', function () {
-        document.querySelectorAll('#orgChartContainer .node.collapsed').forEach(n => n.click());
+        $('#orgChartContainer .node.collapsed').each(function () { $(this).find('> .edge.bottomEdge').trigger('click'); });
     });
     document.getElementById('orgCollapseAll').addEventListener('click', function () {
-        document.querySelectorAll('#orgChartContainer .node:not(.collapsed) .edge.bottomEdge').forEach(e => e.click());
+        $('#orgChartContainer .node:not(.collapsed) > .edge.bottomEdge').trigger('click');
     });
 
     // ---------- export PNG ----------
     document.getElementById('orgExport').addEventListener('click', function () {
-        if (!chart) return;
-        chart.export('Org-Chart-<?= date('Y-m-d'); ?>', 'png');
+        if (chart) chart.export('Org-Chart-<?= date('Y-m-d'); ?>');
     });
-})();
+});
 </script>
