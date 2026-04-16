@@ -15,13 +15,30 @@ Both apps share the same codebase, the same `.env`, and connect to their respect
 
 1. Download the latest code from GitHub (`fadishehadeh/g2grouphrplatform`)
 2. Zip the entire project folder
-3. In **cPanel → File Manager**, navigate to `/home/greykktq/`
-4. Upload and extract the zip — rename the folder to `platform`
+3. In **cPanel → File Manager**, upload and extract it — rename the folder to `platform`
 
-Your directory structure on the server will be:
+Choose where to place it based on your cPanel setup:
+
+**Option A — outside public_html (recommended, more secure):**
 
 ```
 /home/greykktq/platform/
+    ├── app/
+    ├── config/
+    ├── database/
+    ├── public-hr/          ← document root for hr.greydoha.com
+    ├── public-careers/     ← document root for careers.greydoha.com
+    ├── routes/
+    ├── scripts/
+    ├── storage/
+    ├── vendor/
+    └── .env
+```
+
+**Option B — inside public_html (works if cPanel only allows public_html):**
+
+```
+/home/greykktq/public_html/platform/
     ├── app/
     ├── config/
     ├── database/
@@ -38,12 +55,12 @@ Your directory structure on the server will be:
 
 ## 2. Point the Subdomains
 
-In **cPanel → Domains** (or Subdomains), set the document roots:
+In **cPanel → Domains** (or Subdomains), set the document roots to match whichever option you chose above:
 
-| Subdomain | Document Root |
-|-----------|--------------|
-| `hr.greydoha.com` | `/home/greykktq/platform/public-hr` |
-| `careers.greydoha.com` | `/home/greykktq/platform/public-careers` |
+| Subdomain | Option A | Option B |
+|-----------|----------|----------|
+| `hr.greydoha.com` | `/home/greykktq/platform/public-hr` | `/home/greykktq/public_html/platform/public-hr` |
+| `careers.greydoha.com` | `/home/greykktq/platform/public-careers` | `/home/greykktq/public_html/platform/public-careers` |
 
 ---
 
@@ -118,11 +135,16 @@ ENCRYPTION_KEY=your_64_char_hex_key
 
 ## 5. Set Folder Permissions
 
-In **cPanel → Terminal** or via SSH:
+In **cPanel → Terminal** or via SSH (adjust path to match your choice from Step 1):
 
 ```bash
+# Option A
 chmod 755 /home/greykktq/platform/storage
 chmod 755 /home/greykktq/platform/storage/uploads
+
+# Option B
+chmod 755 /home/greykktq/public_html/platform/storage
+chmod 755 /home/greykktq/public_html/platform/storage/uploads
 ```
 
 ---
@@ -150,8 +172,14 @@ Leave request notifications to managers and HR admins are queued in the database
 
 In **cPanel → Cron Jobs**, add the following job to run every minute:
 
+Option A path:
 ```
 * * * * * /usr/local/bin/php /home/greykktq/platform/scripts/process-email-queue.php >> /home/greykktq/logs/email.log 2>&1
+```
+
+Option B path:
+```
+* * * * * /usr/local/bin/php /home/greykktq/public_html/platform/scripts/process-email-queue.php >> /home/greykktq/logs/email.log 2>&1
 ```
 
 > Create the `logs/` directory first if it does not exist.

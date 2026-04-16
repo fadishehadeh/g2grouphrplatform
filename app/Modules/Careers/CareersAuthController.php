@@ -289,8 +289,8 @@ final class CareersAuthController extends Controller
             $html = $this->otpEmailHtml((string) $seeker['username'], $code);
             try {
                 $mailer->send((string) $seeker['email'], 'Your Careers Portal OTP Code', $html);
-            } catch (Throwable) {
-                // silently fail — OTP is still saved, user will see the code-entry page
+            } catch (Throwable $e) {
+                error_log('[OTP Mail Error] ' . $e->getMessage());
             }
         }
 

@@ -434,8 +434,8 @@ final class AuthController extends Controller
             $html = $this->otpEmailHtml($firstName, $code);
             try {
                 $mailer->send($email, 'Your HR System Login Code', $html);
-            } catch (Throwable) {
-                // silently fail — OTP is still saved
+            } catch (Throwable $e) {
+                error_log('[OTP Mail Error] ' . $e->getMessage());
             }
         }
 
