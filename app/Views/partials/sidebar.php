@@ -43,10 +43,10 @@ $nextId = static function () use (&$collapseId): string {
             $peopleOpen = $groupOpen(['/employees', '/onboarding', '/offboarding']);
         ?>
         <div class="sidebar-group">
-            <button class="sidebar-group-toggle collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#<?= e($peopleId); ?>" aria-expanded="<?= $peopleOpen === 'show' ? 'true' : 'false'; ?>">
+            <a class="sidebar-group-toggle<?= $peopleOpen === 'show' ? '' : ' collapsed'; ?>" href="#<?= e($peopleId); ?>" data-bs-toggle="collapse" aria-expanded="<?= $peopleOpen === 'show' ? 'true' : 'false'; ?>">
                 <i class="bi bi-people"></i> People
                 <i class="bi bi-chevron-down sidebar-chevron ms-auto"></i>
-            </button>
+            </a>
             <div class="collapse <?= e($peopleOpen); ?>" id="<?= e($peopleId); ?>">
                 <a href="<?= e(url('/employees')); ?>" class="sidebar-sublink"><i class="bi bi-person-lines-fill"></i> Employees</a>
                 <?php if (can('onboarding.manage')): ?>
@@ -63,10 +63,10 @@ $nextId = static function () use (&$collapseId): string {
             $accessOpen = $groupOpen(['/admin/users', '/admin/roles', '/admin/companies', '/admin/structure']);
         ?>
         <div class="sidebar-group">
-            <button class="sidebar-group-toggle collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#<?= e($accessId); ?>" aria-expanded="<?= $accessOpen === 'show' ? 'true' : 'false'; ?>">
+            <a class="sidebar-group-toggle<?= $accessOpen === 'show' ? '' : ' collapsed'; ?>" href="#<?= e($accessId); ?>" data-bs-toggle="collapse" aria-expanded="<?= $accessOpen === 'show' ? 'true' : 'false'; ?>">
                 <i class="bi bi-shield-lock"></i> Access &amp; Org
                 <i class="bi bi-chevron-down sidebar-chevron ms-auto"></i>
-            </button>
+            </a>
             <div class="collapse <?= e($accessOpen); ?>" id="<?= e($accessId); ?>">
                 <a href="<?= e(url('/admin/users')); ?>"     class="sidebar-sublink"><i class="bi bi-person-gear"></i> User Access</a>
                 <a href="<?= e(url('/admin/roles')); ?>"     class="sidebar-sublink"><i class="bi bi-shield-check"></i> Roles &amp; Permissions</a>
@@ -80,10 +80,10 @@ $nextId = static function () use (&$collapseId): string {
             $leaveHrOpen = $groupOpen(['/leave']);
         ?>
         <div class="sidebar-group">
-            <button class="sidebar-group-toggle collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#<?= e($leaveHrId); ?>" aria-expanded="<?= $leaveHrOpen === 'show' ? 'true' : 'false'; ?>">
+            <a class="sidebar-group-toggle<?= $leaveHrOpen === 'show' ? '' : ' collapsed'; ?>" href="#<?= e($leaveHrId); ?>" data-bs-toggle="collapse" aria-expanded="<?= $leaveHrOpen === 'show' ? 'true' : 'false'; ?>">
                 <i class="bi bi-calendar-check"></i> Leave
                 <i class="bi bi-chevron-down sidebar-chevron ms-auto"></i>
-            </button>
+            </a>
             <div class="collapse <?= e($leaveHrOpen); ?>" id="<?= e($leaveHrId); ?>">
                 <a href="<?= e(url('/leave/approvals')); ?>" class="sidebar-sublink"><i class="bi bi-calendar-check"></i> Leave Management</a>
             </div>
@@ -94,10 +94,10 @@ $nextId = static function () use (&$collapseId): string {
             $docsHrOpen = $groupOpen(['/documents']);
         ?>
         <div class="sidebar-group">
-            <button class="sidebar-group-toggle collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#<?= e($docsHrId); ?>" aria-expanded="<?= $docsHrOpen === 'show' ? 'true' : 'false'; ?>">
+            <a class="sidebar-group-toggle<?= $docsHrOpen === 'show' ? '' : ' collapsed'; ?>" href="#<?= e($docsHrId); ?>" data-bs-toggle="collapse" aria-expanded="<?= $docsHrOpen === 'show' ? 'true' : 'false'; ?>">
                 <i class="bi bi-folder2-open"></i> Documents
                 <i class="bi bi-chevron-down sidebar-chevron ms-auto"></i>
-            </button>
+            </a>
             <div class="collapse <?= e($docsHrOpen); ?>" id="<?= e($docsHrId); ?>">
                 <a href="<?= e(url('/documents')); ?>"            class="sidebar-sublink"><i class="bi bi-folder2-open"></i> HR Documents</a>
                 <a href="<?= e(url('/documents/categories')); ?>" class="sidebar-sublink"><i class="bi bi-tags"></i> Categories</a>
@@ -110,10 +110,10 @@ $nextId = static function () use (&$collapseId): string {
             $recruOpen = $groupOpen(['/admin/jobs', '/careers']);
         ?>
         <div class="sidebar-group">
-            <button class="sidebar-group-toggle collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#<?= e($recruId); ?>" aria-expanded="<?= $recruOpen === 'show' ? 'true' : 'false'; ?>">
+            <a class="sidebar-group-toggle<?= $recruOpen === 'show' ? '' : ' collapsed'; ?>" href="#<?= e($recruId); ?>" data-bs-toggle="collapse" aria-expanded="<?= $recruOpen === 'show' ? 'true' : 'false'; ?>">
                 <i class="bi bi-briefcase"></i> Recruitment
                 <i class="bi bi-chevron-down sidebar-chevron ms-auto"></i>
-            </button>
+            </a>
             <div class="collapse <?= e($recruOpen); ?>" id="<?= e($recruId); ?>">
                 <a href="<?= e(url('/admin/jobs')); ?>" class="sidebar-sublink"><i class="bi bi-briefcase"></i> Jobs &amp; Careers</a>
             </div>
@@ -138,10 +138,10 @@ $nextId = static function () use (&$collapseId): string {
             $myOpen = $groupOpen(['/leave/my', '/leave/request', '/employees/' . ($user['employee_id'] ?? 0)]);
         ?>
         <div class="sidebar-group">
-            <button class="sidebar-group-toggle collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#<?= e($myId); ?>" aria-expanded="<?= $myOpen === 'show' ? 'true' : 'false'; ?>">
+            <a class="sidebar-group-toggle<?= $myOpen === 'show' ? '' : ' collapsed'; ?>" href="#<?= e($myId); ?>" data-bs-toggle="collapse" aria-expanded="<?= $myOpen === 'show' ? 'true' : 'false'; ?>">
                 <i class="bi bi-person-circle"></i> My Space
                 <i class="bi bi-chevron-down sidebar-chevron ms-auto"></i>
-            </button>
+            </a>
             <div class="collapse <?= e($myOpen); ?>" id="<?= e($myId); ?>">
                 <?php if (!empty($user['employee_id']) && can('employee.view_self')): ?>
                 <a href="<?= e($profileUrl); ?>" class="sidebar-sublink"><i class="bi bi-person"></i> My Profile</a>
@@ -165,10 +165,10 @@ $nextId = static function () use (&$collapseId): string {
             $commsOpen = $groupOpen(['/letters', '/announcements', '/notifications']);
         ?>
         <div class="sidebar-group">
-            <button class="sidebar-group-toggle collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#<?= e($commsId); ?>" aria-expanded="<?= $commsOpen === 'show' ? 'true' : 'false'; ?>">
+            <a class="sidebar-group-toggle<?= $commsOpen === 'show' ? '' : ' collapsed'; ?>" href="#<?= e($commsId); ?>" data-bs-toggle="collapse" aria-expanded="<?= $commsOpen === 'show' ? 'true' : 'false'; ?>">
                 <i class="bi bi-chat-dots"></i> Communications
                 <i class="bi bi-chevron-down sidebar-chevron ms-auto"></i>
-            </button>
+            </a>
             <div class="collapse <?= e($commsOpen); ?>" id="<?= e($commsId); ?>">
                 <?php if (can('letters.request') || can('letters.manage')): ?>
                 <a href="<?= e(url(can('letters.manage') ? '/letters/admin' : '/letters/my')); ?>" class="sidebar-sublink"><i class="bi bi-envelope-paper"></i> Letters</a>
