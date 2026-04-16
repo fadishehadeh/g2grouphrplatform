@@ -265,11 +265,20 @@ final class OnboardingController extends Controller
         }
 
         try {
+            $metaValues = [];
+            foreach ($data as $key => $value) {
+                if (str_starts_with($key, 'meta_value_')) {
+                    $fieldKey = substr($key, strlen('meta_value_'));
+                    $metaValues[$fieldKey] = (string) $value;
+                }
+            }
+
             $updatedRecordId = $this->repository->updateTask(
                 $taskId,
                 $status,
                 (string) ($data['remarks'] ?? ''),
-                $this->app->auth()->id()
+                $this->app->auth()->id(),
+                $metaValues
             );
 
             if ($updatedRecordId === null) {
@@ -410,6 +419,7 @@ final class OnboardingController extends Controller
             'sort_order' => (int) $sortOrderValue,
             'assignee_role_id' => $assigneeRoleId,
             'is_required' => (int) $isRequired,
+            'meta_fields' => $data['meta_fields'] ?? null,
         ];
     }
 

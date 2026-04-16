@@ -36,6 +36,9 @@
                                     <option value="manager" <?= (string) old('visibility_scope', 'hr') === 'manager' ? 'selected' : ''; ?>>Manager + above</option>
                                     <option value="hr" <?= (string) old('visibility_scope', 'hr') === 'hr' ? 'selected' : ''; ?>>HR + Admin only</option>
                                     <option value="admin" <?= (string) old('visibility_scope', 'hr') === 'admin' ? 'selected' : ''; ?>>Admin only</option>
+                                    <?php if (has_role(['hr_only'])): ?>
+                                    <option value="hr_only" <?= (string) old('visibility_scope', 'hr') === 'hr_only' ? 'selected' : ''; ?>>HR Only — Confidential (HR Only role exclusively)</option>
+                                    <?php endif; ?>
                                 </select>
                                 <div class="form-text">Controls who can view and download this document.</div>
                             </div>
@@ -75,12 +78,14 @@
                                             'admin' => 'text-bg-danger',
                                             'hr' => 'text-bg-warning',
                                             'manager' => 'text-bg-info',
+                                            'hr_only' => 'text-bg-dark',
                                             default => 'text-bg-secondary',
                                         };
                                         $scopeLabel = match ((string) $document['visibility_scope']) {
                                             'admin' => 'Admin only',
                                             'hr' => 'HR + Admin',
                                             'manager' => 'Manager+',
+                                            'hr_only' => 'HR Only',
                                             default => 'Employee',
                                         };
                                     ?><span class="badge <?= e($scopeClass); ?>"><?= e($scopeLabel); ?></span></td>

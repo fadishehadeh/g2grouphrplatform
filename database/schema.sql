@@ -419,7 +419,7 @@ CREATE TABLE IF NOT EXISTS employee_documents (
     expiry_date DATE NULL,
     version_no INT NOT NULL DEFAULT 1,
     is_current TINYINT(1) NOT NULL DEFAULT 1,
-    visibility_scope ENUM('employee','manager','hr','admin') NOT NULL DEFAULT 'hr',
+    visibility_scope ENUM('employee','manager','hr','admin','hr_only') NOT NULL DEFAULT 'hr',
     status ENUM('active','replaced','archived') NOT NULL DEFAULT 'active',
     uploaded_by BIGINT UNSIGNED NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -790,6 +790,7 @@ CREATE TABLE IF NOT EXISTS onboarding_template_tasks (
     sort_order INT NOT NULL DEFAULT 1,
     assignee_role_id BIGINT UNSIGNED NULL,
     is_required TINYINT(1) NOT NULL DEFAULT 1,
+    meta_fields JSON NULL COMMENT 'JSON array of custom fields: [{label, key, type, required}]',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_onboarding_template_tasks_template FOREIGN KEY (template_id) REFERENCES onboarding_checklist_templates(id)
         ON UPDATE CASCADE ON DELETE CASCADE,
@@ -833,6 +834,7 @@ CREATE TABLE IF NOT EXISTS employee_onboarding_tasks (
     completed_at DATETIME NULL,
     completed_by BIGINT UNSIGNED NULL,
     remarks VARCHAR(255) NULL,
+    meta_values JSON NULL COMMENT 'JSON object of custom field values keyed by field key',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT fk_employee_onboarding_tasks_onboarding FOREIGN KEY (employee_onboarding_id) REFERENCES employee_onboarding(id)

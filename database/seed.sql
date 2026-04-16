@@ -5,7 +5,7 @@ USE hr_system;
 
 INSERT INTO roles (name, code, description, is_system) VALUES
 ('Super Admin', 'super_admin', 'Full system access', 1),
-('HR Admin', 'hr_admin', 'HR operations administrator', 1),
+('HR Only', 'hr_only', 'Full HR operations with exclusive confidential document access', 1),
 ('Manager', 'manager', 'Line manager access', 1),
 ('Employee', 'employee', 'Self-service employee access', 1);
 
@@ -16,6 +16,7 @@ INSERT INTO permissions (module_name, action_name, code, description) VALUES
 ('employee', 'create', 'employee.create', 'Create employee records'),
 ('employee', 'edit', 'employee.edit', 'Edit employee records'),
 ('employee', 'archive', 'employee.archive', 'Archive employee records'),
+('employee', 'delete', 'employee.delete', 'Permanently delete employee records'),
 ('leave', 'view_self', 'leave.view_self', 'View own leave requests'),
 ('leave', 'submit', 'leave.submit', 'Submit leave requests'),
 ('leave', 'approve_team', 'leave.approve_team', 'Approve team leave requests'),
@@ -39,7 +40,7 @@ SELECT 1, id FROM permissions;
 
 INSERT INTO role_permissions (role_id, permission_id)
 SELECT 2, id FROM permissions WHERE code IN (
-    'dashboard.view','employee.view_all','employee.create','employee.edit','employee.archive',
+    'dashboard.view','employee.view_all','employee.create','employee.edit','employee.archive','employee.delete',
     'leave.view_self','leave.submit','leave.manage_types','documents.manage_all',
     'announcements.view','announcements.manage','reports.view_hr','settings.manage',
     'audit.view','onboarding.manage','offboarding.manage','notifications.view_self','structure.manage'

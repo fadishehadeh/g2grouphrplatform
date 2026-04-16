@@ -27,7 +27,7 @@
                 <table class="table align-middle mb-0">
                     <thead>
                     <tr>
-                        <th>Employee</th><th>Category</th><th>Title</th><th>Number</th><th>Expiry</th><th>Visibility</th><th>File</th>
+                        <th>Employee</th><th>Category</th><th>Title</th><th>Number</th><th>Expiry</th><th>Visibility</th><th>File</th><th></th>
                     </tr>
                     </thead>
                     <tbody>
@@ -51,16 +51,19 @@
                                     'admin' => 'text-bg-danger',
                                     'hr' => 'text-bg-warning',
                                     'manager' => 'text-bg-info',
+                                    'hr_only' => 'text-bg-dark',
                                     default => 'text-bg-secondary',
                                 };
                                 $scopeLabel = match ((string) $document['visibility_scope']) {
                                     'admin' => 'Admin only',
                                     'hr' => 'HR + Admin',
                                     'manager' => 'Manager+',
+                                    'hr_only' => 'HR Only',
                                     default => 'Employee',
                                 };
                             ?><span class="badge <?= e($scopeClass); ?>"><?= e($scopeLabel); ?></span></td>
                             <td><div><?= e((string) $document['original_file_name']); ?></div><div class="small text-muted"><?= e(number_format(((int) ($document['file_size'] ?? 0)) / 1024, 1)); ?> KB</div><a href="<?= e(url('/documents/' . $document['id'] . '/download')); ?>" class="btn btn-link btn-sm px-0" target="_blank" rel="noopener">Open / Download</a></td>
+                            <td><a href="<?= e(url('/documents/' . $document['id'] . '/edit')); ?>" class="btn btn-sm btn-outline-secondary">Edit</a></td>
                         </tr>
                     <?php endforeach; ?>
                     </tbody>

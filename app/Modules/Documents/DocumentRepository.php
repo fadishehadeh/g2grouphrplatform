@@ -69,7 +69,7 @@ final class DocumentRepository
         );
     }
 
-    public function listDocuments(string $search = '', string $expiryFilter = 'all'): array
+    public function listDocuments(string $search = '', string $expiryFilter = 'all', string $viewerRoleCode = 'employee'): array
     {
         $sql = "SELECT ed.id, ed.employee_id, ed.title, ed.document_number, ed.original_file_name, ed.file_size,
                        ed.issue_date, ed.expiry_date, ed.visibility_scope, ed.status, ed.created_at,
@@ -80,6 +80,11 @@ final class DocumentRepository
                 INNER JOIN employees e ON e.id = ed.employee_id
                 INNER JOIN document_categories dc ON dc.id = ed.category_id
                 WHERE ed.is_current = 1";
+
+        // hr_only documents are exclusively visible to the hr_only role
+        if ($viewerRoleCode !== 'hr_only') {
+            $sql .= " AND ed.visibility_scope != 'hr_only'";
+        }
         $params = [];
 
         if ($search !== '') {
@@ -112,9 +117,12 @@ final class DocumentRepository
 
     public function employeeDocuments(int $employeeId, string $viewerRoleCode = 'employee'): array
     {
-        // Build the visibility filter based on role
-        if (in_array($viewerRoleCode, ['super_admin', 'hr_admin'], true)) {
-            $scopeCondition = "1 = 1"; // see all
+        // Build the visibility filter based on role.
+        // hr_only scope is exclusive — only the hr_only role can see those documents, not even super_admin.
+        if ($viewerRoleCode === 'hr_only') {
+            $scopeCondition = "1 = 1"; // hr_only sees everything including hr_only-scoped documents
+        } elseif ($viewerRoleCode === 'super_admin') {
+            $scopeCondition = "ed.visibility_scope != 'hr_only'"; // super_admin sees all except hr_only-scoped
         } elseif ($viewerRoleCode === 'manager') {
             $scopeCondition = "ed.visibility_scope IN ('employee', 'manager', 'hr')";
         } else {
@@ -137,7 +145,8 @@ final class DocumentRepository
     public function findDocument(int $documentId): ?array
     {
         return $this->database->fetch(
-            "SELECT ed.id, ed.employee_id, ed.title, ed.original_file_name, ed.stored_file_name, ed.file_path,
+            "SELECT ed.id, ed.employee_id, ed.category_id, ed.title, ed.document_number, ed.issue_date, ed.expiry_date,
+                    ed.original_file_name, ed.stored_file_name, ed.file_path,
                     ed.file_extension, ed.mime_type, ed.file_size, ed.visibility_scope, ed.status,
                     CONCAT_WS(' ', e.first_name, e.middle_name, e.last_name) AS employee_name,
                     e.employee_code
@@ -146,6 +155,31 @@ final class DocumentRepository
              WHERE ed.id = :id AND ed.is_current = 1
              LIMIT 1",
             ['id' => $documentId]
+        );
+    }
+
+    public function updateDocumentDetails(int $documentId, array $data, ?int $actorId): void
+    {
+        $this->database->execute(
+            "UPDATE employee_documents SET
+                category_id       = :category_id,
+                title             = :title,
+                document_number   = :document_number,
+                issue_date        = :issue_date,
+                expiry_date       = :expiry_date,
+                visibility_scope  = :visibility_scope,
+                status            = :status
+             WHERE id = :id AND is_current = 1",
+            [
+                'category_id'     => (int) $data['category_id'],
+                'title'           => (string) $data['title'],
+                'document_number' => ($data['document_number'] ?? '') !== '' ? (string) $data['document_number'] : null,
+                'issue_date'      => ($data['issue_date'] ?? '') !== '' ? (string) $data['issue_date'] : null,
+                'expiry_date'     => ($data['expiry_date'] ?? '') !== '' ? (string) $data['expiry_date'] : null,
+                'visibility_scope'=> (string) $data['visibility_scope'],
+                'status'          => in_array((string) ($data['status'] ?? ''), ['active', 'expired', 'revoked'], true) ? (string) $data['status'] : 'active',
+                'id'              => $documentId,
+            ]
         );
     }
 
@@ -262,7 +296,7 @@ final class DocumentRepository
              FROM users u
              WHERE u.status = 'active'
                AND u.role_id IN (
-                   SELECT id FROM roles WHERE code IN ('super_admin', 'hr_admin')
+                   SELECT id FROM roles WHERE code IN ('super_admin', 'hr_only')
                )
                AND u.email IS NOT NULL AND u.email <> ''"
         );

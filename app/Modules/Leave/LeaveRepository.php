@@ -160,7 +160,7 @@ final class LeaveRepository
                                 ? (int) $employee['manager_user_id']
                                 : null;
                             break;
-                        case 'hr_admin':
+                        case 'hr_only':
                             $approverRoleId = $this->hrAdminRoleId();
                             break;
                         case 'specific_role':
@@ -1147,7 +1147,7 @@ final class LeaveRepository
 
     private function hrAdminRoleId(): ?int
     {
-        $roleId = $this->database->fetchValue('SELECT id FROM roles WHERE code = :code LIMIT 1', ['code' => 'hr_admin']);
+        $roleId = $this->database->fetchValue('SELECT id FROM roles WHERE code = :code LIMIT 1', ['code' => 'hr_only']);
 
         return ($roleId !== null && $roleId !== false) ? (int) $roleId : null;
     }

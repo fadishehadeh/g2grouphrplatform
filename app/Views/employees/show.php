@@ -43,7 +43,10 @@ $isArchived = (($employee['archived_at'] ?? null) !== null) || $statusValue === 
                     <a href="<?= e(url('/employees/' . $employee['id'] . '/history')); ?>" class="btn btn-outline-secondary">History</a>
                     <?php if (can('employee.edit')): ?><a href="<?= e(url('/employees/' . $employee['id'] . '/edit')); ?>" class="btn btn-outline-primary">Edit</a><?php endif; ?>
                     <?php if (can('employee.archive') && !$isArchived): ?><a href="<?= e(url('/employees/' . $employee['id'] . '/archive')); ?>" class="btn btn-outline-danger">Archive</a><?php endif; ?>
-                    <?php if (has_role(['super_admin', 'hr_admin'])): ?>
+                    <?php if (can('employee.delete')): ?>
+                        <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#deleteEmployeeModal"><i class="bi bi-trash"></i> Delete</button>
+                    <?php endif; ?>
+                    <?php if (has_role(['super_admin', 'hr_only'])): ?>
                         <?php $accessLabel = empty($employee['user_id']) ? 'Send Access' : 'Resend Access'; ?>
                         <?php $accessConfirm = empty($employee['user_id']) ? 'This will create a login account and email credentials to the employee. Continue?' : 'This will reset the password and email new credentials to the employee. Continue?'; ?>
                         <form method="post" action="<?= e(url('/employees/' . (int) $employee['id'] . '/send-access')); ?>" class="d-inline" onsubmit="return confirm('<?= e($accessConfirm); ?>');"><?= csrf_field(); ?><button type="submit" class="btn btn-outline-success"><i class="bi bi-envelope-paper"></i> <?= e($accessLabel); ?></button></form>
@@ -157,4 +160,28 @@ $isArchived = (($employee['archived_at'] ?? null) !== null) || $statusValue === 
             <?php endif; ?>
         </div></div>
     </div>
+
+<?php if (can('employee.delete')): ?>
+<div class="modal fade" id="deleteEmployeeModal" tabindex="-1" aria-labelledby="deleteEmployeeModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="deleteEmployeeModalLabel"><i class="bi bi-exclamation-triangle-fill me-2"></i>Permanently Delete Employee</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>You are about to <strong>permanently delete</strong> <strong><?= e(trim((string)(($employee['first_name'] ?? '') . ' ' . ($employee['last_name'] ?? '')))); ?></strong> (<?= e((string)($employee['employee_code'] ?? '')); ?>).</p>
+                <p class="text-danger mb-0"><strong>This action cannot be undone.</strong> All associated records (documents, leave history, onboarding, etc.) will also be deleted.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form method="post" action="<?= e(url('/employees/' . (int)$employee['id'] . '/delete')); ?>" class="d-inline">
+                    <?= csrf_field(); ?>
+                    <button type="submit" class="btn btn-danger"><i class="bi bi-trash me-1"></i>Delete Permanently</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
 </div>

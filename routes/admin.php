@@ -11,7 +11,7 @@ $router = $app->router();
 $adminBaseMiddleware = [
     AuthMiddleware::class,
     AccountStatusMiddleware::class,
-    [RoleMiddleware::class, ['super_admin', 'hr_admin']],
+    [RoleMiddleware::class, ['super_admin', 'hr_only']],
 ];
 
 $router->get('/admin/users', [AdminController::class, 'users'], $adminBaseMiddleware);

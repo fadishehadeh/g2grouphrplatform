@@ -335,6 +335,11 @@ final class EmployeeRepository
         });
     }
 
+    public function deleteEmployee(int $id): void
+    {
+        $this->database->execute('DELETE FROM employees WHERE id = :id', ['id' => $id]);
+    }
+
     public function statusHistory(int $employeeId): array
     {
         return $this->database->fetchAll(

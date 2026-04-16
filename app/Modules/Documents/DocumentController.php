@@ -84,7 +84,8 @@ final class DocumentController extends Controller
         $documents = [];
 
         try {
-            $documents = $this->repository->listDocuments($search, $expiryFilter);
+            $viewerRoleCode = (string) ($this->app->auth()->user()['role_code'] ?? 'employee');
+            $documents = $this->repository->listDocuments($search, $expiryFilter, $viewerRoleCode);
         } catch (Throwable $throwable) {
             $this->app->session()->flash('error', 'Unable to load document center: ' . $throwable->getMessage());
         }
@@ -413,6 +414,62 @@ final class DocumentController extends Controller
         }
     }
 
+    public function editDocument(Request $request, string $id): void
+    {
+        $documentId = (int) $id;
+
+        if ($documentId <= 0) {
+            Response::abort(404, 'Document not found.');
+        }
+
+        $document = $this->repository->findDocument($documentId);
+
+        if ($document === null) {
+            Response::abort(404, 'Document not found.');
+        }
+
+        $categories = $this->repository->activeCategories();
+        $viewerRoleCode = (string) ($this->app->auth()->user()['role_code'] ?? 'employee');
+
+        $this->render('documents.edit', [
+            'title' => 'Edit Document',
+            'pageTitle' => 'Edit Document Details',
+            'document' => $document,
+            'categories' => $categories,
+            'viewerRoleCode' => $viewerRoleCode,
+        ]);
+    }
+
+    public function updateDocument(Request $request, string $id): void
+    {
+        $documentId = (int) $id;
+        $this->validateCsrf($request, '/documents/' . $documentId . '/edit');
+
+        $document = $this->repository->findDocument($documentId);
+
+        if ($document === null) {
+            Response::abort(404, 'Document not found.');
+        }
+
+        $data = $this->sanitized($request);
+
+        foreach (['title', 'category_id', 'visibility_scope'] as $field) {
+            if (($data[$field] ?? '') === '') {
+                $this->invalid('/documents/' . $documentId . '/edit', $data, 'Please complete all required fields.');
+            }
+        }
+
+        try {
+            $this->repository->updateDocumentDetails($documentId, $data, $this->app->auth()->id());
+            $this->app->session()->flash('success', 'Document details updated successfully.');
+            $this->redirect('/documents/' . $documentId . '/edit');
+        } catch (Throwable $throwable) {
+            $this->app->session()->flash('error', 'Unable to update document: ' . $throwable->getMessage());
+            $this->app->session()->flash('old_input', $data);
+            $this->redirect('/documents/' . $documentId . '/edit');
+        }
+    }
+
     public function download(Request $request, string $id): void
     {
         $documentId = (int) $id;
@@ -671,22 +728,29 @@ final class DocumentController extends Controller
 
     /**
      * Determine if the current user can access a specific document based on its visibility_scope.
-     * admin   → super_admin/hr_admin only
-     * hr      → super_admin/hr_admin
-     * manager → super_admin/hr_admin/manager (or manage_all)
+     * hr_only  → hr_only role ONLY (no exceptions, not even super_admin)
+     * admin    → super_admin/hr_only
+     * hr       → super_admin/hr_only
+     * manager  → super_admin/hr_only/manager (or manage_all)
      * employee → anyone with access to the employee's documents
      */
     private function canAccessDocumentByScope(array $document): bool
     {
-        if ($this->app->auth()->hasPermission('documents.manage_all')) {
-            return true;
-        }
-
         $scope = (string) ($document['visibility_scope'] ?? 'employee');
         $user = $this->app->auth()->user() ?? [];
         $roleCode = (string) ($user['role_code'] ?? '');
 
-        if (in_array($roleCode, ['super_admin', 'hr_admin'], true)) {
+        // hr_only scope: exclusively for hr_only role — no other role may access, including super_admin
+        if ($scope === 'hr_only') {
+            return $roleCode === 'hr_only';
+        }
+
+        // For all other scopes, documents.manage_all grants full access
+        if ($this->app->auth()->hasPermission('documents.manage_all')) {
+            return true;
+        }
+
+        if (in_array($roleCode, ['super_admin', 'hr_only'], true)) {
             return true;
         }
 

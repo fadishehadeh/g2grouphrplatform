@@ -56,6 +56,16 @@ $router->get('/documents/{id}/download', [DocumentController::class, 'download']
     [PermissionMiddleware::class, ['documents.manage_all', 'documents.view_self', 'documents.upload_self']],
 ]);
 
+$router->get('/documents/{id}/edit', [DocumentController::class, 'editDocument'], [
+    ...$documentBaseMiddleware,
+    [PermissionMiddleware::class, ['documents.manage_all']],
+]);
+
+$router->post('/documents/{id}/edit', [DocumentController::class, 'updateDocument'], [
+    ...$documentBaseMiddleware,
+    [PermissionMiddleware::class, ['documents.manage_all']],
+]);
+
 $router->get('/employees/{id}/documents/upload', [DocumentController::class, 'upload'], [
     ...$documentBaseMiddleware,
     [PermissionMiddleware::class, ['documents.upload_self', 'documents.view_self', 'documents.manage_all']],

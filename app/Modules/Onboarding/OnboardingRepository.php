@@ -146,11 +146,13 @@ final class OnboardingRepository
                 $this->templateTaskCodes($database, $templateId)
             );
 
+            $metaFields = $this->buildMetaFields($data['meta_fields'] ?? null);
+
             $database->execute(
                 'INSERT INTO onboarding_template_tasks (
-                    template_id, task_name, task_code, description, sort_order, assignee_role_id, is_required
+                    template_id, task_name, task_code, description, sort_order, assignee_role_id, is_required, meta_fields
                  ) VALUES (
-                    :template_id, :task_name, :task_code, :description, :sort_order, :assignee_role_id, :is_required
+                    :template_id, :task_name, :task_code, :description, :sort_order, :assignee_role_id, :is_required, :meta_fields
                  )',
                 [
                     'template_id' => $templateId,
@@ -160,6 +162,7 @@ final class OnboardingRepository
                     'sort_order' => $sortOrder,
                     'assignee_role_id' => $roleId,
                     'is_required' => (int) ($data['is_required'] ?? 1),
+                    'meta_fields' => $metaFields,
                 ]
             );
 
@@ -185,13 +188,16 @@ final class OnboardingRepository
                 throw new RuntimeException('Selected onboarding role is invalid.');
             }
 
+            $metaFields = $this->buildMetaFields($data['meta_fields'] ?? null);
+
             $database->execute(
                 'UPDATE onboarding_template_tasks
                  SET task_name = :task_name,
                      description = :description,
                      sort_order = :sort_order,
                      assignee_role_id = :assignee_role_id,
-                     is_required = :is_required
+                     is_required = :is_required,
+                     meta_fields = :meta_fields
                  WHERE id = :id',
                 [
                     'task_name' => (string) $data['task_name'],
@@ -199,6 +205,7 @@ final class OnboardingRepository
                     'sort_order' => (int) ($data['sort_order'] ?? 1),
                     'assignee_role_id' => $roleId,
                     'is_required' => (int) ($data['is_required'] ?? 1),
+                    'meta_fields' => $metaFields,
                     'id' => $taskId,
                 ]
             );
@@ -344,17 +351,19 @@ final class OnboardingRepository
     {
         return $this->database->fetchAll(
             "SELECT eot.*, CONCAT_WS(' ', au.first_name, au.last_name) AS assigned_to_name,
-                    CONCAT_WS(' ', cu.first_name, cu.last_name) AS completed_by_name
+                    CONCAT_WS(' ', cu.first_name, cu.last_name) AS completed_by_name,
+                    ott.meta_fields
              FROM employee_onboarding_tasks eot
              LEFT JOIN users au ON au.id = eot.assigned_to_user_id
              LEFT JOIN users cu ON cu.id = eot.completed_by
+             LEFT JOIN onboarding_template_tasks ott ON ott.id = eot.template_task_id
              WHERE eot.employee_onboarding_id = :record_id
              ORDER BY eot.id ASC",
             ['record_id' => $recordId]
         );
     }
 
-    public function updateTask(int $taskId, string $status, string $remarks, ?int $actorId): ?int
+    public function updateTask(int $taskId, string $status, string $remarks, ?int $actorId, array $metaValues = []): ?int
     {
         $task = $this->database->fetch(
             'SELECT id, employee_onboarding_id FROM employee_onboarding_tasks WHERE id = :id LIMIT 1',
@@ -367,16 +376,18 @@ final class OnboardingRepository
 
         $completedAt = $status === 'completed' ? date('Y-m-d H:i:s') : null;
         $completedBy = $status === 'completed' ? $actorId : null;
+        $metaValuesJson = !empty($metaValues) ? json_encode($metaValues, JSON_UNESCAPED_UNICODE) : null;
 
         $this->database->execute(
             'UPDATE employee_onboarding_tasks
-             SET status = :status, remarks = :remarks, completed_at = :completed_at, completed_by = :completed_by
+             SET status = :status, remarks = :remarks, completed_at = :completed_at, completed_by = :completed_by, meta_values = :meta_values
              WHERE id = :id',
             [
                 'status' => $status,
                 'remarks' => $this->nullableString($remarks),
                 'completed_at' => $completedAt,
                 'completed_by' => $completedBy,
+                'meta_values' => $metaValuesJson,
                 'id' => $taskId,
             ]
         );
@@ -507,5 +518,57 @@ final class OnboardingRepository
         $string = trim((string) $value);
 
         return $string === '' ? null : $string;
+    }
+
+    /**
+     * Build a JSON string for meta_fields from submitted form data.
+     * Input: array of {label, key, type, required} rows, or a JSON string already.
+     */
+    private function buildMetaFields(mixed $input): ?string
+    {
+        if ($input === null || $input === '') {
+            return null;
+        }
+
+        // If already a JSON string passed directly
+        if (is_string($input)) {
+            $decoded = json_decode($input, true);
+            if (is_array($decoded)) {
+                $input = $decoded;
+            } else {
+                return null;
+            }
+        }
+
+        if (!is_array($input)) {
+            return null;
+        }
+
+        $fields = [];
+
+        foreach ($input as $field) {
+            $label = trim((string) ($field['label'] ?? ''));
+            $key = trim((string) ($field['key'] ?? ''));
+
+            if ($label === '') {
+                continue;
+            }
+
+            if ($key === '') {
+                // Auto-generate key from label
+                $key = strtolower(preg_replace('/[^a-zA-Z0-9]+/', '_', $label));
+            }
+
+            $fields[] = [
+                'label'    => $label,
+                'key'      => $key,
+                'type'     => in_array((string) ($field['type'] ?? 'text'), ['text', 'number', 'date', 'textarea'], true)
+                              ? (string) $field['type']
+                              : 'text',
+                'required' => (bool) ($field['required'] ?? false),
+            ];
+        }
+
+        return empty($fields) ? null : json_encode($fields, JSON_UNESCAPED_UNICODE);
     }
 }

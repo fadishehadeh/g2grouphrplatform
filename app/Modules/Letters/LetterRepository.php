@@ -21,7 +21,7 @@ final class LetterRepository
             "SELECT u.email, u.first_name, u.last_name
              FROM users u
              INNER JOIN roles r ON r.id = u.role_id
-             WHERE r.code IN ('super_admin','hr_admin') AND u.status = 'active' AND u.email IS NOT NULL AND u.email != ''
+             WHERE r.code IN ('super_admin','hr_only') AND u.status = 'active' AND u.email IS NOT NULL AND u.email != ''
              ORDER BY r.code ASC"
         );
     }

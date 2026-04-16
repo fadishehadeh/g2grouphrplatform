@@ -98,8 +98,8 @@ foreach ($pendingRequests as $req) {
     $escalateToRoleId = null;
 
     switch ((string) $rule['escalate_to_type']) {
-        case 'hr_admin':
-            $hrRoleId = $db->fetchValue("SELECT id FROM roles WHERE code = 'hr_admin' LIMIT 1");
+        case 'hr_only':
+            $hrRoleId = $db->fetchValue("SELECT id FROM roles WHERE code = 'hr_only' LIMIT 1");
             $escalateToRoleId = $hrRoleId !== null && $hrRoleId !== false ? (int) $hrRoleId : null;
             break;
         case 'specific_role':

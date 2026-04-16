@@ -6,9 +6,7 @@ define('BASE_PATH', dirname(__DIR__));
 
 require BASE_PATH . '/app/Support/helpers.php';
 
-if (is_file(BASE_PATH . '/vendor/autoload.php')) {
-    require BASE_PATH . '/vendor/autoload.php';
-}
+require BASE_PATH . '/vendor/autoload.php';
 
 // Override per-subdomain settings after .env is loaded
 $_ENV['APP_URL']      = 'https://hr.greydoha.com';

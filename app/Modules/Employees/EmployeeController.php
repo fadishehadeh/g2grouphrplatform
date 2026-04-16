@@ -388,6 +388,32 @@ final class EmployeeController extends Controller
         $this->redirect('/employees/' . $employeeId);
     }
 
+    public function destroy(Request $request, string $id): void
+    {
+        $employeeId = (int) $id;
+        $this->validateCsrf($request, '/employees/' . $employeeId);
+
+        if (!$this->app->auth()->hasPermission('employee.delete')) {
+            Response::abort(403, 'You do not have permission to permanently delete employees.');
+        }
+
+        try {
+            $employee = $this->repository->findEmployee($employeeId);
+            if ($employee === null) {
+                $this->app->session()->flash('error', 'Employee not found.');
+                $this->redirect('/employees');
+            }
+
+            $this->repository->deleteEmployee($employeeId);
+            $this->app->session()->flash('success', 'Employee permanently deleted.');
+        } catch (Throwable $throwable) {
+            $this->app->session()->flash('error', 'Unable to delete employee: ' . $throwable->getMessage());
+            $this->redirect('/employees/' . $employeeId);
+        }
+
+        $this->redirect('/employees');
+    }
+
     public function saveInsurance(Request $request, string $id): void
     {
         $employeeId = (int) $id;

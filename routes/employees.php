@@ -89,8 +89,13 @@ $router->post('/employees/{id}/insurance', [EmployeeController::class, 'saveInsu
     [PermissionMiddleware::class, ['employee.edit']],
 ]);
 
+$router->post('/employees/{id}/delete', [EmployeeController::class, 'destroy'], [
+    ...$employeeBaseMiddleware,
+    [PermissionMiddleware::class, ['employee.delete']],
+]);
+
 $router->post('/employees/{id}/send-access', [EmployeeController::class, 'sendAccess'], [
     AuthMiddleware::class,
     AccountStatusMiddleware::class,
-    [RoleMiddleware::class, ['super_admin', 'hr_admin']],
+    [RoleMiddleware::class, ['super_admin', 'hr_only']],
 ]);
