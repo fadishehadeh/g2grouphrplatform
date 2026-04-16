@@ -388,6 +388,42 @@ final class EmployeeController extends Controller
         $this->redirect('/employees/' . $employeeId);
     }
 
+    public function orgChart(Request $request): void
+    {
+        $employees = [];
+
+        try {
+            $employees = $this->repository->orgChartData();
+        } catch (Throwable $throwable) {
+            $this->app->session()->flash('error', 'Unable to load org chart data: ' . $throwable->getMessage());
+        }
+
+        // Build flat list for JS — resolve photo URLs here in PHP
+        $nodes = [];
+        foreach ($employees as $emp) {
+            $photo = !empty($emp['profile_photo']) && is_file(base_path((string) $emp['profile_photo']))
+                ? url('/' . ltrim((string) $emp['profile_photo'], '/'))
+                : null;
+
+            $nodes[] = [
+                'id'         => (int) $emp['id'],
+                'pid'        => $emp['manager_employee_id'] !== null ? (int) $emp['manager_employee_id'] : null,
+                'name'       => (string) $emp['full_name'],
+                'title'      => (string) ($emp['job_title'] ?? ''),
+                'department' => (string) ($emp['department'] ?? ''),
+                'status'     => (string) ($emp['employee_status'] ?? 'active'),
+                'photo'      => $photo,
+                'profileUrl' => url('/employees/' . (int) $emp['id']),
+            ];
+        }
+
+        $this->render('employees.org-chart', [
+            'title'     => 'Org Chart',
+            'pageTitle' => 'Organisational Chart',
+            'nodes'     => $nodes,
+        ]);
+    }
+
     public function destroy(Request $request, string $id): void
     {
         $employeeId = (int) $id;
@@ -402,6 +438,14 @@ final class EmployeeController extends Controller
             if ($employee === null) {
                 $this->app->session()->flash('error', 'Employee not found.');
                 $this->redirect('/employees');
+            }
+
+            $expectedName = $this->employeeDisplayName($employee);
+            $confirmedName = preg_replace('/\s+/', ' ', trim((string) $request->input('confirm_employee_name', '')));
+
+            if ($confirmedName === '' || $confirmedName !== $expectedName) {
+                $this->app->session()->flash('error', 'Delete confirmation failed. Please type the employee name exactly to continue.');
+                $this->redirect('/employees/' . $employeeId);
             }
 
             $this->repository->deleteEmployee($employeeId);
@@ -496,6 +540,15 @@ final class EmployeeController extends Controller
 
         return $this->app->auth()->hasPermission('employee.view_self')
             && (int) ($user['employee_id'] ?? 0) === $employeeId;
+    }
+
+    private function employeeDisplayName(array $employee): string
+    {
+        return preg_replace(
+            '/\s+/',
+            ' ',
+            trim((string) (($employee['first_name'] ?? '') . ' ' . ($employee['middle_name'] ?? '') . ' ' . ($employee['last_name'] ?? '')))
+        ) ?? '';
     }
 
     public function exportExcel(Request $request): void

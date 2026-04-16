@@ -30,7 +30,7 @@ $nextId = static function () use (&$collapseId): string {
             <small>People operations platform</small>
         </div>
     </div>
-    <nav class="sidebar-nav">
+    <nav class="sidebar-nav" id="sidebarNavAccordion">
 
         <a href="<?= e(url('/dashboard')); ?>" class="sidebar-link<?= $currentPath === '/dashboard' ? ' active' : ''; ?>">
             <i class="bi bi-grid"></i> Dashboard
@@ -47,8 +47,9 @@ $nextId = static function () use (&$collapseId): string {
                 <i class="bi bi-people"></i> People
                 <i class="bi bi-chevron-down sidebar-chevron ms-auto"></i>
             </a>
-            <div class="collapse <?= e($peopleOpen); ?>" id="<?= e($peopleId); ?>">
+            <div class="collapse <?= e($peopleOpen); ?>" id="<?= e($peopleId); ?>" data-bs-parent="#sidebarNavAccordion">
                 <a href="<?= e(url('/employees')); ?>" class="sidebar-sublink"><i class="bi bi-person-lines-fill"></i> Employees</a>
+                <a href="<?= e(url('/employees/org-chart')); ?>" class="sidebar-sublink"><i class="bi bi-diagram-3"></i> Org Chart</a>
                 <?php if (can('onboarding.manage')): ?>
                 <a href="<?= e(url('/onboarding')); ?>" class="sidebar-sublink"><i class="bi bi-person-plus"></i> Onboarding</a>
                 <?php endif; ?>
@@ -67,7 +68,7 @@ $nextId = static function () use (&$collapseId): string {
                 <i class="bi bi-shield-lock"></i> Access &amp; Org
                 <i class="bi bi-chevron-down sidebar-chevron ms-auto"></i>
             </a>
-            <div class="collapse <?= e($accessOpen); ?>" id="<?= e($accessId); ?>">
+            <div class="collapse <?= e($accessOpen); ?>" id="<?= e($accessId); ?>" data-bs-parent="#sidebarNavAccordion">
                 <a href="<?= e(url('/admin/users')); ?>"     class="sidebar-sublink"><i class="bi bi-person-gear"></i> User Access</a>
                 <a href="<?= e(url('/admin/roles')); ?>"     class="sidebar-sublink"><i class="bi bi-shield-check"></i> Roles &amp; Permissions</a>
                 <a href="<?= e(url('/admin/companies')); ?>" class="sidebar-sublink"><i class="bi bi-building"></i> Companies</a>
@@ -84,7 +85,7 @@ $nextId = static function () use (&$collapseId): string {
                 <i class="bi bi-calendar-check"></i> Leave
                 <i class="bi bi-chevron-down sidebar-chevron ms-auto"></i>
             </a>
-            <div class="collapse <?= e($leaveHrOpen); ?>" id="<?= e($leaveHrId); ?>">
+            <div class="collapse <?= e($leaveHrOpen); ?>" id="<?= e($leaveHrId); ?>" data-bs-parent="#sidebarNavAccordion">
                 <a href="<?= e(url('/leave/approvals')); ?>" class="sidebar-sublink"><i class="bi bi-calendar-check"></i> Leave Management</a>
             </div>
         </div>
@@ -98,7 +99,7 @@ $nextId = static function () use (&$collapseId): string {
                 <i class="bi bi-folder2-open"></i> Documents
                 <i class="bi bi-chevron-down sidebar-chevron ms-auto"></i>
             </a>
-            <div class="collapse <?= e($docsHrOpen); ?>" id="<?= e($docsHrId); ?>">
+            <div class="collapse <?= e($docsHrOpen); ?>" id="<?= e($docsHrId); ?>" data-bs-parent="#sidebarNavAccordion">
                 <a href="<?= e(url('/documents')); ?>"            class="sidebar-sublink"><i class="bi bi-folder2-open"></i> HR Documents</a>
                 <a href="<?= e(url('/documents/categories')); ?>" class="sidebar-sublink"><i class="bi bi-tags"></i> Categories</a>
                 <a href="<?= e(url('/documents/expiring')); ?>"   class="sidebar-sublink"><i class="bi bi-exclamation-circle"></i> Expiring</a>
@@ -114,7 +115,7 @@ $nextId = static function () use (&$collapseId): string {
                 <i class="bi bi-briefcase"></i> Recruitment
                 <i class="bi bi-chevron-down sidebar-chevron ms-auto"></i>
             </a>
-            <div class="collapse <?= e($recruOpen); ?>" id="<?= e($recruId); ?>">
+            <div class="collapse <?= e($recruOpen); ?>" id="<?= e($recruId); ?>" data-bs-parent="#sidebarNavAccordion">
                 <a href="<?= e(url('/admin/jobs')); ?>" class="sidebar-sublink"><i class="bi bi-briefcase"></i> Jobs &amp; Careers</a>
             </div>
         </div>
@@ -142,7 +143,7 @@ $nextId = static function () use (&$collapseId): string {
                 <i class="bi bi-person-circle"></i> My Space
                 <i class="bi bi-chevron-down sidebar-chevron ms-auto"></i>
             </a>
-            <div class="collapse <?= e($myOpen); ?>" id="<?= e($myId); ?>">
+            <div class="collapse <?= e($myOpen); ?>" id="<?= e($myId); ?>" data-bs-parent="#sidebarNavAccordion">
                 <?php if (!empty($user['employee_id']) && can('employee.view_self')): ?>
                 <a href="<?= e($profileUrl); ?>" class="sidebar-sublink"><i class="bi bi-person"></i> My Profile</a>
                 <?php endif; ?>
@@ -169,7 +170,7 @@ $nextId = static function () use (&$collapseId): string {
                 <i class="bi bi-chat-dots"></i> Communications
                 <i class="bi bi-chevron-down sidebar-chevron ms-auto"></i>
             </a>
-            <div class="collapse <?= e($commsOpen); ?>" id="<?= e($commsId); ?>">
+            <div class="collapse <?= e($commsOpen); ?>" id="<?= e($commsId); ?>" data-bs-parent="#sidebarNavAccordion">
                 <?php if (can('letters.request') || can('letters.manage')): ?>
                 <a href="<?= e(url(can('letters.manage') ? '/letters/admin' : '/letters/my')); ?>" class="sidebar-sublink"><i class="bi bi-envelope-paper"></i> Letters</a>
                 <?php endif; ?>

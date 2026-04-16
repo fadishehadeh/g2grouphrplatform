@@ -102,15 +102,26 @@ final class EmployeeRepository
         return $row !== null ? $this->decryptSensitiveFields($row) : null;
     }
 
-    private function decryptSensitiveFields(array $row): array
+    private function decryptSensitiveFields(array $row, bool $strict = true): array
     {
         foreach (['phone', 'alternate_phone', 'personal_email', 'date_of_birth', 'id_number', 'passport_number'] as $field) {
             if (isset($row[$field])) {
-                $row[$field] = decrypt_field($row[$field]);
+                $row[$field] = $strict
+                    ? decrypt_field($row[$field])
+                    : $this->safeDecryptField($row[$field]);
             }
         }
 
         return $row;
+    }
+
+    private function safeDecryptField(mixed $stored): ?string
+    {
+        try {
+            return decrypt_field(is_string($stored) ? $stored : null);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     public function emergencyContacts(int $employeeId): array
@@ -530,7 +541,7 @@ final class EmployeeRepository
              ORDER BY e.employee_code ASC"
         );
 
-        return array_map(fn(array $row) => $this->decryptSensitiveFields($row), $rows);
+        return array_map(fn(array $row) => $this->decryptSensitiveFields($row, false), $rows);
     }
 
     public function importLookups(): array
@@ -671,5 +682,21 @@ final class EmployeeRepository
                 ]
             );
         }
+    }
+
+    public function orgChartData(): array
+    {
+        return $this->database->fetchAll(
+            "SELECT e.id, e.manager_employee_id,
+                    CONCAT_WS(' ', e.first_name, e.middle_name, e.last_name) AS full_name,
+                    e.profile_photo, e.employee_status,
+                    jt.name AS job_title,
+                    d.name  AS department
+             FROM employees e
+             LEFT JOIN job_titles jt ON jt.id = e.job_title_id
+             LEFT JOIN departments d ON d.id = e.department_id
+             WHERE e.archived_at IS NULL
+             ORDER BY e.manager_employee_id ASC, e.first_name ASC"
+        );
     }
 }

@@ -19,6 +19,11 @@ $router->get('/employees', [EmployeeController::class, 'index'], [
     [PermissionMiddleware::class, ['employee.view_all']],
 ]);
 
+$router->get('/employees/org-chart', [EmployeeController::class, 'orgChart'], [
+    ...$employeeBaseMiddleware,
+    [PermissionMiddleware::class, ['employee.view_all']],
+]);
+
 $router->get('/employees/create', [EmployeeController::class, 'create'], [
     ...$employeeBaseMiddleware,
     [PermissionMiddleware::class, ['employee.create']],
