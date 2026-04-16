@@ -32,7 +32,6 @@ $nextId = static function () use (&$collapseId): string {
     </div>
     <nav class="sidebar-nav">
 
-        {{-- Dashboard: always visible standalone link --}}
         <a href="<?= e(url('/dashboard')); ?>" class="sidebar-link<?= $currentPath === '/dashboard' ? ' active' : ''; ?>">
             <i class="bi bi-grid"></i> Dashboard
         </a>
