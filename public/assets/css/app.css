@@ -17,18 +17,19 @@ a:hover { color: var(--brand-primary-dark); }
 .sidebar-brand-text small { opacity: .7; font-size: .7rem; }
 .sidebar-nav { display: flex; flex-direction: column; gap: .15rem; overflow-y: auto; flex: 1; scrollbar-width: none; -ms-overflow-style: none; }
 .sidebar-nav::-webkit-scrollbar { display: none; }
-.sidebar-link { color: rgba(255,255,255,.88); text-decoration: none; padding: .45rem .75rem; border-radius: .5rem; font-size: .875rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
-.sidebar-link:hover { background: rgba(255,255,255,.15); color: #fff; }
-.sidebar-link.active { background: #fff; color: var(--brand-primary); font-weight: 700; }
+.sidebar-link { color: rgba(255,255,255,.88) !important; text-decoration: none !important; padding: .45rem .75rem; border-radius: .5rem; font-size: .875rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+.sidebar-link:hover,.sidebar-link:visited { background: rgba(255,255,255,.15); color: #fff !important; text-decoration: none !important; }
+.sidebar-link.active,.sidebar-link.active:visited { background: #fff; color: var(--brand-primary) !important; font-weight: 700; }
 .sidebar-link i { margin-right: .45rem; font-size: .9rem; }
 .sidebar-group { display: flex; flex-direction: column; margin: 0; }
-.sidebar-group-toggle { color: rgba(255,255,255,.88); text-decoration: none; padding: .45rem .75rem; border-radius: .5rem; font-size: .875rem; font-weight: 600; display: flex; align-items: center; }
-.sidebar-group-toggle:hover,.sidebar-group-toggle:focus { background: rgba(255,255,255,.15); color: #fff; text-decoration: none; }
+.sidebar-group-toggle { color: rgba(255,255,255,.88) !important; text-decoration: none !important; padding: .45rem .75rem; border-radius: .5rem; font-size: .875rem; font-weight: 600; display: flex; align-items: center; }
+.sidebar-group-toggle:hover,.sidebar-group-toggle:focus,.sidebar-group-toggle:visited { background: rgba(255,255,255,.15); color: #fff !important; text-decoration: none !important; }
 .sidebar-group-toggle > i:first-child { margin-right: .45rem; font-size: .9rem; flex-shrink: 0; }
 .sidebar-chevron { font-size: .7rem; transition: transform .2s ease; flex-shrink: 0; margin-left: auto; }
 .sidebar-group-toggle[aria-expanded="true"] .sidebar-chevron { transform: rotate(180deg); }
-.sidebar-sublink { color: rgba(255,255,255,.78); text-decoration: none; padding: .35rem .75rem .35rem 2.25rem; border-radius: .5rem; font-size: .86rem; font-weight: 500; display: block; }
-.sidebar-sublink:hover { background: rgba(255,255,255,.14); color: #fff; }
+.sidebar-sublink { color: rgba(255,255,255,.78) !important; text-decoration: none !important; padding: .35rem .75rem .35rem 2.25rem; border-radius: .5rem; font-size: .86rem; font-weight: 500; display: block; }
+.sidebar-sublink:hover,.sidebar-sublink:visited { background: rgba(255,255,255,.14); color: #fff !important; text-decoration: none !important; }
+.sidebar-sublink.active,.sidebar-sublink.active:visited { background: rgba(255,255,255,.18); color: #fff !important; font-weight: 600; }
 .sidebar-sublink i { margin-right: .4rem; font-size: .85rem; }
 .sidebar-user { flex-shrink: 0; padding-top: .5rem; border-top: 1px solid rgba(255,255,255,.2); }
 .app-main { flex: 1; display: flex; flex-direction: column; margin-left: 250px; }
@@ -63,6 +64,7 @@ a:hover { color: var(--brand-primary-dark); }
 .sidebar-toggle { display: none; background: none; border: none; font-size: 1.5rem; color: var(--brand-primary); cursor: pointer; padding: .25rem .5rem; line-height: 1; }
 .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 1035; }
 .sidebar-close { display: none; position: absolute; top: .5rem; right: .5rem; background: none; border: none; color: #fff; font-size: 1.25rem; cursor: pointer; z-index: 1050; line-height: 1; padding: .25rem; }
+.sidebar-brand-text small::after { content: " LIVE-CSS-TEST-APR17"; display: inline; margin-left: .35rem; font-size: .65rem; opacity: .85; letter-spacing: .02em; }
 @media (max-width: 991.98px) {
     .sidebar { transform: translateX(-100%); width: 260px; }
     .sidebar.sidebar-open { transform: translateX(0); }

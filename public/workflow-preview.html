@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f55d3e">
+    <title>HR System Workflow Preview</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="assets/css/workflow-preview.css" rel="stylesheet">
+</head>
+<body>
+    <div class="workflow-page">
+        <header class="workflow-hero">
+            <div>
+                <p class="eyebrow">Workflow Improvement Sample</p>
+                <h1>Leave request flow redesigned for clarity, not complexity.</h1>
+                <p class="hero-text">
+                    Same permissions, same approvals, same data. The improvement is in the order, visibility,
+                    and feedback: fewer hidden steps, clearer status, and less back-and-forth.
+                </p>
+            </div>
+            <div class="hero-card">
+                <span class="hero-label">Outcome</span>
+                <strong>Submit in 3 clear steps</strong>
+                <small>instead of a long form with scattered context</small>
+            </div>
+        </header>
+
+        <main class="workflow-grid">
+            <section class="panel panel-wide">
+                <div class="panel-header">
+                    <div>
+                        <p class="eyebrow">Proposed Journey</p>
+                        <h2>Request Leave</h2>
+                    </div>
+                    <span class="status-chip">In Progress</span>
+                </div>
+
+                <div class="stepper">
+                    <div class="step is-complete">
+                        <span class="step-index">1</span>
+                        <div>
+                            <strong>Choose leave type</strong>
+                            <small>Eligibility and balance shown immediately</small>
+                        </div>
+                    </div>
+                    <div class="step is-active">
+                        <span class="step-index">2</span>
+                        <div>
+                            <strong>Select dates</strong>
+                            <small>Calendar highlights weekends, holidays, and overlap</small>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <span class="step-index">3</span>
+                        <div>
+                            <strong>Review and submit</strong>
+                            <small>Approver, duration, and policy impact summarized</small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="workspace">
+                    <div class="form-panel">
+                        <div class="field-group">
+                            <label>Leave Type</label>
+                            <div class="input-shell selected">
+                                <span>Annual Leave</span>
+                                <i class="bi bi-chevron-down"></i>
+                            </div>
+                        </div>
+
+                        <div class="field-row">
+                            <div class="field-group">
+                                <label>Start Date</label>
+                                <div class="input-shell">
+                                    <span>2026-04-22</span>
+                                    <i class="bi bi-calendar3"></i>
+                                </div>
+                            </div>
+                            <div class="field-group">
+                                <label>End Date</label>
+                                <div class="input-shell">
+                                    <span>2026-04-24</span>
+                                    <i class="bi bi-calendar3"></i>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="calendar-card">
+                            <div class="calendar-head">
+                                <strong>April 2026</strong>
+                                <span>Live validation preview</span>
+                            </div>
+                            <div class="calendar-grid">
+                                <span>20</span>
+                                <span>21</span>
+                                <span class="selected-day">22</span>
+                                <span class="selected-day">23</span>
+                                <span class="selected-day">24</span>
+                                <span class="blocked-day">25</span>
+                                <span class="blocked-day">26</span>
+                            </div>
+                            <div class="legend">
+                                <span><i class="dot dot-selected"></i> Requested</span>
+                                <span><i class="dot dot-blocked"></i> Weekend/Holiday</span>
+                            </div>
+                        </div>
+
+                        <div class="helper-note">
+                            <i class="bi bi-info-circle"></i>
+                            3 working days will be deducted. Friday and Saturday are excluded automatically.
+                        </div>
+
+                        <div class="actions">
+                            <a href="#" class="btn-solid">Continue</a>
+                            <a href="#" class="btn-soft">Save Draft</a>
+                        </div>
+                    </div>
+
+                    <aside class="summary-panel">
+                        <div class="summary-block">
+                            <span class="summary-label">Available Balance</span>
+                            <strong>11 days</strong>
+                            <small>After this request: 8 days</small>
+                        </div>
+                        <div class="summary-block">
+                            <span class="summary-label">Approver</span>
+                            <strong>Operations Manager</strong>
+                            <small>Auto-detected from reporting line</small>
+                        </div>
+                        <div class="summary-block">
+                            <span class="summary-label">Policy Check</span>
+                            <strong>Valid</strong>
+                            <small>No overlap or minimum notice issue</small>
+                        </div>
+                    </aside>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="panel-header">
+                    <div>
+                        <p class="eyebrow">Before</p>
+                        <h2>Typical pain points</h2>
+                    </div>
+                </div>
+                <ul class="issue-list">
+                    <li>Balance is visible only after submission or on another page.</li>
+                    <li>Users discover blocked dates too late.</li>
+                    <li>Approver path is unclear, so staff ask HR manually.</li>
+                    <li>One long form mixes inputs, warnings, and policy text together.</li>
+                </ul>
+            </section>
+
+            <section class="panel">
+                <div class="panel-header">
+                    <div>
+                        <p class="eyebrow">After</p>
+                        <h2>Workflow upgrades</h2>
+                    </div>
+                </div>
+                <ul class="benefit-list">
+                    <li>Step-by-step progression with visible completion state.</li>
+                    <li>Immediate policy feedback beside the form, not after submit.</li>
+                    <li>Sticky summary panel so the user always sees impact.</li>
+                    <li>Draft/save pattern for interrupted work without changing logic.</li>
+                </ul>
+            </section>
+
+            <section class="panel panel-wide">
+                <div class="panel-header">
+                    <div>
+                        <p class="eyebrow">Same Backend, Better Flow</p>
+                        <h2>What changes in the real app</h2>
+                    </div>
+                </div>
+                <div class="comparison-grid">
+                    <div class="comparison-card">
+                        <span class="comparison-title">Keep</span>
+                        <p>Routes, permissions, leave calculations, approval rules, and database structure.</p>
+                    </div>
+                    <div class="comparison-card">
+                        <span class="comparison-title">Improve</span>
+                        <p>Form grouping, step order, summary visibility, inline validation, and feedback states.</p>
+                    </div>
+                    <div class="comparison-card">
+                        <span class="comparison-title">Result</span>
+                        <p>Faster completion, fewer user mistakes, and less HR support overhead.</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+</body>
+</html>

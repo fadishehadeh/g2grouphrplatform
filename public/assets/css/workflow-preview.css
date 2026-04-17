@@ -1,0 +1,431 @@
+:root {
+    --wf-bg: #f6f4ef;
+    --wf-surface: rgba(255, 255, 255, 0.82);
+    --wf-surface-strong: rgba(255, 255, 255, 0.94);
+    --wf-border: rgba(44, 36, 29, 0.1);
+    --wf-text: #1f1813;
+    --wf-muted: #6f6358;
+    --wf-brand: #f55d3e;
+    --wf-brand-soft: rgba(245, 93, 62, 0.12);
+    --wf-accent: #ffc96b;
+    --wf-good: #167c5b;
+    --wf-shadow: 0 28px 80px rgba(70, 47, 28, 0.12);
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    color: var(--wf-text);
+    background:
+        radial-gradient(circle at top right, rgba(255, 201, 107, 0.18), transparent 22%),
+        radial-gradient(circle at top left, rgba(245, 93, 62, 0.12), transparent 20%),
+        linear-gradient(180deg, #fcfaf7 0%, var(--wf-bg) 100%);
+    font-family: "Manrope", Arial, sans-serif;
+}
+
+.workflow-page {
+    max-width: 1440px;
+    margin: 0 auto;
+    padding: 1.4rem;
+}
+
+.eyebrow {
+    margin: 0 0 0.55rem;
+    color: var(--wf-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    font-size: 0.72rem;
+    font-weight: 800;
+}
+
+.workflow-hero,
+.panel {
+    border: 1px solid var(--wf-border);
+    border-radius: 30px;
+    background: var(--wf-surface);
+    backdrop-filter: blur(16px);
+    box-shadow: var(--wf-shadow);
+}
+
+.workflow-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) 320px;
+    gap: 1.25rem;
+    padding: 1.75rem;
+    margin-bottom: 1rem;
+}
+
+.workflow-hero h1,
+.panel-header h2 {
+    margin: 0;
+    font-family: "Space Grotesk", Arial, sans-serif;
+    letter-spacing: -0.03em;
+}
+
+.workflow-hero h1 {
+    max-width: 15ch;
+    font-size: clamp(2.2rem, 4vw, 4.6rem);
+    line-height: 0.95;
+}
+
+.hero-text {
+    max-width: 68ch;
+    margin: 1rem 0 0;
+    color: var(--wf-muted);
+    line-height: 1.75;
+}
+
+.hero-card {
+    display: grid;
+    align-content: center;
+    gap: 0.35rem;
+    padding: 1.3rem;
+    border-radius: 24px;
+    background: linear-gradient(135deg, rgba(245, 93, 62, 0.95), rgba(255, 143, 87, 0.92));
+    color: #fff;
+}
+
+.hero-card strong {
+    font-size: 1.7rem;
+    line-height: 1.1;
+}
+
+.hero-label {
+    text-transform: uppercase;
+    font-size: 0.72rem;
+    letter-spacing: 0.16em;
+    opacity: 0.82;
+    font-weight: 700;
+}
+
+.workflow-grid {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.panel {
+    grid-column: span 4;
+    padding: 1.3rem;
+}
+
+.panel-wide {
+    grid-column: span 8;
+}
+
+.panel-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.panel-header h2 {
+    font-size: 1.5rem;
+}
+
+.status-chip {
+    display: inline-flex;
+    align-items: center;
+    min-height: 34px;
+    padding: 0.45rem 0.8rem;
+    border-radius: 999px;
+    background: var(--wf-brand-soft);
+    color: var(--wf-brand);
+    font-size: 0.82rem;
+    font-weight: 800;
+}
+
+.stepper {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.85rem;
+    margin-bottom: 1.1rem;
+}
+
+.step {
+    display: flex;
+    gap: 0.8rem;
+    align-items: flex-start;
+    padding: 1rem;
+    border: 1px solid var(--wf-border);
+    border-radius: 22px;
+    background: rgba(255, 255, 255, 0.55);
+}
+
+.step.is-active {
+    border-color: rgba(245, 93, 62, 0.35);
+    background: rgba(255, 255, 255, 0.88);
+    box-shadow: inset 0 0 0 1px rgba(245, 93, 62, 0.14);
+}
+
+.step.is-complete .step-index {
+    background: var(--wf-good);
+    color: #fff;
+}
+
+.step-index {
+    width: 36px;
+    height: 36px;
+    display: grid;
+    place-items: center;
+    border-radius: 12px;
+    background: #efe7dd;
+    color: var(--wf-text);
+    font-weight: 800;
+    flex: 0 0 36px;
+}
+
+.step strong,
+.summary-block strong,
+.comparison-title {
+    display: block;
+}
+
+.step small,
+.summary-block small {
+    color: var(--wf-muted);
+}
+
+.workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 1.3fr) 300px;
+    gap: 1rem;
+}
+
+.form-panel,
+.summary-panel,
+.calendar-card,
+.comparison-card {
+    border: 1px solid var(--wf-border);
+    border-radius: 24px;
+    background: var(--wf-surface-strong);
+}
+
+.form-panel {
+    padding: 1rem;
+}
+
+.field-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.85rem;
+}
+
+.field-group {
+    display: grid;
+    gap: 0.45rem;
+    margin-bottom: 0.9rem;
+}
+
+.field-group label,
+.summary-label {
+    color: var(--wf-muted);
+    font-size: 0.84rem;
+    font-weight: 700;
+}
+
+.input-shell {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 54px;
+    padding: 0.9rem 1rem;
+    border: 1px solid var(--wf-border);
+    border-radius: 18px;
+    background: #fff;
+}
+
+.input-shell.selected {
+    border-color: rgba(245, 93, 62, 0.3);
+    box-shadow: 0 0 0 4px rgba(245, 93, 62, 0.08);
+}
+
+.calendar-card {
+    padding: 1rem;
+    margin-bottom: 0.9rem;
+}
+
+.calendar-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.8rem;
+}
+
+.calendar-head span,
+.legend,
+.issue-list,
+.benefit-list,
+.comparison-card p {
+    color: var(--wf-muted);
+}
+
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 0.45rem;
+}
+
+.calendar-grid span {
+    min-height: 44px;
+    display: grid;
+    place-items: center;
+    border-radius: 14px;
+    background: #f7f2eb;
+    font-weight: 700;
+}
+
+.selected-day {
+    background: linear-gradient(135deg, var(--wf-brand), #ff8e57) !important;
+    color: #fff;
+}
+
+.blocked-day {
+    color: #9a8b7f;
+    text-decoration: line-through;
+}
+
+.legend {
+    display: flex;
+    gap: 1rem;
+    margin-top: 0.8rem;
+    font-size: 0.85rem;
+}
+
+.dot {
+    width: 10px;
+    height: 10px;
+    display: inline-block;
+    border-radius: 50%;
+    margin-right: 0.35rem;
+}
+
+.dot-selected {
+    background: var(--wf-brand);
+}
+
+.dot-blocked {
+    background: #b7aa9e;
+}
+
+.helper-note {
+    display: flex;
+    gap: 0.6rem;
+    align-items: flex-start;
+    padding: 0.95rem 1rem;
+    border-radius: 18px;
+    background: #fff4e8;
+    color: #8a5a1a;
+    margin-bottom: 0.9rem;
+}
+
+.actions {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.btn-solid,
+.btn-soft {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 46px;
+    padding: 0.8rem 1.2rem;
+    border-radius: 999px;
+    text-decoration: none;
+    font-weight: 800;
+}
+
+.btn-solid {
+    background: linear-gradient(135deg, var(--wf-brand), #ff8d56);
+    color: #fff;
+}
+
+.btn-soft {
+    background: #fff;
+    color: var(--wf-text);
+    border: 1px solid var(--wf-border);
+}
+
+.summary-panel {
+    padding: 1rem;
+    display: grid;
+    gap: 0.8rem;
+    align-content: start;
+}
+
+.summary-block {
+    padding: 1rem;
+    border-radius: 20px;
+    background: #fff;
+    border: 1px solid rgba(44, 36, 29, 0.08);
+}
+
+.summary-block strong {
+    margin-top: 0.3rem;
+    font-size: 1.2rem;
+}
+
+.issue-list,
+.benefit-list {
+    margin: 0;
+    padding-left: 1.15rem;
+    line-height: 1.8;
+}
+
+.comparison-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.9rem;
+}
+
+.comparison-card {
+    padding: 1rem;
+}
+
+.comparison-title {
+    margin-bottom: 0.45rem;
+    color: var(--wf-brand);
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font-weight: 800;
+}
+
+@media (max-width: 1180px) {
+    .workflow-hero,
+    .workspace,
+    .stepper,
+    .comparison-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .panel,
+    .panel-wide {
+        grid-column: span 12;
+    }
+}
+
+@media (max-width: 720px) {
+    .workflow-page {
+        padding: 1rem;
+    }
+
+    .workflow-hero,
+    .panel {
+        padding: 1rem;
+        border-radius: 24px;
+    }
+
+    .field-row {
+        grid-template-columns: 1fr;
+    }
+}

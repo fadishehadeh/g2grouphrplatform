@@ -73,7 +73,20 @@ function url(string $path = ''): string
 
 function asset(string $path = ''): string
 {
-    return url('assets/' . ltrim($path, '/'));
+    $relativePath = 'assets/' . ltrim($path, '/');
+    $assetUrl = url($relativePath);
+
+    $version = trim((string) env('ASSET_VERSION', ''));
+    if ($version !== '') {
+        return $assetUrl . '?v=' . rawurlencode($version);
+    }
+
+    $fullPath = base_path('public/' . $relativePath);
+    if (is_file($fullPath)) {
+        return $assetUrl . '?v=' . filemtime($fullPath);
+    }
+
+    return $assetUrl;
 }
 
 function e(mixed $value): string

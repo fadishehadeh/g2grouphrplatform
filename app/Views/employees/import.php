@@ -9,7 +9,7 @@
             <a href="<?= e(url('/employees')); ?>" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Back</a>
         </div>
 
-        <?php if ($importErrors = app()->session()->flash('import_errors')): ?>
+        <?php if ($importErrors = app()->session()->getFlash('import_errors')): ?>
             <div class="alert alert-warning">
                 <h6 class="alert-heading"><i class="bi bi-exclamation-triangle"></i> Import Errors</h6>
                 <ul class="mb-0 small">
@@ -55,4 +55,3 @@
         </div>
     </div>
 </div>
-

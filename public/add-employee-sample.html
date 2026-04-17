@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#FF3D33">
+    <title>Add Employee Sample</title>
+    <style>
+        :root {
+            --brand-primary: #FF3D33;
+            --brand-primary-dark: #d93028;
+            --brand-primary-soft: #ffe1df;
+            --bg: #f6f7fb;
+            --surface: #ffffff;
+            --surface-muted: #fbfbfd;
+            --line: #e7e9f0;
+            --line-strong: #d8dbe6;
+            --text: #1b2230;
+            --muted: #6b7280;
+            --muted-strong: #4b5563;
+            --success: #1f8f5f;
+            --shadow-sm: 0 10px 24px rgba(15, 23, 42, 0.04);
+            --shadow-md: 0 18px 50px rgba(15, 23, 42, 0.08);
+            --radius-xl: 24px;
+            --radius-lg: 18px;
+            --radius-md: 14px;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: "Segoe UI", Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+        }
+        a { color: inherit; text-decoration: none; }
+        button, input, select, textarea { font: inherit; }
+        .app-shell { display: grid; grid-template-columns: 272px minmax(0, 1fr); min-height: 100vh; }
+        .sidebar {
+            position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; gap: 18px;
+            padding: 22px 16px 18px; background: var(--brand-primary); color: #fff;
+        }
+        .sidebar-brand { padding: 10px 10px 18px; border-bottom: 1px solid rgba(255,255,255,.18); }
+        .brand-logo {
+            width: 54px; height: 54px; display: grid; place-items: center; margin-bottom: 14px;
+            border-radius: 16px; background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.18);
+            font-weight: 800; letter-spacing: .08em;
+        }
+        .sidebar-brand h1 { margin: 0 0 4px; font-size: 1rem; font-weight: 700; }
+        .sidebar-brand p { margin: 0; color: rgba(255,255,255,.74); font-size: .88rem; }
+        .sidebar-section-label {
+            margin: 8px 10px 4px; color: rgba(255,255,255,.66); font-size: .72rem;
+            letter-spacing: .12em; text-transform: uppercase; font-weight: 700;
+        }
+        .nav-list { display: grid; gap: 6px; }
+        .nav-link {
+            display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px;
+            color: rgba(255,255,255,.84); font-size: .96rem; font-weight: 600;
+        }
+        .nav-link:hover, .nav-link.active { background: rgba(255,255,255,.14); color: #fff; }
+        .nav-icon {
+            width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center;
+            background: rgba(255,255,255,.12); font-size: .8rem; font-weight: 800;
+        }
+        .sidebar-user {
+            margin-top: auto; padding: 14px; border-radius: 16px; background: rgba(255,255,255,.1);
+            border: 1px solid rgba(255,255,255,.14);
+        }
+        .sidebar-user strong, .sidebar-user span, .account-chip strong, .account-chip span, .meta-row strong, .meta-row span { display: block; }
+        .sidebar-user strong { margin-bottom: 4px; font-size: .95rem; }
+        .sidebar-user span { color: rgba(255,255,255,.72); font-size: .84rem; }
+        .topbar {
+            position: sticky; top: 0; z-index: 10; display: flex; align-items: center; justify-content: space-between;
+            gap: 24px; padding: 20px 28px; background: rgba(246,247,251,.94);
+            border-bottom: 1px solid rgba(231,233,240,.95); backdrop-filter: blur(8px);
+        }
+        .topbar-left h2 { margin: 0 0 4px; font-size: 1.28rem; font-weight: 700; }
+        .topbar-left small, .page-head-copy p, .section-head p, .field-help, .aside-panel p, .bullet-list li, .mini-meta, .upload-note, .breadcrumb, .account-chip span {
+            color: var(--muted);
+        }
+        .topbar-actions { display: flex; align-items: center; gap: 12px; }
+        .icon-button, .account-chip { border: 1px solid var(--line); background: #fff; box-shadow: var(--shadow-sm); }
+        .icon-button {
+            width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center;
+            color: var(--muted-strong); font-weight: 700;
+        }
+        .account-chip {
+            display: flex; align-items: center; gap: 12px; min-height: 48px;
+            padding: 6px 8px 6px 12px; border-radius: 16px;
+        }
+        .avatar, .photo-avatar {
+            display: grid; place-items: center; background: var(--brand-primary-soft); color: var(--brand-primary); font-weight: 800;
+        }
+        .avatar { width: 34px; height: 34px; border-radius: 50%; font-size: .82rem; }
+        .page { padding: 28px; }
+        .page-head {
+            display: flex; align-items: start; justify-content: space-between; gap: 24px; margin-bottom: 24px;
+        }
+        .breadcrumb { margin: 0 0 10px; font-size: .82rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+        .page-head-copy h1 { margin: 0 0 8px; font-size: clamp(1.9rem, 3vw, 2.5rem); line-height: 1.08; letter-spacing: -.03em; }
+        .page-head-copy p { margin: 0; max-width: 68ch; line-height: 1.65; font-size: .98rem; }
+        .page-status {
+            display: inline-flex; align-items: center; gap: 10px; padding: 14px 16px; border-radius: 16px;
+            background: #fff; border: 1px solid var(--line); box-shadow: var(--shadow-sm); white-space: nowrap;
+        }
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--success); }
+        .page-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) 340px; gap: 22px; align-items: start; }
+        .content-stack, .aside-stack { display: grid; gap: 22px; }
+        .aside-stack { position: sticky; top: 96px; }
+        .panel {
+            background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-xl); box-shadow: var(--shadow-sm);
+        }
+        .panel-head {
+            display: flex; align-items: start; justify-content: space-between; gap: 18px; padding: 24px 24px 0;
+        }
+        .section-head h3, .aside-panel h3, .aside-panel h4 { margin: 0 0 8px; letter-spacing: -.02em; }
+        .section-head p, .aside-panel p { margin: 0; line-height: 1.55; font-size: .92rem; }
+        .section-tag {
+            display: inline-flex; align-items: center; min-height: 32px; padding: 0 12px; border-radius: 999px;
+            background: var(--brand-primary-soft); color: var(--brand-primary); font-size: .8rem; font-weight: 800;
+        }
+        .panel-body, .aside-panel { padding: 24px; }
+        .fields {
+            display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 18px 16px;
+        }
+        .field { grid-column: span 4; display: grid; gap: 8px; }
+        .field.span-12 { grid-column: span 12; }
+        .field-label-row {
+            display: flex; align-items: center; justify-content: space-between; gap: 12px;
+        }
+        label { font-size: .92rem; font-weight: 700; color: var(--text); }
+        .required { color: var(--brand-primary); margin-left: 4px; }
+        .field-meta { color: var(--muted); font-size: .76rem; font-weight: 700; }
+        .control, .textarea, .upload-trigger {
+            width: 100%; border: 1px solid var(--line-strong); border-radius: var(--radius-md); background: #fff;
+            color: var(--text); transition: border-color 160ms ease, box-shadow 160ms ease;
+        }
+        .control, .upload-trigger { min-height: 52px; padding: 0 15px; }
+        .textarea { min-height: 124px; padding: 14px 15px; resize: vertical; }
+        .control:focus, .textarea:focus, .upload-trigger:focus {
+            outline: none; border-color: rgba(255,61,51,.52); box-shadow: 0 0 0 4px rgba(255,61,51,.12);
+        }
+        select.control {
+            appearance: none;
+            background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+            background-position: calc(100% - 18px) 22px, calc(100% - 12px) 22px;
+            background-size: 6px 6px, 6px 6px;
+            background-repeat: no-repeat;
+            padding-right: 36px;
+        }
+        .field-help { font-size: .82rem; line-height: 1.45; }
+        .photo-card, .action-card, .meta-card { display: grid; gap: 16px; }
+        .photo-preview {
+            display: grid; justify-items: center; gap: 12px; padding: 22px; border-radius: 18px;
+            background: var(--surface-muted); border: 1px dashed var(--line-strong); text-align: center;
+        }
+        .photo-avatar { width: 92px; height: 92px; border-radius: 24px; font-size: 1.7rem; }
+        .upload-trigger {
+            display: flex; align-items: center; justify-content: center; font-weight: 700; color: var(--muted-strong); background: #fff;
+        }
+        .upload-note { font-size: .8rem; text-align: center; }
+        .check-list {
+            display: grid; gap: 10px; padding: 16px; border-radius: 18px; background: var(--surface-muted); border: 1px solid var(--line);
+        }
+        .check-item {
+            display: flex; align-items: center; gap: 10px; color: var(--muted-strong); font-size: .9rem;
+        }
+        .check-icon {
+            width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: #fff;
+            border: 1px solid var(--line); color: var(--brand-primary); font-size: .78rem; font-weight: 800;
+        }
+        .bullet-list { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
+        .button-row { display: grid; gap: 12px; }
+        .btn {
+            display: inline-flex; align-items: center; justify-content: center; min-height: 50px; padding: 0 18px;
+            border-radius: 14px; border: 1px solid transparent; font-weight: 800; cursor: pointer; transition: transform 140ms ease, box-shadow 140ms ease;
+        }
+        .btn:hover { transform: translateY(-1px); }
+        .btn-primary { background: var(--brand-primary); color: #fff; box-shadow: 0 14px 24px rgba(255,61,51,.2); }
+        .btn-primary:hover { background: var(--brand-primary-dark); }
+        .btn-secondary { background: #fff; color: var(--muted-strong); border-color: var(--line-strong); }
+        .meta-row {
+            display: flex; align-items: start; justify-content: space-between; gap: 14px; padding: 14px 0; border-top: 1px solid var(--line);
+        }
+        .meta-row:first-child { border-top: 0; padding-top: 0; }
+        .meta-row strong { font-size: .92rem; }
+        .mini-meta { font-size: .84rem; line-height: 1.45; text-align: right; }
+        .mobile-toggle { display: none; }
+        @media (max-width: 1100px) {
+            .page-grid { grid-template-columns: 1fr; }
+            .aside-stack { position: static; }
+        }
+        @media (max-width: 900px) {
+            .app-shell { grid-template-columns: 1fr; }
+            .sidebar {
+                position: fixed; inset: 0 auto 0 0; width: 280px; transform: translateX(-100%);
+                transition: transform 180ms ease; z-index: 30; box-shadow: var(--shadow-md);
+            }
+            .sidebar.open { transform: translateX(0); }
+            .mobile-toggle {
+                display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px;
+                border-radius: 14px; border: 1px solid var(--line); background: #fff; box-shadow: var(--shadow-sm); font-weight: 800;
+            }
+            .topbar { padding: 20px 18px; }
+            .page { padding: 18px; }
+            .page-head { flex-direction: column; align-items: stretch; }
+        }
+        @media (max-width: 760px) {
+            .fields { grid-template-columns: 1fr; }
+            .field, .field.span-12 { grid-column: span 1; }
+            .panel-head, .panel-body, .aside-panel { padding-left: 18px; padding-right: 18px; }
+            .account-chip span { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-shell">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-brand">
+                <div class="brand-logo">GD</div>
+                <h1>HR Management System</h1>
+                <p>People operations platform</p>
+            </div>
+            <div class="sidebar-section-label">Main</div>
+            <nav class="nav-list">
+                <a class="nav-link" href="#"><span class="nav-icon">D</span>Dashboard</a>
+                <a class="nav-link active" href="#"><span class="nav-icon">P</span>People</a>
+                <a class="nav-link" href="#"><span class="nav-icon">L</span>Leave</a>
+                <a class="nav-link" href="#"><span class="nav-icon">R</span>Reports</a>
+            </nav>
+            <div class="sidebar-section-label">Management</div>
+            <nav class="nav-list">
+                <a class="nav-link" href="#"><span class="nav-icon">O</span>Onboarding</a>
+                <a class="nav-link" href="#"><span class="nav-icon">J</span>Jobs &amp; Careers</a>
+                <a class="nav-link" href="#"><span class="nav-icon">A</span>Access &amp; Org</a>
+                <a class="nav-link" href="#"><span class="nav-icon">S</span>Settings</a>
+            </nav>
+            <div class="sidebar-user">
+                <strong>Amal Rahman</strong>
+                <span>HR Administrator</span>
+            </div>
+        </aside>
+        <main class="main">
+            <header class="topbar">
+                <div class="topbar-left">
+                    <div style="display:flex;align-items:center;gap:12px;">
+                        <button class="mobile-toggle" id="mobileToggle" type="button">=</button>
+                        <div>
+                            <h2>Add Employee</h2>
+                            <small>Create the employee master record and assign initial structure details.</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="topbar-actions">
+                    <button class="icon-button" type="button">!</button>
+                    <div class="account-chip">
+                        <div>
+                            <strong>HR Admin</strong>
+                            <span>People Operations</span>
+                        </div>
+                        <div class="avatar">AR</div>
+                    </div>
+                </div>
+            </header>
+            <div class="page">
+                <section class="page-head">
+                    <div class="page-head-copy">
+                        <p class="breadcrumb">Employees / Directory / Add Employee</p>
+                        <h1>Create a new employee profile</h1>
+                        <p>This sample keeps the same content and brand identity, but upgrades the page with clearer structure, more breathable spacing, stronger sectioning, and a cleaner right-side action rail for a more premium HR admin experience.</p>
+                    </div>
+                    <div class="page-status">
+                        <span class="status-dot"></span>
+                        <div>
+                            <strong style="display:block;font-size:.92rem;">Draft Ready</strong>
+                            <span style="font-size:.84rem;color:var(--muted);">12 core fields suggested</span>
+                        </div>
+                    </div>
+                </section>
+                <section class="page-grid">
+                    <div class="content-stack">
+                        <article class="panel">
+                            <div class="panel-head">
+                                <div class="section-head">
+                                    <h3>Personal Information</h3>
+                                    <p>Capture the employee’s identity and primary contact details first. Required inputs are marked clearly but remain visually subtle.</p>
+                                </div>
+                                <span class="section-tag">Core Profile</span>
+                            </div>
+                            <div class="panel-body">
+                                <form class="fields">
+                                    <div class="field">
+                                        <div class="field-label-row">
+                                            <label for="employeeCode">Employee Code <span class="required">*</span></label>
+                                            <span class="field-meta">Unique ID</span>
+                                        </div>
+                                        <input class="control" id="employeeCode" type="text" value="EMP-2026-104">
+                                    </div>
+                                    <div class="field"><label for="firstName">First Name <span class="required">*</span></label><input class="control" id="firstName" type="text" value="Maya"></div>
+                                    <div class="field"><label for="middleName">Middle Name</label><input class="control" id="middleName" type="text" value="Salem"></div>
+                                    <div class="field"><label for="lastName">Last Name <span class="required">*</span></label><input class="control" id="lastName" type="text" value="Khaled"></div>
+                                    <div class="field"><label for="workEmail">Work Email <span class="required">*</span></label><input class="control" id="workEmail" type="email" value="maya.khaled@greydoha.com"></div>
+                                    <div class="field"><label for="personalEmail">Personal Email</label><input class="control" id="personalEmail" type="email" placeholder="name@email.com"></div>
+                                    <div class="field"><label for="phone">Phone</label><input class="control" id="phone" type="text" value="+974 5555 2180"></div>
+                                    <div class="field"><label for="alternatePhone">Alternate Phone</label><input class="control" id="alternatePhone" type="text" placeholder="+974 0000 0000"></div>
+                                    <div class="field"><label for="dob">Date of Birth</label><input class="control" id="dob" type="date" value="1992-08-14"></div>
+                                    <div class="field"><label for="gender">Gender</label><select class="control" id="gender"><option selected>Female</option><option>Male</option><option>Other</option><option>Prefer not to say</option></select></div>
+                                    <div class="field"><label for="maritalStatus">Marital Status</label><select class="control" id="maritalStatus"><option selected>Single</option><option>Married</option><option>Divorced</option><option>Widowed</option></select></div>
+                                    <div class="field"><label for="nationality">Nationality</label><select class="control" id="nationality"><option selected>Lebanon</option><option>Qatar</option><option>Jordan</option><option>India</option></select></div>
+                                    <div class="field"><label for="secondNationality">Second Nationality</label><select class="control" id="secondNationality"><option selected>None</option><option>Jordan</option><option>United Kingdom</option></select></div>
+                                    <div class="field"><label for="idNumber">ID / National Number</label><input class="control" id="idNumber" type="text" value="QID-8842-1942"></div>
+                                    <div class="field"><label for="passportNumber">Passport Number</label><input class="control" id="passportNumber" type="text" value="LR901284"></div>
+                                </form>
+                            </div>
+                        </article>
+                        <article class="panel">
+                            <div class="panel-head">
+                                <div class="section-head">
+                                    <h3>Employment Details</h3>
+                                    <p>Organize the employee into the company structure with a cleaner grouping of role, reporting line, contract type, and start dates.</p>
+                                </div>
+                                <span class="section-tag">Work Setup</span>
+                            </div>
+                            <div class="panel-body">
+                                <div class="fields">
+                                    <div class="field"><label for="company">Company <span class="required">*</span></label><select class="control" id="company"><option selected>Grey Doha Trading</option><option>Grey Doha Services</option></select></div>
+                                    <div class="field"><label for="branch">Branch</label><select class="control" id="branch"><option selected>Head Office</option><option>West Bay</option></select></div>
+                                    <div class="field"><label for="department">Department</label><select class="control" id="department"><option selected>People Operations</option><option>Finance</option><option>Projects</option></select></div>
+                                    <div class="field"><label for="team">Team</label><select class="control" id="team"><option selected>HR Shared Services</option><option>Talent Acquisition</option></select></div>
+                                    <div class="field"><label for="jobTitle">Job Title</label><select class="control" id="jobTitle"><option selected>HR Officer</option><option>HR Specialist</option></select></div>
+                                    <div class="field"><label for="designation">Designation</label><select class="control" id="designation"><option selected>People Operations</option><option>Administration</option></select></div>
+                                    <div class="field"><label for="manager">Manager</label><select class="control" id="manager"><option selected>Amal Rahman</option><option>Omar Nasser</option></select></div>
+                                    <div class="field"><label for="employmentType">Employment Type <span class="required">*</span></label><select class="control" id="employmentType"><option selected>Full Time</option><option>Contract</option><option>Part Time</option></select></div>
+                                    <div class="field"><label for="employeeStatus">Employee Status</label><select class="control" id="employeeStatus"><option selected>Draft</option><option>Active</option><option>On Leave</option></select></div>
+                                    <div class="field"><label for="contractType">Contract Type</label><input class="control" id="contractType" type="text" value="Unlimited"></div>
+                                    <div class="field"><label for="joiningDate">Joining Date</label><input class="control" id="joiningDate" type="date" value="2026-05-01"></div>
+                                    <div class="field"><label for="probationStart">Probation Start</label><input class="control" id="probationStart" type="date" value="2026-05-01"></div>
+                                    <div class="field"><label for="probationEnd">Probation End</label><input class="control" id="probationEnd" type="date" value="2026-08-01"></div>
+                                    <div class="field span-12">
+                                        <label for="notes">Notes</label>
+                                        <textarea class="textarea" id="notes">Candidate is converting from the internship pipeline. Initial setup should include standard HR access, document follow-up, and onboarding workflow assignment.</textarea>
+                                        <div class="field-help">Use notes for setup context only. Operational records, documents, and employee history remain connected from the profile after creation.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </article>
+                    </div>
+                    <aside class="aside-stack">
+                        <section class="panel aside-panel photo-card">
+                            <div>
+                                <h3>Profile Photo</h3>
+                                <p>Clean upload treatment with clearer guidance and a more polished placeholder state.</p>
+                            </div>
+                            <div class="photo-preview">
+                                <div class="photo-avatar">MK</div>
+                                <div>
+                                    <strong style="display:block;margin-bottom:4px;">Maya Khaled</strong>
+                                    <span class="mini-meta" style="text-align:center;">HR Officer candidate profile</span>
+                                </div>
+                            </div>
+                            <button class="upload-trigger" type="button">Upload Photo</button>
+                            <div class="upload-note">PNG or JPG, up to 2 MB. Square image recommended for the best profile crop.</div>
+                        </section>
+                        <section class="panel aside-panel action-card">
+                            <div>
+                                <h3>Create Employee</h3>
+                                <p>The action area is intentionally tighter and more useful, with quick context instead of generic filler copy.</p>
+                            </div>
+                            <div class="check-list">
+                                <div class="check-item"><span class="check-icon">1</span> Core identity fields completed</div>
+                                <div class="check-item"><span class="check-icon">2</span> Reporting line assigned</div>
+                                <div class="check-item"><span class="check-icon">3</span> Start date and contract captured</div>
+                            </div>
+                            <ul class="bullet-list">
+                                <li>Emergency contacts, documents, and leave history can be added from the employee profile after creation.</li>
+                                <li>Draft status lets HR review the record before full activation.</li>
+                            </ul>
+                            <div class="button-row">
+                                <button class="btn btn-primary" type="button">Create Employee Record</button>
+                                <button class="btn btn-secondary" type="button">Back to Directory</button>
+                            </div>
+                        </section>
+                        <section class="panel aside-panel meta-card">
+                            <h4>Record Summary</h4>
+                            <div class="meta-row">
+                                <div><strong>Assigned Company</strong><span class="mini-meta" style="text-align:left;">Grey Doha Trading</span></div>
+                                <span class="mini-meta">Head Office</span>
+                            </div>
+                            <div class="meta-row">
+                                <div><strong>Manager</strong><span class="mini-meta" style="text-align:left;">Amal Rahman</span></div>
+                                <span class="mini-meta">HR Administrator</span>
+                            </div>
+                            <div class="meta-row">
+                                <div><strong>Employment Setup</strong><span class="mini-meta" style="text-align:left;">Full Time</span></div>
+                                <span class="mini-meta">Draft</span>
+                            </div>
+                        </section>
+                    </aside>
+                </section>
+            </div>
+        </main>
+    </div>
+    <script>
+        const toggle = document.getElementById('mobileToggle');
+        const sidebar = document.getElementById('sidebar');
+        if (toggle && sidebar) {
+            toggle.addEventListener('click', () => sidebar.classList.toggle('open'));
+        }
+    </script>
+</body>
+</html>

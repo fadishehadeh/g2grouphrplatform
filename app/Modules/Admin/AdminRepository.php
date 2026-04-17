@@ -61,7 +61,8 @@ final class AdminRepository
 
     public function availableEmployees(?int $currentUserId = null): array
     {
-        $sql = "SELECT id, CONCAT(employee_code, ' - ', CONCAT_WS(' ', first_name, middle_name, last_name)) AS name
+        $sql = "SELECT id, employee_code, first_name, middle_name, last_name, work_email,
+                       CONCAT(employee_code, ' - ', CONCAT_WS(' ', first_name, middle_name, last_name)) AS name
                 FROM employees
                 WHERE archived_at IS NULL AND (user_id IS NULL";
         $params = [];
