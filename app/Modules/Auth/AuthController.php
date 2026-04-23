@@ -7,6 +7,8 @@ namespace App\Modules\Auth;
 use App\Core\Controller;
 use App\Core\Database;
 use App\Core\Request;
+use App\Support\Branding;
+use App\Support\EmailTemplate;
 use App\Support\Mailer;
 use App\Support\PasswordPolicy;
 use Throwable;
@@ -273,7 +275,7 @@ final class AuthController extends Controller
                 });
 
                 if ($mailEnabled) {
-                    $this->sendPasswordResetEmail((string) $user['email'], $resetLink, $expiresAt);
+                    $this->sendPasswordResetEmail((int) $user['id'], (string) $user['email'], $resetLink, $expiresAt);
                 }
             }
         } catch (Throwable $exception) {
@@ -431,7 +433,7 @@ final class AuthController extends Controller
         $mailer     = new Mailer($mailConfig);
 
         if ($mailer->isEnabled()) {
-            $html = $this->otpEmailHtml($firstName, $code);
+            $html = $this->otpEmailHtml($firstName, $code, $userId, $email);
             try {
                 $mailer->send($email, 'Your HR System Login Code', $html);
             } catch (Throwable $e) {
@@ -446,22 +448,15 @@ final class AuthController extends Controller
         $this->redirect('/otp');
     }
 
-    private function otpEmailHtml(string $name, string $code): string
+    private function otpEmailHtml(string $name, string $code, int $userId, string $email): string
     {
-        $appName = htmlspecialchars((string) config('app.name', 'HR System'), ENT_QUOTES);
-        $name    = htmlspecialchars($name, ENT_QUOTES);
-        $code    = htmlspecialchars($code, ENT_QUOTES);
-
-        return '<!DOCTYPE html><html><body style="font-family:sans-serif;background:#f8f9fa;padding:40px">
-<div style="max-width:480px;margin:auto;background:#fff;border-radius:8px;padding:40px;border:1px solid #dee2e6">
-  <h2 style="color:#212529;margin-top:0">' . $appName . ' — Login Verification</h2>
-  <p>Hi <strong>' . $name . '</strong>,</p>
-  <p>Use the code below to complete your sign-in. It expires in <strong>10 minutes</strong>.</p>
-  <div style="font-size:36px;font-weight:700;letter-spacing:12px;text-align:center;padding:24px;background:#f1f3f5;border-radius:6px;margin:24px 0">' . $code . '</div>
-  <p style="color:#6c757d;font-size:13px">If you did not attempt to log in, please contact your system administrator immediately.</p>
-</div></body></html>';
+        return EmailTemplate::otp(
+            $name,
+            $code,
+            Branding::appName(),
+            Branding::companyLogoUrlForUser($userId, $email)
+        );
     }
-
     // ------------------------------------------------------------------ //
     //  CAPTCHA
     // ------------------------------------------------------------------ //
@@ -536,20 +531,13 @@ final class AuthController extends Controller
         return null;
     }
 
-    private function sendPasswordResetEmail(string $email, string $resetLink, string $expiresAt): void
+    private function sendPasswordResetEmail(int $userId, string $email, string $resetLink, string $expiresAt): void
     {
-        $appName = htmlspecialchars((string) config('app.name', 'HR System'), ENT_QUOTES);
-        $link    = htmlspecialchars($resetLink, ENT_QUOTES);
-        $expires = htmlspecialchars($expiresAt, ENT_QUOTES);
-
-        $bodyHtml = '<!DOCTYPE html><html><body style="font-family:sans-serif;background:#f8f9fa;padding:40px">'
-            . '<div style="max-width:520px;margin:auto;background:#fff;border-radius:8px;padding:40px;border:1px solid #dee2e6">'
-            . '<h2 style="color:#212529;margin-top:0">' . $appName . ' — Password Reset</h2>'
-            . '<p>A password reset was requested for your account.</p>'
-            . '<p><a href="' . $link . '" style="display:inline-block;padding:12px 24px;background:#0d6efd;color:#fff;border-radius:6px;text-decoration:none;font-weight:600">Reset your password</a></p>'
-            . '<p style="color:#6c757d;font-size:13px">This link expires at <strong>' . $expires . '</strong>.</p>'
-            . '<p style="color:#6c757d;font-size:13px">If you did not request this, you can safely ignore this message.</p>'
-            . '</div></body></html>';
+        $bodyHtml = EmailTemplate::passwordReset(
+            $resetLink,
+            $expiresAt,
+            Branding::companyLogoUrlForUser($userId, $email)
+        );
 
         $mailConfig = (array) $this->app->config('app.mail', []);
         $mailer     = new Mailer($mailConfig);
@@ -557,10 +545,9 @@ final class AuthController extends Controller
         try {
             $mailer->send($email, 'Reset your password', $bodyHtml);
         } catch (Throwable) {
-            // Email send failed — token is already saved, so the user can retry
+            // Email send failed; the token is already saved so the user can retry.
         }
     }
-
     private function mailEnabled(): bool
     {
         return (bool) config('app.mail.enabled', false);

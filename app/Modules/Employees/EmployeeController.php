@@ -8,6 +8,8 @@ use App\Core\Application;
 use App\Core\Controller;
 use App\Core\Request;
 use App\Core\Response;
+use App\Support\Branding;
+use App\Support\EmailTemplate;
 use App\Support\Mailer;
 use Throwable;
 
@@ -79,6 +81,10 @@ final class EmployeeController extends Controller
         $this->validateCsrf($request, '/employees/create');
         $data = $this->sanitized($request);
 
+        if (($data['employee_code'] ?? '') === '') {
+            $data['employee_code'] = $this->repository->nextEmployeeCode();
+        }
+
         if (!$this->validate($data, '/employees/create')) {
             return;
         }
@@ -89,6 +95,11 @@ final class EmployeeController extends Controller
             $photoPath = $this->handlePhotoUpload($request, $employeeId);
             if ($photoPath !== null) {
                 $this->repository->updatePhotoPath($employeeId, $photoPath);
+            }
+
+            $contacts = $request->input('emergency_contacts', []);
+            if (is_array($contacts) && count($contacts) > 0) {
+                $this->repository->saveEmergencyContacts($employeeId, $contacts);
             }
 
             $this->app->session()->flash('success', 'Employee created successfully.');
@@ -152,14 +163,17 @@ final class EmployeeController extends Controller
             $this->redirect('/employees');
         }
 
+        $emergencyContacts = $this->repository->emergencyContacts($employeeId);
+
         $this->render('employees.form', [
-            'title' => 'Edit Employee',
-            'pageTitle' => 'Edit Employee',
-            'employee' => $employee,
-            'options' => $options,
-            'formAction' => '/employees/' . $employeeId . '/edit',
-            'submitLabel' => 'Save Changes',
-            'isEdit' => true,
+            'title'             => 'Edit Employee',
+            'pageTitle'         => 'Edit Employee',
+            'employee'          => $employee,
+            'options'           => $options,
+            'formAction'        => '/employees/' . $employeeId . '/edit',
+            'submitLabel'       => 'Save Changes',
+            'isEdit'            => true,
+            'emergencyContacts' => $emergencyContacts,
         ]);
     }
 
@@ -207,6 +221,11 @@ final class EmployeeController extends Controller
             $photoPath = $this->handlePhotoUpload($request, $employeeId);
             if ($photoPath !== null) {
                 $this->repository->updatePhotoPath($employeeId, $photoPath);
+            }
+
+            $contacts = $request->input('emergency_contacts', []);
+            if (is_array($contacts)) {
+                $this->repository->saveEmergencyContacts($employeeId, $contacts);
             }
 
             $this->app->session()->flash('success', 'Employee updated successfully.');
@@ -357,20 +376,16 @@ final class EmployeeController extends Controller
             );
 
             $setPasswordLink = url('/reset-password/' . $token);
-            $appName = (string) config('app.brand.display_name', config('app.name', 'HR Management System'));
+            $appName = Branding::appName();
             $firstName = (string) ($employee['first_name'] ?? 'Employee');
 
-            $bodyHtml = '<div style="font-family:Arial,sans-serif;max-width:600px">'
-                . '<h2>Welcome to ' . e($appName) . '</h2>'
-                . '<p>Hello ' . e($firstName) . ',</p>'
-                . '<p>Your account has been created. Please set your password using the button below to access the system:</p>'
-                . '<table style="margin:16px 0;border-collapse:collapse">'
-                . '<tr><td style="padding:4px 12px 4px 0;font-weight:bold">Login Email</td><td style="padding:4px 0">' . e($email) . '</td></tr>'
-                . '</table>'
-                . '<p style="margin:24px 0"><a href="' . e($setPasswordLink) . '" style="background:#0d6efd;color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold">Set My Password</a></p>'
-                . '<p class="text-muted" style="font-size:13px;color:#888">This link expires in 72 hours. If you did not expect this email, please ignore it.</p>'
-                . '<p>Best regards,<br>' . e($appName) . '</p>'
-                . '</div>';
+            $bodyHtml = EmailTemplate::accessInvitation(
+                $firstName,
+                $email,
+                $setPasswordLink,
+                '72 hours',
+                Branding::companyLogoUrlForEmployee($employee)
+            );
 
             $bodyText = "Welcome to {$appName}\n\nHello {$firstName},\n\n"
                 . "Your account has been created. Set your password here:\n{$setPasswordLink}\n\n"
@@ -507,7 +522,7 @@ final class EmployeeController extends Controller
 
     private function validate(array $data, string $redirectPath): bool
     {
-        foreach (['employee_code', 'company_id', 'first_name', 'last_name', 'work_email', 'employment_type'] as $field) {
+        foreach (['company_id', 'first_name', 'last_name', 'work_email', 'employment_type'] as $field) {
             if (($data[$field] ?? '') === '') {
                 $this->app->session()->flash('error', 'Please complete all required employee fields.');
                 $this->app->session()->flash('old_input', $data);
@@ -556,6 +571,11 @@ final class EmployeeController extends Controller
         try {
             $employees = $this->repository->exportEmployees();
             $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+            $spreadsheet->getProperties()
+                ->setCreator(Branding::appName())
+                ->setTitle('Employee Directory')
+                ->setSubject('Employee Directory Export');
+
             $sheet = $spreadsheet->getActiveSheet();
             $sheet->setTitle('Employees');
 
@@ -564,13 +584,28 @@ final class EmployeeController extends Controller
                 'Employment Type', 'Employee Status', 'Nationality', 'Second Nationality', 'Gender',
                 'Date of Birth', 'Joining Date', 'Marital Status', 'Notes'];
 
-            $sheet->fromArray($headers, null, 'A1');
-            $headerStyle = $sheet->getStyle('A1:W1');
-            $headerStyle->getFont()->setBold(true);
-            $headerStyle->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setRGB('4472C4');
-            $headerStyle->getFont()->getColor()->setRGB('FFFFFF');
+            $sheet->mergeCells('A1:W1');
+            $sheet->mergeCells('A2:W2');
+            $sheet->mergeCells('A3:W3');
+            $sheet->setCellValue('A1', 'Employee Directory');
+            $sheet->setCellValue('A2', Branding::appName() . ' | Generated ' . date('d M Y, H:i'));
+            $sheet->setCellValue('A3', 'Total employees: ' . count($employees));
+            $sheet->fromArray($headers, null, 'A5');
 
-            $row = 2;
+            $sheet->getRowDimension(1)->setRowHeight(28);
+            $sheet->getRowDimension(2)->setRowHeight(20);
+            $sheet->getRowDimension(3)->setRowHeight(20);
+            $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(18)->getColor()->setRGB('111827');
+            $sheet->getStyle('A2:A3')->getFont()->setSize(10)->getColor()->setRGB('64748B');
+            $sheet->getStyle('A1:A3')->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_LEFT);
+
+            $headerStyle = $sheet->getStyle('A5:W5');
+            $headerStyle->getFont()->setBold(true)->getColor()->setRGB('FFFFFF');
+            $headerStyle->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setRGB('FF3D33');
+            $headerStyle->getAlignment()->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER);
+            $sheet->getRowDimension(5)->setRowHeight(24);
+
+            $row = 6;
             foreach ($employees as $emp) {
                 $sheet->fromArray([
                     $emp['employee_code'], $emp['first_name'], $emp['middle_name'] ?? '', $emp['last_name'],
@@ -582,8 +617,36 @@ final class EmployeeController extends Controller
                     $emp['date_of_birth'] ?? '', $emp['joining_date'] ?? '', $emp['marital_status'] ?? '',
                     $emp['notes'] ?? '',
                 ], null, 'A' . $row);
+
+                if ($row % 2 === 0) {
+                    $sheet->getStyle('A' . $row . ':W' . $row)
+                        ->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
+                        ->getStartColor()->setRGB('F8FAFC');
+                }
+
+                $status = strtolower((string) ($emp['employee_status'] ?? ''));
+                $statusColor = match ($status) {
+                    'active' => 'DCFCE7',
+                    'draft' => 'F1F5F9',
+                    'on_leave' => 'FEF3C7',
+                    'terminated', 'resigned' => 'FEE2E2',
+                    default => 'FFFFFF',
+                };
+                $sheet->getStyle('P' . $row)->getFill()
+                    ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
+                    ->getStartColor()->setRGB($statusColor);
                 $row++;
             }
+
+            $lastRow = max(6, $row - 1);
+            $sheet->freezePane('A6');
+            $sheet->setAutoFilter('A5:W' . $lastRow);
+            $sheet->getStyle('A5:W' . $lastRow)->getBorders()->getAllBorders()
+                ->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN)
+                ->getColor()->setRGB('E2E8F0');
+            $sheet->getStyle('A6:W' . $lastRow)->getAlignment()
+                ->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_TOP)
+                ->setWrapText(true);
 
             foreach (range('A', 'W') as $col) {
                 $sheet->getColumnDimension($col)->setAutoSize(true);
@@ -610,22 +673,54 @@ final class EmployeeController extends Controller
             $pdf->SetTitle('Employee Directory');
             $pdf->setPrintHeader(false);
             $pdf->setPrintFooter(true);
+            $pdf->SetMargins(12, 14, 12);
             $pdf->SetAutoPageBreak(true, 15);
             $pdf->AddPage();
-            $pdf->SetFont('helvetica', 'B', 14);
-            $pdf->Cell(0, 10, 'Employee Directory - ' . date('d M Y'), 0, 1, 'C');
-            $pdf->Ln(4);
 
-            $html = '<table border="1" cellpadding="4" cellspacing="0" style="font-size:8px;">
-            <thead><tr style="background-color:#4472C4;color:#FFFFFF;font-weight:bold;">
+            $logoPath = Branding::defaultLogoPath();
+            if ($logoPath !== null && strtolower(pathinfo($logoPath, PATHINFO_EXTENSION)) !== 'svg') {
+                $pdf->Image($logoPath, 14, 13, 26, 0, '', '', '', false, 300);
+            } else {
+                $logoPath = null;
+            }
+
+            $pdf->SetFont('helvetica', 'B', 16);
+            $pdf->SetTextColor(17, 24, 39);
+            $pdf->SetXY($logoPath !== null ? 44 : 14, 14);
+            $pdf->Cell(0, 7, 'Employee Directory', 0, 1, 'L');
+            $pdf->SetFont('helvetica', '', 9);
+            $pdf->SetTextColor(100, 116, 139);
+            $pdf->SetX($logoPath !== null ? 44 : 14);
+            $pdf->Cell(0, 6, Branding::appName() . ' | Generated ' . date('d M Y, H:i') . ' | Total employees: ' . count($employees), 0, 1, 'L');
+            $pdf->SetDrawColor(255, 61, 51);
+            $pdf->SetLineWidth(0.8);
+            $pdf->Line(14, 33, 406, 33);
+            $pdf->Ln(10);
+
+            $html = '<style>
+                table.employee-export { border-collapse: collapse; font-size: 8px; color: #111827; }
+                table.employee-export th { background-color: #ff3d33; color: #ffffff; font-weight: bold; border: 1px solid #ff3d33; }
+                table.employee-export td { border: 1px solid #e2e8f0; }
+                tr.alt td { background-color: #f8fafc; }
+            </style>
+            <table class="employee-export" cellpadding="5" cellspacing="0">
+            <thead><tr>
                 <th>Code</th><th>Name</th><th>Work Email</th><th>Department</th><th>Job Title</th>
                 <th>Line Manager</th><th>Status</th><th>Joining Date</th><th>Phone</th><th>Nationality</th>
             </tr></thead><tbody>';
 
+            $i = 0;
             foreach ($employees as $emp) {
                 $name = trim(($emp['first_name'] ?? '') . ' ' . ($emp['middle_name'] ?? '') . ' ' . ($emp['last_name'] ?? ''));
-                $statusBg = ($emp['employee_status'] ?? '') === 'active' ? '#D4EDDA' : '#F8F9FA';
-                $html .= '<tr>
+                $status = strtolower((string) ($emp['employee_status'] ?? ''));
+                $statusBg = match ($status) {
+                    'active' => '#dcfce7',
+                    'draft' => '#f1f5f9',
+                    'on_leave' => '#fef3c7',
+                    'terminated', 'resigned' => '#fee2e2',
+                    default => '#ffffff',
+                };
+                $html .= '<tr' . ($i % 2 === 1 ? ' class="alt"' : '') . '>
                     <td>' . htmlspecialchars($emp['employee_code'] ?? '') . '</td>
                     <td>' . htmlspecialchars($name) . '</td>
                     <td>' . htmlspecialchars($emp['work_email'] ?? '') . '</td>
@@ -637,6 +732,7 @@ final class EmployeeController extends Controller
                     <td>' . htmlspecialchars($emp['phone'] ?? '—') . '</td>
                     <td>' . htmlspecialchars($emp['nationality'] ?? '—') . '</td>
                 </tr>';
+                $i++;
             }
             $html .= '</tbody></table>';
 
@@ -674,7 +770,7 @@ final class EmployeeController extends Controller
             $sheet->fromArray($headers, null, 'A1');
             $headerStyle = $sheet->getStyle('A1:W1');
             $headerStyle->getFont()->setBold(true);
-            $headerStyle->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setRGB('4472C4');
+            $headerStyle->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setRGB('FF3D33');
             $headerStyle->getFont()->getColor()->setRGB('FFFFFF');
 
             // Add sample row

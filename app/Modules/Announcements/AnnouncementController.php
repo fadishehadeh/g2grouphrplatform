@@ -498,12 +498,12 @@ final class AnnouncementController extends Controller
             $pColor = $priorityColors[$priority] ?? '#0d6efd';
 
             $bodyHtml = '<div style="font-family:Arial,Helvetica,sans-serif;max-width:650px;margin:0 auto;color:#333;">';
-            $bodyHtml .= '<div style="background:#1a3a5c;color:#fff;padding:18px 24px;border-radius:6px 6px 0 0;">';
+            $bodyHtml .= '<div style="background:#ff3d33;color:#fff;padding:18px 24px;border-radius:6px 6px 0 0;">';
             $bodyHtml .= '<h2 style="margin:0;font-size:20px;">&#128226; ' . e($title) . '</h2></div>';
             $bodyHtml .= '<div style="padding:20px 24px;border:1px solid #e0e0e0;border-top:none;">';
             $bodyHtml .= '<p style="margin:0 0 8px;"><strong>Priority:</strong> <span style="color:' . $pColor . ';font-weight:600;">' . e($priority) . '</span></p>';
             $bodyHtml .= '<div style="background:#f8f9fa;padding:16px;border-radius:6px;margin:12px 0;font-size:14px;line-height:1.6;">' . nl2br(e($content)) . '</div>';
-            $bodyHtml .= '<p style="margin:16px 0 0;"><a href="' . e($appUrl . '/announcements/' . $announcementId) . '" style="display:inline-block;padding:10px 24px;background:#1a3a5c;color:#fff;text-decoration:none;border-radius:4px;font-weight:600;">View Announcement</a></p>';
+            $bodyHtml .= '<p style="margin:16px 0 0;"><a href="' . e($appUrl . '/announcements/' . $announcementId) . '" style="display:inline-block;padding:10px 24px;background:#ff3d33;color:#fff;text-decoration:none;border-radius:4px;font-weight:600;">View Announcement</a></p>';
             $bodyHtml .= '<p style="margin-top:20px;font-size:12px;color:#888;">This is an automated message from ' . e($appName) . '.</p>';
             $bodyHtml .= '</div></div>';
 

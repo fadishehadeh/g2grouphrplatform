@@ -602,6 +602,26 @@ final class LeaveRepository
         return $this->database->fetchAll($sql, $params);
     }
 
+    public function updateLeaveType(int $id, string $name, string $code, string $status): void
+    {
+        $this->database->execute(
+            'UPDATE leave_types SET name = :name, code = :code, status = :status WHERE id = :id',
+            ['name' => $name, 'code' => $code, 'status' => $status, 'id' => $id]
+        );
+    }
+
+    public function nextLeaveTypeCode(): string
+    {
+        $rows = $this->database->fetchAll("SELECT code FROM leave_types WHERE code LIKE 'LV-%'");
+        $max  = 0;
+        foreach ($rows as $row) {
+            if (preg_match('/([0-9]+)$/', (string) $row['code'], $m)) {
+                $max = max($max, (int) $m[1]);
+            }
+        }
+        return 'LV-' . str_pad((string) ($max + 1), 3, '0', STR_PAD_LEFT);
+    }
+
     public function createLeaveType(array $data): void
     {
         $this->database->execute(
@@ -1349,14 +1369,14 @@ final class LeaveRepository
         $joiningDate = e((string) ($profile['joining_date'] ?? '—'));
 
         $html = '<div style="font-family:Arial,Helvetica,sans-serif;max-width:700px;margin:0 auto;color:#333;">';
-        $html .= '<div style="background:#1a3a5c;color:#fff;padding:18px 24px;border-radius:6px 6px 0 0;">';
+        $html .= '<div style="background:#ff3d33;color:#fff;padding:18px 24px;border-radius:6px 6px 0 0;">';
         $html .= '<h2 style="margin:0;font-size:20px;">' . e($heading) . '</h2></div>';
         $html .= '<div style="padding:20px 24px;border:1px solid #e0e0e0;border-top:none;">';
         $html .= '<p style="font-size:15px;">' . $bodyIntro . '</p>';
 
         if ($highlightRequestId !== null) {
             $requestUrl = $appUrl . '/leave/requests/' . $highlightRequestId;
-            $html .= '<p style="margin:20px 0;"><a href="' . e($requestUrl) . '" style="display:inline-block;background:#1a3a5c;color:#fff;padding:11px 28px;border-radius:5px;text-decoration:none;font-weight:bold;font-size:14px;">&#128196; View &amp; Action This Request</a></p>';
+            $html .= '<p style="margin:20px 0;"><a href="' . e($requestUrl) . '" style="display:inline-block;background:#ff3d33;color:#fff;padding:11px 28px;border-radius:5px;text-decoration:none;font-weight:bold;font-size:14px;">&#128196; View &amp; Action This Request</a></p>';
         }
 
         // Employee info card
@@ -1371,9 +1391,9 @@ final class LeaveRepository
 
         // Leave balances
         if ($balances !== []) {
-            $html .= '<h3 style="font-size:15px;margin:20px 0 8px;border-bottom:2px solid #1a3a5c;padding-bottom:4px;">Leave Balances (' . $year . ')</h3>';
+            $html .= '<h3 style="font-size:15px;margin:20px 0 8px;border-bottom:2px solid #ff3d33;padding-bottom:4px;">Leave Balances (' . $year . ')</h3>';
             $html .= '<table style="width:100%;border-collapse:collapse;font-size:13px;border:1px solid #dee2e6;">';
-            $html .= '<thead><tr style="background:#1a3a5c;color:#fff;">';
+            $html .= '<thead><tr style="background:#ff3d33;color:#fff;">';
             $html .= '<th style="padding:8px;text-align:left;">Leave Type</th>';
             $html .= '<th style="padding:8px;text-align:center;">Opening</th>';
             $html .= '<th style="padding:8px;text-align:center;">Accrued</th>';
@@ -1399,9 +1419,9 @@ final class LeaveRepository
 
         // Recent leave requests
         if ($requests !== []) {
-            $html .= '<h3 style="font-size:15px;margin:20px 0 8px;border-bottom:2px solid #1a3a5c;padding-bottom:4px;">Recent Leave Requests</h3>';
+            $html .= '<h3 style="font-size:15px;margin:20px 0 8px;border-bottom:2px solid #ff3d33;padding-bottom:4px;">Recent Leave Requests</h3>';
             $html .= '<table style="width:100%;border-collapse:collapse;font-size:13px;border:1px solid #dee2e6;">';
-            $html .= '<thead><tr style="background:#1a3a5c;color:#fff;">';
+            $html .= '<thead><tr style="background:#ff3d33;color:#fff;">';
             $html .= '<th style="padding:8px;text-align:left;">Type</th>';
             $html .= '<th style="padding:8px;text-align:center;">From</th>';
             $html .= '<th style="padding:8px;text-align:center;">To</th>';

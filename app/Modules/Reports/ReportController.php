@@ -7,6 +7,7 @@ namespace App\Modules\Reports;
 use App\Core\Application;
 use App\Core\Controller;
 use App\Core\Request;
+use App\Support\Branding;
 use Throwable;
 
 final class ReportController extends Controller
@@ -307,22 +308,42 @@ final class ReportController extends Controller
             $sheet = $spreadsheet->getActiveSheet();
             $sheet->setTitle('Headcount');
 
-            $headers = ['Employee Code', 'Name', 'Email', 'Department', 'Job Title', 'Joining Date', 'Status'];
-            $sheet->fromArray($headers, null, 'A1');
-            $hs = $sheet->getStyle('A1:G1');
-            $hs->getFont()->setBold(true);
-            $hs->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setRGB('4472C4');
-            $hs->getFont()->getColor()->setRGB('FFFFFF');
+            $sheet->mergeCells('A1:G1');
+            $sheet->mergeCells('A2:G2');
+            $sheet->mergeCells('A3:G3');
+            $sheet->setCellValue('A1', 'Headcount Report');
+            $sheet->setCellValue('A2', Branding::appName() . ' | Generated ' . date('d M Y, H:i'));
+            $sheet->setCellValue('A3', 'Total records: ' . count($employees));
+            $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(18)->getColor()->setRGB('111827');
+            $sheet->getStyle('A2:A3')->getFont()->setSize(10)->getColor()->setRGB('64748B');
 
-            $row = 2;
+            $headers = ['Employee Code', 'Name', 'Email', 'Department', 'Job Title', 'Joining Date', 'Status'];
+            $sheet->fromArray($headers, null, 'A5');
+            $hs = $sheet->getStyle('A5:G5');
+            $hs->getFont()->setBold(true)->getColor()->setRGB('FFFFFF');
+            $hs->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setRGB('FF3D33');
+
+            $row = 6;
             foreach ($employees as $emp) {
                 $sheet->fromArray([
                     $emp['employee_code'] ?? '', $emp['employee_name'] ?? '', $emp['work_email'] ?? '',
                     $emp['department_name'] ?? '', $emp['job_title_name'] ?? '',
                     $emp['joining_date'] ?? '', $emp['employee_status'] ?? '',
                 ], null, 'A' . $row);
+                if ($row % 2 === 0) {
+                    $sheet->getStyle('A' . $row . ':G' . $row)->getFill()
+                        ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
+                        ->getStartColor()->setRGB('F8FAFC');
+                }
                 $row++;
             }
+
+            $lastRow = max(6, $row - 1);
+            $sheet->freezePane('A6');
+            $sheet->setAutoFilter('A5:G' . $lastRow);
+            $sheet->getStyle('A5:G' . $lastRow)->getBorders()->getAllBorders()
+                ->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN)
+                ->getColor()->setRGB('E2E8F0');
 
             foreach (range('A', 'G') as $col) {
                 $sheet->getColumnDimension($col)->setAutoSize(true);
@@ -354,20 +375,34 @@ final class ReportController extends Controller
             $pdf->SetTitle('Headcount Report');
             $pdf->setPrintHeader(false);
             $pdf->setPrintFooter(true);
+            $pdf->SetMargins(12, 14, 12);
             $pdf->SetAutoPageBreak(true, 15);
             $pdf->AddPage();
-            $pdf->SetFont('helvetica', 'B', 14);
-            $pdf->Cell(0, 10, 'Headcount Report - ' . date('d M Y'), 0, 1, 'C');
-            $pdf->Ln(4);
+            $pdf->SetFont('helvetica', 'B', 15);
+            $pdf->SetTextColor(17, 24, 39);
+            $pdf->Cell(0, 7, 'Headcount Report', 0, 1, 'L');
+            $pdf->SetFont('helvetica', '', 9);
+            $pdf->SetTextColor(100, 116, 139);
+            $pdf->Cell(0, 6, Branding::appName() . ' | Generated ' . date('d M Y, H:i') . ' | Total records: ' . count($employees), 0, 1, 'L');
+            $pdf->SetDrawColor(255, 61, 51);
+            $pdf->SetLineWidth(0.7);
+            $pdf->Line(12, 30, 285, 30);
+            $pdf->Ln(8);
 
-            $html = '<table border="1" cellpadding="4" cellspacing="0" style="font-size:9px;">
-            <thead><tr style="background-color:#4472C4;color:#FFFFFF;font-weight:bold;">
+            $html = '<style>
+                table.export { border-collapse: collapse; font-size: 9px; color: #111827; }
+                table.export th { background-color:#ff3d33;color:#ffffff;font-weight:bold;border:1px solid #ff3d33; }
+                table.export td { border:1px solid #e2e8f0; }
+                tr.alt td { background-color:#f8fafc; }
+            </style><table class="export" cellpadding="5" cellspacing="0">
+            <thead><tr>
                 <th>Code</th><th>Name</th><th>Email</th><th>Department</th><th>Job Title</th><th>Joined</th><th>Status</th>
             </tr></thead><tbody>';
 
+            $i = 0;
             foreach ($employees as $emp) {
                 $sBg = ($emp['employee_status'] ?? '') === 'active' ? '#D4EDDA' : '#F8F9FA';
-                $html .= '<tr>
+                $html .= '<tr' . ($i % 2 === 1 ? ' class="alt"' : '') . '>
                     <td>' . htmlspecialchars($emp['employee_code'] ?? '') . '</td>
                     <td>' . htmlspecialchars($emp['employee_name'] ?? '') . '</td>
                     <td>' . htmlspecialchars($emp['work_email'] ?? '') . '</td>
@@ -376,6 +411,7 @@ final class ReportController extends Controller
                     <td>' . htmlspecialchars($emp['joining_date'] ?? '—') . '</td>
                     <td style="background-color:' . $sBg . ';">' . htmlspecialchars(ucwords(str_replace('_', ' ', $emp['employee_status'] ?? ''))) . '</td>
                 </tr>';
+                $i++;
             }
             $html .= '</tbody></table>';
 

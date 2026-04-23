@@ -9,7 +9,7 @@
                 <form method="post" action="<?= e(url('/admin/leave/types')); ?>">
                     <?= csrf_field(); ?>
                     <div class="mb-3"><label class="form-label">Name *</label><input type="text" name="name" class="form-control" value="<?= e((string) old('name', '')); ?>" required></div>
-                    <div class="mb-3"><label class="form-label">Code *</label><input type="text" name="code" class="form-control" value="<?= e((string) old('code', '')); ?>" required></div>
+                    <div class="mb-3"><label class="form-label">Code</label><input type="text" name="code" class="form-control" value="<?= e((string) old('code', '')); ?>" placeholder="Auto-generated"><div class="form-text">Leave blank to auto-generate.</div></div>
                     <div class="mb-3"><label class="form-label">Description</label><textarea name="description" class="form-control" rows="3"><?= e((string) old('description', '')); ?></textarea></div>
                     <div class="row g-3">
                         <div class="col-md-6"><label class="form-label">Paid Leave</label><select name="is_paid" class="form-select"><?php foreach ([1 => 'Yes', 0 => 'No'] as $value => $label): ?><option value="<?= e((string) $value); ?>" <?= (string) old('is_paid', '1') === (string) $value ? 'selected' : ''; ?>><?= e($label); ?></option><?php endforeach; ?></select></div>
@@ -49,7 +49,7 @@
                         <table class="table align-middle mb-0">
                             <thead>
                             <tr>
-                                <th>Name</th><th>Code</th><th>Paid</th><th>Balance</th><th>Attachment</th><th>HR Approval</th><th>Half Day</th><th>Default Days</th><th>Status</th>
+                                <th>Name</th><th>Code</th><th>Paid</th><th>Balance</th><th>Attachment</th><th>HR Approval</th><th>Half Day</th><th>Default Days</th><th>Status</th><th></th>
                             </tr>
                             </thead>
                             <tbody>
@@ -64,6 +64,7 @@
                                     <td><?= e((string) ((int) $leaveType['allow_half_day'] === 1 ? 'Yes' : 'No')); ?></td>
                                     <td><?= e((string) $leaveType['default_days']); ?></td>
                                     <td><span class="badge <?= ($leaveType['status'] ?? '') === 'active' ? 'text-bg-success' : 'text-bg-secondary'; ?>"><?= e((string) $leaveType['status']); ?></span></td>
+                                    <td><button type="button" class="btn btn-outline-secondary btn-sm edit-type-btn" data-id="<?= e((string) $leaveType['id']); ?>" data-name="<?= e((string) $leaveType['name']); ?>" data-code="<?= e((string) $leaveType['code']); ?>" data-status="<?= e((string) $leaveType['status']); ?>"><i class="bi bi-pencil"></i></button></td>
                                 </tr>
                             <?php endforeach; ?>
                             </tbody>
@@ -74,3 +75,37 @@
         </div>
     </div>
 </div>
+
+<div class="modal fade" id="editTypeModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Leave Type</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" id="editTypeForm">
+                <?= csrf_field(); ?>
+                <div class="modal-body">
+                    <div class="mb-3"><label class="form-label">Name *</label><input type="text" name="name" id="editTypeName" class="form-control" required></div>
+                    <div class="mb-3"><label class="form-label">Code *</label><input type="text" name="code" id="editTypeCode" class="form-control" required></div>
+                    <div class="mb-3"><label class="form-label">Status</label><select name="status" id="editTypeStatus" class="form-select"><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+document.querySelectorAll('.edit-type-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        document.getElementById('editTypeName').value = this.dataset.name;
+        document.getElementById('editTypeCode').value = this.dataset.code;
+        document.getElementById('editTypeStatus').value = this.dataset.status || 'active';
+        document.getElementById('editTypeForm').action = '<?= e(url('/admin/leave/types')); ?>/' + this.dataset.id + '/update';
+        new bootstrap.Modal(document.getElementById('editTypeModal')).show();
+    });
+});
+</script>

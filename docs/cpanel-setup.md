@@ -91,6 +91,18 @@ Then add a cron job to process the email queue:
 
 > Change the admin password immediately after first login.
 
+## 9. GitHub Auto-Deployment (Optional)
+
+To automatically pull the latest code from GitHub when you push updates:
+
+1. Initialize git on your server and configure the webhook secret in `.env`
+2. Set up GitHub webhook to call `https://yourdomain.com/hr2/deploy.php`
+3. Every push to `main` branch will automatically deploy
+
+**Full setup guide:** See [github-deployment.md](github-deployment.md)
+
+This is optional — you can also deploy manually via FTP or SSH `git pull`.
+
 ## Troubleshooting
 
 | Problem | Fix |

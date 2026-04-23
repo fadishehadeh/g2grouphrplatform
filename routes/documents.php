@@ -28,6 +28,31 @@ $router->post('/documents/categories', [DocumentController::class, 'storeCategor
     [PermissionMiddleware::class, ['documents.manage_all']],
 ]);
 
+$router->get('/documents/types', [DocumentController::class, 'documentTypes'], [
+    ...$documentBaseMiddleware,
+    [PermissionMiddleware::class, ['documents.manage_all']],
+]);
+
+$router->post('/documents/types', [DocumentController::class, 'storeDocumentType'], [
+    ...$documentBaseMiddleware,
+    [PermissionMiddleware::class, ['documents.manage_all']],
+]);
+
+$router->get('/documents/types/{id}/edit', [DocumentController::class, 'editDocumentType'], [
+    ...$documentBaseMiddleware,
+    [PermissionMiddleware::class, ['documents.manage_all']],
+]);
+
+$router->post('/documents/types/{id}/edit', [DocumentController::class, 'updateDocumentType'], [
+    ...$documentBaseMiddleware,
+    [PermissionMiddleware::class, ['documents.manage_all']],
+]);
+
+$router->post('/documents/admin-upload', [DocumentController::class, 'adminUpload'], [
+    ...$documentBaseMiddleware,
+    [PermissionMiddleware::class, ['documents.manage_all']],
+]);
+
 $router->get('/documents/expiring', [DocumentController::class, 'expiring'], [
     ...$documentBaseMiddleware,
     [PermissionMiddleware::class, ['documents.manage_all']],

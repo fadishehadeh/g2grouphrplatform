@@ -7,6 +7,7 @@
         <?php endif; ?>
         <?php if (can('letters.manage')): ?>
             <a href="<?= e(url('/letters/admin')); ?>" class="btn btn-outline-secondary btn-sm">All Requests</a>
+            <a href="<?= e(url('/letters/templates')); ?>" class="btn btn-outline-secondary btn-sm">Templates</a>
         <?php endif; ?>
     </div>
 </div>

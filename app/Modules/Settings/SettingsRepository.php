@@ -355,6 +355,37 @@ final class SettingsRepository
         });
     }
 
+    public function updateShift(int $id, string $name, string $code): void
+    {
+        $this->database->execute(
+            'UPDATE shifts SET name = :name, code = :code WHERE id = :id',
+            ['name' => $name, 'code' => strtoupper($code), 'id' => $id]
+        );
+    }
+
+    public function updateSchedule(int $id, string $name, string $code): void
+    {
+        $this->database->execute(
+            'UPDATE work_schedules SET name = :name, code = :code WHERE id = :id',
+            ['name' => $name, 'code' => strtoupper($code), 'id' => $id]
+        );
+    }
+
+    public function nextShiftCode(): string    { return $this->nextCode('shifts', 'SHIFT_'); }
+    public function nextScheduleCode(): string { return $this->nextCode('work_schedules', 'SCH_'); }
+
+    private function nextCode(string $table, string $prefix): string
+    {
+        $rows = $this->database->fetchAll("SELECT code FROM {$table} WHERE code LIKE :prefix", ['prefix' => $prefix . '%']);
+        $max  = 0;
+        foreach ($rows as $row) {
+            if (preg_match('/([0-9]+)$/', (string) $row['code'], $m)) {
+                $max = max($max, (int) $m[1]);
+            }
+        }
+        return $prefix . str_pad((string) ($max + 1), 3, '0', STR_PAD_LEFT);
+    }
+
     public function createShift(array $data): void
     {
         $this->database->execute(

@@ -10,6 +10,9 @@ $isAdmin = can('letters.manage');
         </a>
     </div>
     <div class="d-flex gap-2">
+        <a href="<?= e(url('/letters/' . (int) ($letter['id'] ?? 0) . '/download')); ?>" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-download"></i> Download PDF
+        </a>
         <button onclick="window.print()" class="btn btn-primary btn-sm">
             <i class="bi bi-printer"></i> Print
         </button>

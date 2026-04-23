@@ -81,22 +81,81 @@ final class DocumentController extends Controller
             $expiryFilter = 'all';
         }
 
-        $documents = [];
+        $documents     = [];
+        $documentTypes = [];
+        $employees     = [];
 
         try {
             $viewerRoleCode = (string) ($this->app->auth()->user()['role_code'] ?? 'employee');
-            $documents = $this->repository->listDocuments($search, $expiryFilter, $viewerRoleCode);
+            $documents      = $this->repository->listDocuments($search, $expiryFilter, $viewerRoleCode);
         } catch (Throwable $throwable) {
             $this->app->session()->flash('error', 'Unable to load document center: ' . $throwable->getMessage());
         }
 
+        try {
+            $documentTypes = $this->repository->activeDocumentTypes();
+            $employees     = $this->employees->activeEmployeesForSelect();
+        } catch (Throwable) {
+            // non-fatal — upload modal will be disabled if table missing
+        }
+
         $this->render('documents.index', [
-            'title' => 'Documents',
-            'pageTitle' => 'Document Center',
-            'documents' => $documents,
-            'search' => $search,
-            'expiryFilter' => $expiryFilter,
+            'title'         => 'Documents',
+            'pageTitle'     => 'Document Center',
+            'documents'     => $documents,
+            'search'        => $search,
+            'expiryFilter'  => $expiryFilter,
+            'documentTypes' => $documentTypes,
+            'employees'     => $employees,
         ]);
+    }
+
+    public function adminUpload(Request $request): void
+    {
+        $redirectPath = '/documents';
+        $this->validateCsrf($request, $redirectPath);
+
+        $data       = $this->sanitized($request);
+        $employeeId = (int) ($data['employee_id'] ?? 0);
+
+        if ($employeeId <= 0) {
+            $this->app->session()->flash('error', 'Please select an employee.');
+            $this->redirect($redirectPath);
+        }
+
+        try {
+            $employee = $this->employees->findEmployee($employeeId);
+
+            if ($employee === null) {
+                Response::abort(404, 'Employee not found.');
+            }
+
+            $documentType = $this->repository->findDocumentType((int) ($data['document_type_id'] ?? 0));
+
+            if ($documentType === null || (int) ($documentType['is_active'] ?? 0) !== 1) {
+                $this->app->session()->flash('error', 'Please select a valid document type.');
+                $this->redirect($redirectPath);
+            }
+
+            $data['category_id'] = $documentType['category_id'];
+
+            $this->validateUploadData($data, (int) ($documentType['requires_expiry'] ?? 0), $redirectPath);
+            $fileMeta = $this->storeUploadedFile($request->file('document_file'), $employeeId, $data, $redirectPath);
+
+            try {
+                $this->repository->createDocument($employeeId, $data, $fileMeta, $this->app->auth()->id());
+            } catch (Throwable $throwable) {
+                $this->removeStoredFile((string) $fileMeta['absolute_path']);
+                throw $throwable;
+            }
+
+            $empName = trim((string) (($employee['first_name'] ?? '') . ' ' . ($employee['last_name'] ?? '')));
+            $this->app->session()->flash('success', 'Document uploaded successfully for ' . $empName . '.');
+            $this->redirect($redirectPath);
+        } catch (Throwable $throwable) {
+            $this->app->session()->flash('error', 'Unable to upload document: ' . $throwable->getMessage());
+            $this->redirect($redirectPath);
+        }
     }
 
     public function expiring(Request $request): void
@@ -205,6 +264,101 @@ final class DocumentController extends Controller
         $this->redirect('/documents/expiring');
     }
 
+    public function documentTypes(Request $request): void
+    {
+        $search = trim((string) $request->input('q', ''));
+        $types = [];
+        $categories = [];
+
+        try {
+            $types = $this->repository->listDocumentTypes($search);
+            $categories = $this->repository->activeCategories();
+        } catch (Throwable $throwable) {
+            $this->app->session()->flash('error', 'Unable to load document types: ' . $throwable->getMessage());
+        }
+
+        $this->render('documents.types', [
+            'title'      => 'Document Types',
+            'pageTitle'  => 'Document Types',
+            'types'      => $types,
+            'categories' => $categories,
+            'search'     => $search,
+        ]);
+    }
+
+    public function storeDocumentType(Request $request): void
+    {
+        $this->validateCsrf($request, '/documents/types');
+        $data = $this->sanitized($request);
+
+        foreach (['name', 'category_id'] as $field) {
+            if (($data[$field] ?? '') === '') {
+                $this->invalid('/documents/types', $data, 'Please provide a name and category for the document type.');
+            }
+        }
+
+        try {
+            $this->repository->createDocumentType($data);
+            $this->app->session()->flash('success', 'Document type created successfully.');
+            $this->redirect('/documents/types');
+        } catch (Throwable $throwable) {
+            $this->app->session()->flash('error', 'Unable to save document type: ' . $throwable->getMessage());
+            $this->app->session()->flash('old_input', $data);
+            $this->redirect('/documents/types');
+        }
+    }
+
+    public function editDocumentType(Request $request, string $id): void
+    {
+        $typeId = (int) $id;
+        $type   = $this->repository->findDocumentType($typeId);
+
+        if ($type === null) {
+            Response::abort(404, 'Document type not found.');
+        }
+
+        try {
+            $categories = $this->repository->activeCategories();
+        } catch (Throwable $throwable) {
+            $categories = [];
+        }
+
+        $this->render('documents.type-edit', [
+            'title'      => 'Edit Document Type',
+            'pageTitle'  => 'Edit Document Type',
+            'type'       => $type,
+            'categories' => $categories,
+        ]);
+    }
+
+    public function updateDocumentType(Request $request, string $id): void
+    {
+        $typeId = (int) $id;
+        $this->validateCsrf($request, '/documents/types/' . $typeId . '/edit');
+
+        if ($this->repository->findDocumentType($typeId) === null) {
+            Response::abort(404, 'Document type not found.');
+        }
+
+        $data = $this->sanitized($request);
+
+        foreach (['name', 'category_id'] as $field) {
+            if (($data[$field] ?? '') === '') {
+                $this->invalid('/documents/types/' . $typeId . '/edit', $data, 'Please provide a name and category.');
+            }
+        }
+
+        try {
+            $this->repository->updateDocumentType($typeId, $data);
+            $this->app->session()->flash('success', 'Document type updated.');
+            $this->redirect('/documents/types/' . $typeId . '/edit');
+        } catch (Throwable $throwable) {
+            $this->app->session()->flash('error', 'Unable to update document type: ' . $throwable->getMessage());
+            $this->app->session()->flash('old_input', $data);
+            $this->redirect('/documents/types/' . $typeId . '/edit');
+        }
+    }
+
     public function upload(Request $request, string $id): void
     {
         $employeeId = (int) $id;
@@ -212,6 +366,9 @@ final class DocumentController extends Controller
         if (!$this->canAccessEmployeeDocuments($employeeId)) {
             Response::abort(403, 'You do not have access to this employee document record.');
         }
+
+        $documentTypes      = [];
+        $documentTypesReady = true;
 
         try {
             $employee = $this->employees->findEmployee($employeeId);
@@ -221,11 +378,16 @@ final class DocumentController extends Controller
             }
 
             $viewerRoleCode = (string) ($this->app->auth()->user()['role_code'] ?? 'employee');
-            $categories = $this->repository->activeCategories();
-            $documents = $this->repository->employeeDocuments($employeeId, $viewerRoleCode);
+            $documents      = $this->repository->employeeDocuments($employeeId, $viewerRoleCode);
         } catch (Throwable $throwable) {
             $this->app->session()->flash('error', 'Unable to load employee documents: ' . $throwable->getMessage());
             $this->redirect($this->app->auth()->hasPermission('documents.manage_all') ? '/documents' : '/dashboard');
+        }
+
+        try {
+            $documentTypes = $this->repository->activeDocumentTypes();
+        } catch (Throwable) {
+            $documentTypesReady = false;
         }
 
         // Log a 'view' event for each document visible on this page
@@ -245,18 +407,19 @@ final class DocumentController extends Controller
         }
 
         $this->render('documents.upload', [
-            'title' => 'Employee Documents',
-            'pageTitle' => 'Employee Documents',
-            'employee' => $employee,
-            'categories' => $categories,
-            'documents' => $documents,
-            'canUpload' => $this->canUploadForEmployee($employeeId),
+            'title'              => 'Employee Documents',
+            'pageTitle'          => 'Employee Documents',
+            'employee'           => $employee,
+            'documentTypes'      => $documentTypes,
+            'documentTypesReady' => $documentTypesReady,
+            'documents'          => $documents,
+            'canUpload'          => $this->canUploadForEmployee($employeeId),
         ]);
     }
 
     public function storeUpload(Request $request, string $id): void
     {
-        $employeeId = (int) $id;
+        $employeeId   = (int) $id;
         $redirectPath = '/employees/' . $employeeId . '/documents/upload';
 
         if (!$this->canUploadForEmployee($employeeId)) {
@@ -273,13 +436,16 @@ final class DocumentController extends Controller
                 Response::abort(404, 'Employee not found.');
             }
 
-            $category = $this->repository->findCategory((int) ($data['category_id'] ?? 0));
+            $documentType = $this->repository->findDocumentType((int) ($data['document_type_id'] ?? 0));
 
-            if ($category === null || (int) ($category['is_active'] ?? 0) !== 1) {
-                $this->invalid($redirectPath, $data, 'Please select a valid active document category.');
+            if ($documentType === null || (int) ($documentType['is_active'] ?? 0) !== 1) {
+                $this->invalid($redirectPath, $data, 'Please select a valid document type.');
             }
 
-            $this->validateUploadData($data, $category, $redirectPath);
+            // Derive category from the selected type
+            $data['category_id'] = $documentType['category_id'];
+
+            $this->validateUploadData($data, (int) ($documentType['requires_expiry'] ?? 0), $redirectPath);
             $fileMeta = $this->storeUploadedFile($request->file('document_file'), $employeeId, $data, $redirectPath);
 
             try {
@@ -428,22 +594,31 @@ final class DocumentController extends Controller
             Response::abort(404, 'Document not found.');
         }
 
-        $categories = $this->repository->activeCategories();
+        $categories     = $this->repository->activeCategories();
+        $documentTypes  = [];
         $viewerRoleCode = (string) ($this->app->auth()->user()['role_code'] ?? 'employee');
 
+        try {
+            $documentTypes = $this->repository->activeDocumentTypes();
+        } catch (Throwable) {
+            // non-fatal — type dropdown will be empty
+        }
+
         $this->render('documents.edit', [
-            'title' => 'Edit Document',
-            'pageTitle' => 'Edit Document Details',
-            'document' => $document,
-            'categories' => $categories,
+            'title'         => 'Edit Document',
+            'pageTitle'     => 'Edit Document Details',
+            'document'      => $document,
+            'categories'    => $categories,
+            'documentTypes' => $documentTypes,
             'viewerRoleCode' => $viewerRoleCode,
         ]);
     }
 
     public function updateDocument(Request $request, string $id): void
     {
-        $documentId = (int) $id;
-        $this->validateCsrf($request, '/documents/' . $documentId . '/edit');
+        $documentId   = (int) $id;
+        $redirectPath = '/documents/' . $documentId . '/edit';
+        $this->validateCsrf($request, $redirectPath);
 
         $document = $this->repository->findDocument($documentId);
 
@@ -455,18 +630,32 @@ final class DocumentController extends Controller
 
         foreach (['title', 'category_id', 'visibility_scope'] as $field) {
             if (($data[$field] ?? '') === '') {
-                $this->invalid('/documents/' . $documentId . '/edit', $data, 'Please complete all required fields.');
+                $this->invalid($redirectPath, $data, 'Please complete all required fields.');
             }
+        }
+
+        // If a type is selected, derive category from it and validate expiry requirement
+        $requiresExpiry = 0;
+        if (($data['document_type_id'] ?? '') !== '') {
+            $documentType = $this->repository->findDocumentType((int) $data['document_type_id']);
+            if ($documentType !== null) {
+                $data['category_id'] = $documentType['category_id'];
+                $requiresExpiry      = (int) ($documentType['requires_expiry'] ?? 0);
+            }
+        }
+
+        if ($requiresExpiry === 1 && ($data['expiry_date'] ?? '') === '') {
+            $this->invalid($redirectPath, $data, 'This document type requires an expiry date.');
         }
 
         try {
             $this->repository->updateDocumentDetails($documentId, $data, $this->app->auth()->id());
             $this->app->session()->flash('success', 'Document details updated successfully.');
-            $this->redirect('/documents/' . $documentId . '/edit');
+            $this->redirect($redirectPath);
         } catch (Throwable $throwable) {
             $this->app->session()->flash('error', 'Unable to update document: ' . $throwable->getMessage());
             $this->app->session()->flash('old_input', $data);
-            $this->redirect('/documents/' . $documentId . '/edit');
+            $this->redirect($redirectPath);
         }
     }
 
@@ -574,9 +763,9 @@ final class DocumentController extends Controller
         return $data;
     }
 
-    private function validateUploadData(array $data, array $category, string $redirectPath): void
+    private function validateUploadData(array $data, int $requiresExpiry, string $redirectPath): void
     {
-        foreach (['category_id', 'title', 'visibility_scope'] as $field) {
+        foreach (['title', 'visibility_scope'] as $field) {
             if (($data[$field] ?? '') === '') {
                 $this->invalid($redirectPath, $data, 'Please complete the required document fields.');
             }
@@ -586,11 +775,11 @@ final class DocumentController extends Controller
             $this->invalid($redirectPath, $data, 'Please select a valid document visibility scope.');
         }
 
-        $issueDate = $this->validatedDate($data['issue_date'] ?? null, 'issue date', $redirectPath, $data);
+        $issueDate  = $this->validatedDate($data['issue_date'] ?? null, 'issue date', $redirectPath, $data);
         $expiryDate = $this->validatedDate($data['expiry_date'] ?? null, 'expiry date', $redirectPath, $data);
 
-        if ((int) ($category['requires_expiry'] ?? 0) === 1 && $expiryDate === null) {
-            $this->invalid($redirectPath, $data, 'This document category requires an expiry date.');
+        if ($requiresExpiry === 1 && $expiryDate === null) {
+            $this->invalid($redirectPath, $data, 'This document type requires an expiry date.');
         }
 
         if ($issueDate instanceof DateTimeImmutable && $expiryDate instanceof DateTimeImmutable && $expiryDate < $issueDate) {

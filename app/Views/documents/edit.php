@@ -1,5 +1,8 @@
 <?php declare(strict_types=1); ?>
 <?php require base_path('app/Views/partials/document-nav.php'); ?>
+<?php
+$selectedTypeId = (int) old('document_type_id', (string) ($document['document_type_id'] ?? '0'));
+?>
 
 <div class="card content-card mb-4">
     <div class="card-body p-4 d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
@@ -21,8 +24,34 @@
                     <?= csrf_field(); ?>
 
                     <div class="mb-3">
+                        <label class="form-label">Document Type</label>
+                        <select name="document_type_id" id="doc-type-select" class="form-select">
+                            <option value="">— No type selected —</option>
+                            <?php
+                            $currentGroup = '';
+                            foreach (($documentTypes ?? []) as $t):
+                                if ($t['category_name'] !== $currentGroup):
+                                    if ($currentGroup !== '') echo '</optgroup>';
+                                    $currentGroup = $t['category_name'];
+                                    echo '<optgroup label="' . e($currentGroup) . '">';
+                                endif;
+                            ?>
+                            <option value="<?= e((string) $t['id']); ?>"
+                                data-category-id="<?= (int) $t['category_id']; ?>"
+                                data-category="<?= e((string) $t['category_name']); ?>"
+                                data-requires-expiry="<?= (int) $t['requires_expiry']; ?>"
+                                <?= $selectedTypeId === (int) $t['id'] ? 'selected' : ''; ?>>
+                                <?= e((string) $t['name']); ?>
+                            </option>
+                            <?php endforeach; ?>
+                            <?php if ($currentGroup !== '') echo '</optgroup>'; ?>
+                        </select>
+                        <div id="doc-type-hint" class="form-text text-muted"></div>
+                    </div>
+
+                    <div class="mb-3">
                         <label class="form-label">Category *</label>
-                        <select name="category_id" class="form-select" required>
+                        <select name="category_id" id="category-select" class="form-select" required>
                             <option value="">Select category</option>
                             <?php foreach (($categories ?? []) as $category): ?>
                                 <option value="<?= e((string) $category['id']); ?>"
@@ -31,6 +60,7 @@
                                 </option>
                             <?php endforeach; ?>
                         </select>
+                        <div class="form-text">Auto-set when a document type is selected above.</div>
                     </div>
 
                     <div class="mb-3">
@@ -52,9 +82,10 @@
                                    value="<?= e((string) old('issue_date', (string) ($document['issue_date'] ?? ''))); ?>">
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Expiry Date</label>
-                            <input type="date" name="expiry_date" class="form-control"
+                            <label class="form-label" id="expiry-label">Expiry Date</label>
+                            <input type="date" name="expiry_date" id="expiry-date" class="form-control"
                                    value="<?= e((string) old('expiry_date', (string) ($document['expiry_date'] ?? ''))); ?>">
+                            <div id="expiry-hint" class="form-text"></div>
                         </div>
                     </div>
 
@@ -63,7 +94,7 @@
                         <select name="visibility_scope" class="form-select" required>
                             <option value="employee" <?= (string) old('visibility_scope', (string) $document['visibility_scope']) === 'employee' ? 'selected' : ''; ?>>Employee only</option>
                             <option value="manager"  <?= (string) old('visibility_scope', (string) $document['visibility_scope']) === 'manager'  ? 'selected' : ''; ?>>Manager + above</option>
-                            <option value="hr"       <?= (string) old('visibility_scope', (string) $document['visibility_scope']) === 'hr'       ? 'selected' : ''; ?>>HR + Admin only</option>
+                            <option value="hr"       <?= (string) old('visibility_scope', (string) $document['visibility_scope']) === 'hr'       ? 'selected' : ''; ?>>HR only</option>
                             <option value="admin"    <?= (string) old('visibility_scope', (string) $document['visibility_scope']) === 'admin'    ? 'selected' : ''; ?>>Admin only</option>
                             <?php if (($viewerRoleCode ?? '') === 'hr_only'): ?>
                             <option value="hr_only"  <?= (string) old('visibility_scope', (string) $document['visibility_scope']) === 'hr_only'  ? 'selected' : ''; ?>>HR Only — Confidential</option>
@@ -100,3 +131,61 @@
         </div>
     </div>
 </div>
+
+<script>
+(function () {
+    var typeSelect     = document.getElementById('doc-type-select');
+    var categorySelect = document.getElementById('category-select');
+    var expiryInput    = document.getElementById('expiry-date');
+    var expiryLabel    = document.getElementById('expiry-label');
+    var expiryHint     = document.getElementById('expiry-hint');
+    var typeHint       = document.getElementById('doc-type-hint');
+
+    if (!typeSelect) return;
+
+    function applyType(option) {
+        if (!option || option.value === '') {
+            expiryLabel.textContent = 'Expiry Date';
+            expiryInput.removeAttribute('required');
+            expiryHint.textContent = '';
+            typeHint.textContent = '';
+            return;
+        }
+
+        var categoryId = option.dataset.categoryId || '';
+        var category   = option.dataset.category || '';
+        var reqExp     = parseInt(option.dataset.requiresExpiry, 10) === 1;
+
+        // Auto-set the category dropdown
+        if (categoryId !== '') {
+            for (var i = 0; i < categorySelect.options.length; i++) {
+                if (categorySelect.options[i].value === categoryId) {
+                    categorySelect.selectedIndex = i;
+                    break;
+                }
+            }
+        }
+
+        typeHint.textContent = 'Category auto-set to: ' + category;
+
+        if (reqExp) {
+            expiryLabel.textContent = 'Expiry Date *';
+            expiryInput.setAttribute('required', 'required');
+            expiryHint.textContent = 'Required for this document type.';
+            expiryHint.className = 'form-text text-danger';
+        } else {
+            expiryLabel.textContent = 'Expiry Date';
+            expiryInput.removeAttribute('required');
+            expiryHint.textContent = 'Optional for this document type.';
+            expiryHint.className = 'form-text text-muted';
+        }
+    }
+
+    typeSelect.addEventListener('change', function () {
+        applyType(typeSelect.options[typeSelect.selectedIndex]);
+    });
+
+    // Apply on page load for pre-selected type
+    applyType(typeSelect.options[typeSelect.selectedIndex]);
+}());
+</script>

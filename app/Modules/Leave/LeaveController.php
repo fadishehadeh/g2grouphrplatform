@@ -8,6 +8,7 @@ use App\Core\Application;
 use App\Core\Controller;
 use App\Core\Request;
 use App\Core\Response;
+use App\Support\Branding;
 use DateTimeImmutable;
 use Throwable;
 
@@ -433,15 +434,38 @@ final class LeaveController extends Controller
         ]);
     }
 
+    public function updateType(Request $request, string $id): void
+    {
+        $this->validateCsrf($request, '/admin/leave/types');
+        $name   = trim((string) $request->input('name', ''));
+        $code   = trim((string) $request->input('code', ''));
+        $status = trim((string) $request->input('status', 'active'));
+
+        if ($name === '' || $code === '') {
+            $this->invalid('/admin/leave/types', [], 'Name and code are required.');
+        }
+
+        try {
+            $this->repository->updateLeaveType((int) $id, $name, $code, $status);
+            $this->app->session()->flash('success', 'Leave type updated successfully.');
+        } catch (Throwable $throwable) {
+            $this->app->session()->flash('error', 'Unable to update leave type: ' . $throwable->getMessage());
+        }
+
+        $this->redirect('/admin/leave/types');
+    }
+
     public function storeType(Request $request): void
     {
         $this->validateCsrf($request, '/admin/leave/types');
         $data = $this->sanitized($request);
 
-        foreach (['name', 'code'] as $field) {
-            if (($data[$field] ?? '') === '') {
-                $this->invalid('/admin/leave/types', $data, 'Please provide the required leave type fields.');
-            }
+        if (($data['name'] ?? '') === '') {
+            $this->invalid('/admin/leave/types', $data, 'Please provide the required leave type fields.');
+        }
+
+        if (($data['code'] ?? '') === '') {
+            $data['code'] = $this->repository->nextLeaveTypeCode();
         }
 
         try {
@@ -1314,15 +1338,23 @@ final class LeaveController extends Controller
             $sheet = $spreadsheet->getActiveSheet();
             $sheet->setTitle('Leave Requests');
 
+            $sheet->mergeCells('A1:J1');
+            $sheet->mergeCells('A2:J2');
+            $sheet->mergeCells('A3:J3');
+            $sheet->setCellValue('A1', 'Leave Requests');
+            $sheet->setCellValue('A2', Branding::appName() . ' | Generated ' . date('d M Y, H:i'));
+            $sheet->setCellValue('A3', 'Total requests: ' . count($requests));
+            $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(18)->getColor()->setRGB('111827');
+            $sheet->getStyle('A2:A3')->getFont()->setSize(10)->getColor()->setRGB('64748B');
+
             $headers = ['Employee', 'Code', 'Department', 'Leave Type', 'Start Date', 'End Date',
                 'Days', 'Status', 'Submitted', 'Reason'];
-            $sheet->fromArray($headers, null, 'A1');
-            $headerStyle = $sheet->getStyle('A1:J1');
-            $headerStyle->getFont()->setBold(true);
-            $headerStyle->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setRGB('4472C4');
-            $headerStyle->getFont()->getColor()->setRGB('FFFFFF');
+            $sheet->fromArray($headers, null, 'A5');
+            $headerStyle = $sheet->getStyle('A5:J5');
+            $headerStyle->getFont()->setBold(true)->getColor()->setRGB('FFFFFF');
+            $headerStyle->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setRGB('FF3D33');
 
-            $row = 2;
+            $row = 6;
             foreach ($requests as $r) {
                 $sheet->fromArray([
                     $r['employee_name'] ?? '', $r['employee_code'] ?? '', $r['department_name'] ?? '',
@@ -1330,8 +1362,20 @@ final class LeaveController extends Controller
                     $r['days_requested'] ?? '', $r['status'] ?? '',
                     $r['submitted_at'] ?? $r['created_at'] ?? '', $r['reason'] ?? '',
                 ], null, 'A' . $row);
+                if ($row % 2 === 0) {
+                    $sheet->getStyle('A' . $row . ':J' . $row)->getFill()
+                        ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
+                        ->getStartColor()->setRGB('F8FAFC');
+                }
                 $row++;
             }
+
+            $lastRow = max(6, $row - 1);
+            $sheet->freezePane('A6');
+            $sheet->setAutoFilter('A5:J' . $lastRow);
+            $sheet->getStyle('A5:J' . $lastRow)->getBorders()->getAllBorders()
+                ->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN)
+                ->getColor()->setRGB('E2E8F0');
 
             foreach (range('A', 'J') as $col) {
                 $sheet->getColumnDimension($col)->setAutoSize(true);
@@ -1364,21 +1408,35 @@ final class LeaveController extends Controller
             $pdf->SetTitle('Leave Requests');
             $pdf->setPrintHeader(false);
             $pdf->setPrintFooter(true);
+            $pdf->SetMargins(12, 14, 12);
             $pdf->SetAutoPageBreak(true, 15);
             $pdf->AddPage();
-            $pdf->SetFont('helvetica', 'B', 14);
-            $pdf->Cell(0, 10, 'Leave Requests - ' . date('d M Y'), 0, 1, 'C');
-            $pdf->Ln(4);
+            $pdf->SetFont('helvetica', 'B', 15);
+            $pdf->SetTextColor(17, 24, 39);
+            $pdf->Cell(0, 7, 'Leave Requests', 0, 1, 'L');
+            $pdf->SetFont('helvetica', '', 9);
+            $pdf->SetTextColor(100, 116, 139);
+            $pdf->Cell(0, 6, Branding::appName() . ' | Generated ' . date('d M Y, H:i') . ' | Total requests: ' . count($requests), 0, 1, 'L');
+            $pdf->SetDrawColor(255, 61, 51);
+            $pdf->SetLineWidth(0.7);
+            $pdf->Line(12, 30, 285, 30);
+            $pdf->Ln(8);
 
-            $html = '<table border="1" cellpadding="4" cellspacing="0" style="font-size:8px;">
-            <thead><tr style="background-color:#4472C4;color:#FFFFFF;font-weight:bold;">
+            $html = '<style>
+                table.export { border-collapse: collapse; font-size: 8px; color: #111827; }
+                table.export th { background-color:#ff3d33;color:#ffffff;font-weight:bold;border:1px solid #ff3d33; }
+                table.export td { border:1px solid #e2e8f0; }
+                tr.alt td { background-color:#f8fafc; }
+            </style><table class="export" cellpadding="5" cellspacing="0">
+            <thead><tr>
                 <th>Employee</th><th>Leave Type</th><th>Start</th><th>End</th>
                 <th>Days</th><th>Status</th><th>Submitted</th>
             </tr></thead><tbody>';
 
+            $i = 0;
             foreach ($requests as $r) {
                 $sBg = ($r['status'] ?? '') === 'approved' ? '#D4EDDA' : (in_array($r['status'] ?? '', ['rejected', 'cancelled'], true) ? '#F8D7DA' : '#FFF3CD');
-                $html .= '<tr>
+                $html .= '<tr' . ($i % 2 === 1 ? ' class="alt"' : '') . '>
                     <td>' . htmlspecialchars($r['employee_name'] ?? '') . '</td>
                     <td>' . htmlspecialchars($r['leave_type_name'] ?? '') . '</td>
                     <td>' . htmlspecialchars($r['start_date'] ?? '') . '</td>
@@ -1387,6 +1445,7 @@ final class LeaveController extends Controller
                     <td style="background-color:' . $sBg . ';">' . htmlspecialchars($r['status'] ?? '') . '</td>
                     <td>' . htmlspecialchars($r['submitted_at'] ?? $r['created_at'] ?? '') . '</td>
                 </tr>';
+                $i++;
             }
             $html .= '</tbody></table>';
 

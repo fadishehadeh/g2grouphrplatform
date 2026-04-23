@@ -89,6 +89,11 @@ $router->get('/admin/leave/types', [LeaveController::class, 'types'], [
     [PermissionMiddleware::class, ['leave.manage_types']],
 ]);
 
+$router->post('/admin/leave/types/{id}/update', [LeaveController::class, 'updateType'], [
+    ...$leaveBaseMiddleware,
+    [PermissionMiddleware::class, ['leave.manage_types']],
+]);
+
 $router->post('/admin/leave/types', [LeaveController::class, 'storeType'], [
     ...$leaveBaseMiddleware,
     [PermissionMiddleware::class, ['leave.manage_types']],

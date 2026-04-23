@@ -54,6 +54,18 @@ final class EmployeeRepository
         return (int) ($this->database->fetchValue($sql, $this->searchParams($search)) ?? 0);
     }
 
+    public function activeEmployeesForSelect(): array
+    {
+        return $this->database->fetchAll(
+            "SELECT id, employee_code,
+                    CONCAT_WS(' ', first_name, middle_name, last_name) AS full_name
+             FROM employees
+             WHERE archived_at IS NULL
+               AND employee_status NOT IN ('archived', 'terminated')
+             ORDER BY first_name ASC, last_name ASC"
+        );
+    }
+
     private function searchWhereClause(): string
     {
         return " AND (
@@ -83,7 +95,7 @@ final class EmployeeRepository
     public function findEmployee(int $id): ?array
     {
         $row = $this->database->fetch(
-            "SELECT e.*, c.name AS company_name, b.name AS branch_name, d.name AS department_name, t.name AS team_name,
+            "SELECT e.*, c.name AS company_name, c.logo_path AS company_logo_path, b.name AS branch_name, d.name AS department_name, t.name AS team_name,
                     jt.name AS job_title_name, ds.name AS designation_name,
                     CONCAT_WS(' ', m.first_name, m.middle_name, m.last_name) AS manager_name
              FROM employees e
@@ -133,6 +145,36 @@ final class EmployeeRepository
              ORDER BY is_primary DESC, created_at ASC',
             ['employee_id' => $employeeId]
         );
+    }
+
+    public function saveEmergencyContacts(int $employeeId, array $contacts): void
+    {
+        $this->database->execute(
+            'DELETE FROM employee_emergency_contacts WHERE employee_id = :employee_id',
+            ['employee_id' => $employeeId]
+        );
+
+        foreach ($contacts as $c) {
+            $name  = trim((string) ($c['full_name'] ?? ''));
+            $phone = trim((string) ($c['phone'] ?? ''));
+            if ($name === '' && $phone === '') {
+                continue;
+            }
+            $this->database->execute(
+                'INSERT INTO employee_emergency_contacts
+                 (employee_id, full_name, relationship, phone, alternate_phone, email, is_primary, created_at)
+                 VALUES (:eid, :name, :rel, :phone, :alt, :email, :primary, NOW())',
+                [
+                    'eid'     => $employeeId,
+                    'name'    => $name,
+                    'rel'     => trim((string) ($c['relationship'] ?? '')),
+                    'phone'   => $phone,
+                    'alt'     => trim((string) ($c['alternate_phone'] ?? '')) ?: null,
+                    'email'   => trim((string) ($c['email'] ?? '')) ?: null,
+                    'primary' => isset($c['is_primary']) && (int) $c['is_primary'] === 1 ? 1 : 0,
+                ]
+            );
+        }
     }
 
     public function profileStats(int $employeeId): array
@@ -526,7 +568,7 @@ final class EmployeeRepository
             "SELECT e.employee_code, e.first_name, e.middle_name, e.last_name, e.work_email, e.personal_email,
                     e.phone, e.employment_type, e.employee_status, e.nationality, e.second_nationality,
                     e.gender, e.date_of_birth, e.joining_date, e.marital_status, e.notes,
-                    c.name AS company_name, b.name AS branch_name, d.name AS department_name,
+                    c.name AS company_name, c.logo_path AS company_logo_path, b.name AS branch_name, d.name AS department_name,
                     t.name AS team_name, jt.name AS job_title_name, ds.name AS designation_name,
                     CONCAT_WS(' ', m.first_name, m.middle_name, m.last_name) AS manager_name
              FROM employees e

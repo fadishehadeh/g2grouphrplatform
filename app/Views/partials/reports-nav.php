@@ -1,6 +1,6 @@
 <?php declare(strict_types=1); ?>
 <div class="card content-card mb-4">
-    <div class="card-body p-3 d-flex flex-wrap gap-2">
+    <div class="card-body p-3 d-flex flex-wrap gap-2 module-nav">
         <?php if (can('reports.view_hr') || can('reports.view_team')): ?>
             <a href="<?= e(url('/reports')); ?>" class="btn btn-outline-secondary btn-sm">Overview</a>
             <a href="<?= e(url('/reports/headcount')); ?>" class="btn btn-outline-secondary btn-sm">Headcount</a>

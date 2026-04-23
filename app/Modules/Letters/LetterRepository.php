@@ -162,6 +162,18 @@ final class LetterRepository
         );
     }
 
+    public function updateStatus(int $id, string $status): void
+    {
+        $allowed = ['pending', 'approved', 'rejected', 'cancelled'];
+        if (!in_array($status, $allowed, true)) {
+            throw new \InvalidArgumentException('Invalid status: ' . $status);
+        }
+        $this->database->execute(
+            'UPDATE letter_requests SET status = :status, updated_at = NOW() WHERE id = :id',
+            ['id' => $id, 'status' => $status]
+        );
+    }
+
     public function buildLetterContent(array $request, string $generatedByName): string
     {
         $employeeName   = htmlspecialchars((string) $request['employee_name'], ENT_QUOTES, 'UTF-8');
@@ -195,20 +207,35 @@ final class LetterRepository
             default                   => 'LETTER',
         };
 
-        $body = match ($letterType) {
-            'salary_certificate' => $this->salaryBody($employeeName, $employeeCode, $jobTitle, $department, $joiningDate, $employmentType, $purpose, $request, $additionalInfo),
-            'employment_certificate' => $this->employmentBody($employeeName, $employeeCode, $jobTitle, $department, $joiningDate, $employmentType, $purpose, $additionalInfo),
-            'experience_letter' => $this->experienceBody($employeeName, $employeeCode, $jobTitle, $department, $joiningDate, $purpose, $additionalInfo),
-            'noc' => $this->nocBody($employeeName, $jobTitle, $joiningDate, $purpose, $additionalInfo),
-            'bank_letter' => $this->bankBody($employeeName, $employeeCode, $jobTitle, $department, $joiningDate, $request, $additionalInfo),
-            default => '<p>This letter is issued to confirm the employment of ' . $employeeName . ' at ' . $company . '.</p>',
-        };
+        $salaryFormatted = ($request['salary_amount'] ?? null) !== null && (float) $request['salary_amount'] > 0
+            ? number_format((float) $request['salary_amount'], 2)
+            : 'N/A';
+
+        $savedTemplate = $this->getTemplate($letterType);
+        $bodyTemplate  = $savedTemplate ?? self::defaultBody($letterType);
+
+        $body = $this->applyPlaceholders($bodyTemplate, [
+            'employee_name'   => $employeeName,
+            'employee_code'   => $employeeCode,
+            'job_title'       => $jobTitle,
+            'department'      => $department,
+            'company_name'    => $company,
+            'branch'          => $branch,
+            'joining_date'    => $joiningDate,
+            'employment_type' => $employmentType,
+            'purpose'         => $purpose,
+            'salary_amount'   => $salaryFormatted,
+            'additional_info' => $additionalInfo,
+            'ref_number'      => $refNumber,
+            'date'            => $today,
+            'signer_name'     => $signerName,
+        ]);
 
         // Company logo (base64 embed so it works in PDF too)
         $logoHtml = '';
         $logoPath = ($request['logo_path'] ?? '') !== '' ? (string) $request['logo_path'] : null;
         if ($logoPath !== null) {
-            $absLogo = base_path($logoPath);
+            $absLogo = base_path('public-hr/' . ltrim($logoPath, '/'));
             if (is_file($absLogo)) {
                 $mime = mime_content_type($absLogo) ?: 'image/png';
                 $b64  = base64_encode((string) file_get_contents($absLogo));
@@ -221,7 +248,7 @@ final class LetterRepository
     <div class="letter-header">
         <div class="letter-company">
             ' . ($logoHtml !== '' ? '<div class="mb-2">' . $logoHtml . '</div>' : '') . '
-            <h2>' . $company . '</h2>
+            ' . ($logoHtml === '' ? '<h2>' . $company . '</h2>' : '') . '
             ' . ($branch !== '' ? '<div class="text-muted">' . $branch . '</div>' : '') . '
         </div>
         <div class="letter-meta text-end">
@@ -329,6 +356,85 @@ final class LetterRepository
         ' . $salary . '
         ' . $extra . '
         <p>We request you to kindly extend all due courtesies to the bearer of this letter.</p>';
+    }
+
+    // -------------------------------------------------------------------------
+    // Letter Templates
+    // -------------------------------------------------------------------------
+
+    public function getTemplate(string $letterType): ?string
+    {
+        $row = $this->database->fetch(
+            'SELECT body_content FROM letter_templates WHERE letter_type = :type LIMIT 1',
+            ['type' => $letterType]
+        );
+        return $row !== null ? (string) $row['body_content'] : null;
+    }
+
+    public function saveTemplate(string $letterType, string $bodyContent, int $updatedBy): void
+    {
+        $exists = $this->database->fetchValue(
+            'SELECT id FROM letter_templates WHERE letter_type = :type LIMIT 1',
+            ['type' => $letterType]
+        );
+
+        if ($exists !== null) {
+            $this->database->execute(
+                'UPDATE letter_templates SET body_content = :body, updated_by = :by, updated_at = NOW() WHERE letter_type = :type',
+                ['body' => $bodyContent, 'by' => $updatedBy, 'type' => $letterType]
+            );
+        } else {
+            $this->database->execute(
+                'INSERT INTO letter_templates (letter_type, body_content, updated_by, updated_at) VALUES (:type, :body, :by, NOW())',
+                ['type' => $letterType, 'body' => $bodyContent, 'by' => $updatedBy]
+            );
+        }
+    }
+
+    public static function defaultBody(string $letterType): string
+    {
+        return match ($letterType) {
+            'salary_certificate' =>
+                "<p>This is to certify that <strong>{{employee_name}}</strong> (Employee Code: {{employee_code}}) is currently employed at our organisation as <strong>{{job_title}}</strong> in the <strong>{{department}}</strong> department on a <strong>{{employment_type}}</strong> basis.</p>\n" .
+                "<p>Their employment commenced on <strong>{{joining_date}}</strong> and they currently receive a monthly basic salary of <strong>{{salary_amount}}</strong>.</p>\n" .
+                "{{additional_info}}\n" .
+                "<p>This certificate is issued upon the employee's request for the purpose of <strong>{{purpose}}</strong>.</p>",
+
+            'employment_certificate' =>
+                "<p>This is to certify that <strong>{{employee_name}}</strong> (Employee Code: {{employee_code}}) is currently employed with our organisation as <strong>{{job_title}}</strong> in the <strong>{{department}}</strong> department.</p>\n" .
+                "<p>Their employment commenced on <strong>{{joining_date}}</strong> on a <strong>{{employment_type}}</strong> basis and they remain an active member of our team.</p>\n" .
+                "{{additional_info}}\n" .
+                "<p>This certificate is issued upon the employee's request for the purpose of <strong>{{purpose}}</strong>.</p>",
+
+            'experience_letter' =>
+                "<p>This is to certify that <strong>{{employee_name}}</strong> (Employee Code: {{employee_code}}) has been employed with our organisation from <strong>{{joining_date}}</strong> to date, holding the position of <strong>{{job_title}}</strong> in the <strong>{{department}}</strong> department.</p>\n" .
+                "<p>During their tenure, they have demonstrated professionalism, dedication, and a strong commitment to their responsibilities.</p>\n" .
+                "{{additional_info}}\n" .
+                "<p>We wish them continued success in all their future endeavours.</p>\n" .
+                "<p>This letter is issued at the employee's request for <strong>{{purpose}}</strong>.</p>",
+
+            'noc' =>
+                "<p>This is to confirm that our organisation has <strong>no objection</strong> to <strong>{{employee_name}}</strong>, currently serving as <strong>{{job_title}}</strong> with us since <strong>{{joining_date}}</strong>, for the purpose of <strong>{{purpose}}</strong>.</p>\n" .
+                "<p>Their employment status is currently active and in good standing.</p>\n" .
+                "{{additional_info}}\n" .
+                "<p>This No Objection Certificate is issued upon the employee's request.</p>",
+
+            'bank_letter' =>
+                "<p>This is to confirm that <strong>{{employee_name}}</strong> (Employee Code: {{employee_code}}) is a current employee of our organisation, holding the position of <strong>{{job_title}}</strong> in the <strong>{{department}}</strong> department.</p>\n" .
+                "<p>Their employment commenced on <strong>{{joining_date}}</strong> and they remain an active employee in good standing.</p>\n" .
+                "<p>Their current monthly basic salary is <strong>{{salary_amount}}</strong>.</p>\n" .
+                "{{additional_info}}\n" .
+                "<p>We request you to kindly extend all due courtesies to the bearer of this letter.</p>",
+
+            default => "<p>This letter is issued to confirm the employment of <strong>{{employee_name}}</strong> at <strong>{{company_name}}</strong>.</p>",
+        };
+    }
+
+    private function applyPlaceholders(string $template, array $vars): string
+    {
+        $search  = array_map(fn($k) => '{{' . $k . '}}', array_keys($vars));
+        $replace = array_values($vars);
+        return str_replace($search, $replace, $template);
     }
 
     public static function letterTypeLabel(string $type): string

@@ -132,11 +132,6 @@ final class LetterController extends Controller
             $this->redirect('/letters/admin');
         }
 
-        if ((string) ($letter['status'] ?? '') === 'approved') {
-            $this->app->session()->flash('error', 'This letter has already been generated.');
-            $this->redirect('/letters/' . $id);
-        }
-
         try {
             $user            = $this->app->auth()->user() ?? [];
             $generatedByName = trim(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? ''));
@@ -203,6 +198,144 @@ final class LetterController extends Controller
             'pageTitle' => LetterRepository::letterTypeLabel((string) $letter['letter_type']),
             'letter'    => $letter,
         ]);
+    }
+
+    /** HR Admin: list letter templates */
+    public function templates(Request $request): void
+    {
+        $types = ['salary_certificate', 'employment_certificate', 'experience_letter', 'noc', 'bank_letter'];
+        $list  = [];
+        foreach ($types as $type) {
+            try {
+                $saved = $this->repository->getTemplate($type);
+            } catch (Throwable) {
+                $saved = null;
+            }
+            $list[] = [
+                'type'       => $type,
+                'label'      => LetterRepository::letterTypeLabel($type),
+                'has_custom' => $saved !== null,
+            ];
+        }
+
+        $this->render('letters.templates', [
+            'title'     => 'Letter Templates',
+            'pageTitle' => 'Letter Templates',
+            'templates' => $list,
+        ]);
+    }
+
+    /** HR Admin: edit template form */
+    public function editTemplate(Request $request, string $type): void
+    {
+        $allowedTypes = ['salary_certificate', 'employment_certificate', 'experience_letter', 'noc', 'bank_letter'];
+        if (!in_array($type, $allowedTypes, true)) {
+            $this->app->session()->flash('error', 'Unknown letter type.');
+            $this->redirect('/letters/templates');
+        }
+
+        $saved = $this->repository->getTemplate($type);
+        $body  = $saved ?? LetterRepository::defaultBody($type);
+
+        $this->render('letters.template-edit', [
+            'title'       => 'Edit Template: ' . LetterRepository::letterTypeLabel($type),
+            'pageTitle'   => 'Edit Template',
+            'letterType'  => $type,
+            'typeLabel'   => LetterRepository::letterTypeLabel($type),
+            'body'        => $body,
+            'hasCustom'   => $saved !== null,
+        ]);
+    }
+
+    /** HR Admin: save template */
+    public function saveTemplate(Request $request, string $type): void
+    {
+        $this->validateCsrf($request, '/letters/templates/' . $type . '/edit');
+
+        $allowedTypes = ['salary_certificate', 'employment_certificate', 'experience_letter', 'noc', 'bank_letter'];
+        if (!in_array($type, $allowedTypes, true)) {
+            $this->app->session()->flash('error', 'Unknown letter type.');
+            $this->redirect('/letters/templates');
+        }
+
+        $body = trim((string) $request->input('body_content', ''));
+
+        if ($body === '') {
+            $this->app->session()->flash('error', 'Template body cannot be empty.');
+            $this->redirect('/letters/templates/' . $type . '/edit');
+        }
+
+        try {
+            $user = $this->app->auth()->user() ?? [];
+            $this->repository->saveTemplate($type, $body, (int) ($user['id'] ?? 0));
+            $this->app->session()->flash('success', LetterRepository::letterTypeLabel($type) . ' template saved.');
+        } catch (Throwable $throwable) {
+            $this->app->session()->flash('error', 'Unable to save template: ' . $throwable->getMessage());
+        }
+
+        $this->redirect('/letters/templates/' . $type . '/edit');
+    }
+
+    /** HR Admin: reset template to default */
+    public function resetTemplate(Request $request, string $type): void
+    {
+        $this->validateCsrf($request, '/letters/templates/' . $type . '/edit');
+
+        try {
+            $this->repository->saveTemplate($type, LetterRepository::defaultBody($type), (int) ($this->app->auth()->user()['id'] ?? 0));
+            $this->app->session()->flash('success', 'Template reset to default.');
+        } catch (Throwable $throwable) {
+            $this->app->session()->flash('error', 'Unable to reset template: ' . $throwable->getMessage());
+        }
+
+        $this->redirect('/letters/templates/' . $type . '/edit');
+    }
+
+    /** HR Admin: change letter status */
+    public function updateStatus(Request $request, string $id): void
+    {
+        $this->validateCsrf($request, '/letters/' . $id);
+        $status = trim((string) ($request->input('status') ?? ''));
+
+        try {
+            $this->repository->updateStatus((int) $id, $status);
+            $this->app->session()->flash('success', 'Status updated to ' . ucfirst($status) . '.');
+        } catch (Throwable $throwable) {
+            $this->app->session()->flash('error', 'Unable to update status: ' . $throwable->getMessage());
+        }
+
+        $this->redirect('/letters/' . $id);
+    }
+
+    /** Download letter as PDF */
+    public function downloadPdf(Request $request, string $id): void
+    {
+        $letter = $this->repository->findRequest((int) $id);
+
+        if ($letter === null || empty($letter['letter_content'])) {
+            $this->app->session()->flash('error', 'Letter not found or not yet generated.');
+            $this->redirect('/letters/admin');
+        }
+
+        if (!$this->app->auth()->hasPermission('letters.manage')) {
+            $employeeId = (int) ($this->app->auth()->user()['employee_id'] ?? 0);
+            if ((int) $letter['employee_id'] !== $employeeId) {
+                $this->app->session()->flash('error', 'Access denied.');
+                $this->redirect('/letters/my');
+            }
+        }
+
+        $typeLabel = LetterRepository::letterTypeLabel((string) $letter['letter_type']);
+        $company   = (string) ($letter['company_name'] ?? '');
+        $fileName  = strtolower(str_replace(' ', '_', $typeLabel)) . '_' . date('Ymd') . '.pdf';
+
+        $pdfContent = $this->buildPdf((string) $letter['letter_content'], $typeLabel, $company);
+
+        header('Content-Type: application/pdf');
+        header('Content-Disposition: attachment; filename="' . $fileName . '"');
+        header('Content-Length: ' . strlen($pdfContent));
+        echo $pdfContent;
+        exit;
     }
 
     /** HR Admin: reject a letter request */

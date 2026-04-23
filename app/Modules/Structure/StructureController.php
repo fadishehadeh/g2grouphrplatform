@@ -50,7 +50,7 @@ final class StructureController extends Controller
                 ['name' => 'legal_name', 'label' => 'Legal Name', 'type' => 'text'],
                 ['name' => 'registration_number', 'label' => 'Registration Number', 'type' => 'text'],
                 ['name' => 'tax_number', 'label' => 'Tax Number', 'type' => 'text'],
-                ['name' => 'code', 'label' => 'Code', 'type' => 'text', 'required' => true],
+                ['name' => 'code', 'label' => 'Code', 'type' => 'text', 'hint' => 'Leave blank to auto-generate.'],
                 ['name' => 'email', 'label' => 'Email', 'type' => 'email'],
                 ['name' => 'phone', 'label' => 'Phone', 'type' => 'text'],
                 ['name' => 'address_line_1', 'label' => 'Address Line 1', 'type' => 'text'],
@@ -76,12 +76,16 @@ final class StructureController extends Controller
 
         $data = $this->trimmedInput($request);
 
-        foreach (['name', 'code', 'timezone'] as $field) {
+        foreach (['name', 'timezone'] as $field) {
             if (($data[$field] ?? '') === '') {
                 $this->app->session()->flash('error', 'Please complete all required fields.');
                 $this->app->session()->flash('old_input', $data);
                 $this->redirect('/admin/companies');
             }
+        }
+
+        if (($data['code'] ?? '') === '') {
+            $data['code'] = $this->repository->nextCompanyCode();
         }
 
         $this->validateCompanyPayload($data, '/admin/companies');
@@ -101,13 +105,13 @@ final class StructureController extends Controller
                 $this->app->session()->flash('old_input', $data);
                 $this->redirect('/admin/companies');
             }
-            $logoDir = base_path('storage/uploads/logos');
+            $logoDir = base_path('public-hr/assets/uploads/logos');
             if (!is_dir($logoDir) && !mkdir($logoDir, 0775, true) && !is_dir($logoDir)) {
                 throw new \RuntimeException('Unable to create logo directory.');
             }
             $storedName = 'company_new_' . date('YmdHis') . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
-            $logoPath = 'storage/uploads/logos/' . $storedName;
-            if (!move_uploaded_file((string) ($logoFile['tmp_name'] ?? ''), base_path($logoPath))) {
+            $logoPath = 'assets/uploads/logos/' . $storedName;
+            if (!move_uploaded_file((string) ($logoFile['tmp_name'] ?? ''), base_path('public-hr/' . $logoPath))) {
                 $this->app->session()->flash('error', 'Unable to upload logo file.');
                 $this->app->session()->flash('old_input', $data);
                 $this->redirect('/admin/companies');
@@ -231,13 +235,13 @@ final class StructureController extends Controller
                     $this->app->session()->flash('error', 'Logo file must be 2 MB or smaller.');
                     $this->redirect($redirect);
                 }
-                $logoDir = base_path('storage/uploads/logos');
+                $logoDir = base_path('public-hr/assets/uploads/logos');
                 if (!is_dir($logoDir) && !mkdir($logoDir, 0775, true) && !is_dir($logoDir)) {
                     throw new \RuntimeException('Unable to create logo directory.');
                 }
                 $storedName = 'company_' . $companyId . '_' . date('YmdHis') . '.' . $ext;
-                $logoPath = 'storage/uploads/logos/' . $storedName;
-                if (!move_uploaded_file((string) ($logoFile['tmp_name'] ?? ''), base_path($logoPath))) {
+                $logoPath = 'assets/uploads/logos/' . $storedName;
+                if (!move_uploaded_file((string) ($logoFile['tmp_name'] ?? ''), base_path('public-hr/' . $logoPath))) {
                     throw new \RuntimeException('Unable to move uploaded logo file.');
                 }
                 $updateData['logo_path'] = $logoPath;
@@ -257,9 +261,10 @@ final class StructureController extends Controller
         $companyId = (int) $id;
         $redirect = '/admin/companies/' . $companyId;
 
-        $this->persist($request, $redirect, ['name', 'code'], function (array $data) use ($companyId): void {
+        $this->persist($request, $redirect, ['name'], function (array $data) use ($companyId): void {
+            $code = $data['code'] !== '' ? strtoupper($data['code']) : $this->repository->nextBranchCode();
             $this->repository->createBranch([
-                'company_id' => $companyId, 'name' => $data['name'], 'code' => strtoupper($data['code']),
+                'company_id' => $companyId, 'name' => $data['name'], 'code' => $code,
                 'email' => $data['email'] ?: null, 'phone' => $data['phone'] ?: null,
                 'city' => $data['city'] ?: null, 'country' => $data['country'] ?: null,
                 'status' => $data['status'] ?: 'active',
@@ -272,10 +277,11 @@ final class StructureController extends Controller
         $companyId = (int) $id;
         $redirect = '/admin/companies/' . $companyId;
 
-        $this->persist($request, $redirect, ['name', 'code'], function (array $data) use ($companyId): void {
+        $this->persist($request, $redirect, ['name'], function (array $data) use ($companyId): void {
+            $code = $data['code'] !== '' ? strtoupper($data['code']) : $this->repository->nextDepartmentCode();
             $this->repository->createDepartment([
                 'company_id' => $companyId, 'branch_id' => ($data['branch_id'] ?? '') !== '' ? (int) $data['branch_id'] : null,
-                'parent_department_id' => null, 'name' => $data['name'], 'code' => strtoupper($data['code']),
+                'parent_department_id' => null, 'name' => $data['name'], 'code' => $code,
                 'description' => $data['description'] ?: null, 'status' => $data['status'] ?: 'active',
             ]);
         }, 'Department added successfully.');
@@ -285,9 +291,10 @@ final class StructureController extends Controller
     {
         $redirect = '/admin/companies/' . (int) $id;
 
-        $this->persist($request, $redirect, ['name', 'code'], function (array $data): void {
+        $this->persist($request, $redirect, ['name'], function (array $data): void {
+            $code = $data['code'] !== '' ? strtoupper($data['code']) : $this->repository->nextJobTitleCode();
             $this->repository->createJobTitle([
-                'name' => $data['name'], 'code' => strtoupper($data['code']),
+                'name' => $data['name'], 'code' => $code,
                 'level_rank' => (int) ($data['level_rank'] ?? 0),
                 'description' => $data['description'] ?: null, 'status' => $data['status'] ?: 'active',
             ]);
@@ -298,9 +305,10 @@ final class StructureController extends Controller
     {
         $redirect = '/admin/companies/' . (int) $id;
 
-        $this->persist($request, $redirect, ['name', 'code'], function (array $data): void {
+        $this->persist($request, $redirect, ['name'], function (array $data): void {
+            $code = $data['code'] !== '' ? strtoupper($data['code']) : $this->repository->nextDesignationCode();
             $this->repository->createDesignation([
-                'name' => $data['name'], 'code' => strtoupper($data['code']),
+                'name' => $data['name'], 'code' => $code,
                 'description' => $data['description'] ?: null, 'status' => $data['status'] ?: 'active',
             ]);
         }, 'Designation added successfully.');
@@ -317,7 +325,7 @@ final class StructureController extends Controller
             [
                 ['name' => 'company_id', 'label' => 'Company', 'type' => 'select', 'required' => true, 'options' => $this->options($this->repository->companies())],
                 ['name' => 'name', 'label' => 'Branch Name', 'type' => 'text', 'required' => true],
-                ['name' => 'code', 'label' => 'Code', 'type' => 'text', 'required' => true],
+                ['name' => 'code', 'label' => 'Code', 'type' => 'text', 'hint' => 'Leave blank to auto-generate.'],
                 ['name' => 'email', 'label' => 'Email', 'type' => 'email'],
                 ['name' => 'phone', 'label' => 'Phone', 'type' => 'text'],
                 ['name' => 'city', 'label' => 'City', 'type' => 'text'],
@@ -330,9 +338,10 @@ final class StructureController extends Controller
 
     public function storeBranch(Request $request): void
     {
-        $this->persist($request, '/admin/branches', ['company_id', 'name', 'code'], function (array $data): void {
+        $this->persist($request, '/admin/branches', ['company_id', 'name'], function (array $data): void {
+            $code = $data['code'] !== '' ? strtoupper($data['code']) : $this->repository->nextBranchCode();
             $this->repository->createBranch([
-                'company_id' => (int) $data['company_id'], 'name' => $data['name'], 'code' => strtoupper($data['code']),
+                'company_id' => (int) $data['company_id'], 'name' => $data['name'], 'code' => $code,
                 'email' => $data['email'] ?: null, 'phone' => $data['phone'] ?: null, 'city' => $data['city'] ?: null,
                 'country' => $data['country'] ?: null, 'status' => $data['status'] ?: 'active',
             ]);
@@ -352,21 +361,23 @@ final class StructureController extends Controller
                 ['name' => 'branch_id', 'label' => 'Branch', 'type' => 'select', 'options' => ['' => 'No branch'] + $this->options($this->repository->branchesOptions())],
                 ['name' => 'parent_department_id', 'label' => 'Parent Department', 'type' => 'select', 'options' => ['' => 'No parent'] + $this->options($this->repository->departmentsOptions())],
                 ['name' => 'name', 'label' => 'Department Name', 'type' => 'text', 'required' => true],
-                ['name' => 'code', 'label' => 'Code', 'type' => 'text', 'required' => true],
+                ['name' => 'code', 'label' => 'Code', 'type' => 'text', 'hint' => 'Leave blank to auto-generate.'],
                 ['name' => 'description', 'label' => 'Description', 'type' => 'textarea'],
                 ['name' => 'status', 'label' => 'Status', 'type' => 'select', 'required' => true, 'options' => ['active' => 'Active', 'inactive' => 'Inactive'], 'value' => 'active'],
             ],
-            fn (string $search): array => $this->repository->listDepartments($search)
+            fn (string $search): array => $this->repository->listDepartments($search),
+            ['branchOptions' => $this->options($this->repository->branchesOptions())]
         );
     }
 
     public function storeDepartment(Request $request): void
     {
-        $this->persist($request, '/admin/departments', ['company_id', 'name', 'code'], function (array $data): void {
+        $this->persist($request, '/admin/departments', ['company_id', 'name'], function (array $data): void {
+            $code = $data['code'] !== '' ? strtoupper($data['code']) : $this->repository->nextDepartmentCode();
             $this->repository->createDepartment([
                 'company_id' => (int) $data['company_id'], 'branch_id' => $data['branch_id'] !== '' ? (int) $data['branch_id'] : null,
                 'parent_department_id' => $data['parent_department_id'] !== '' ? (int) $data['parent_department_id'] : null,
-                'name' => $data['name'], 'code' => strtoupper($data['code']), 'description' => $data['description'] ?: null,
+                'name' => $data['name'], 'code' => $code, 'description' => $data['description'] ?: null,
                 'status' => $data['status'] ?: 'active',
             ]);
         }, 'Department created successfully.');
@@ -383,7 +394,7 @@ final class StructureController extends Controller
             [
                 ['name' => 'department_id', 'label' => 'Department', 'type' => 'select', 'required' => true, 'options' => $this->options($this->repository->departmentsOptions())],
                 ['name' => 'name', 'label' => 'Team Name', 'type' => 'text', 'required' => true],
-                ['name' => 'code', 'label' => 'Code', 'type' => 'text', 'required' => true],
+                ['name' => 'code', 'label' => 'Code', 'type' => 'text', 'hint' => 'Leave blank to auto-generate.'],
                 ['name' => 'description', 'label' => 'Description', 'type' => 'textarea'],
                 ['name' => 'status', 'label' => 'Status', 'type' => 'select', 'required' => true, 'options' => ['active' => 'Active', 'inactive' => 'Inactive'], 'value' => 'active'],
             ],
@@ -393,9 +404,10 @@ final class StructureController extends Controller
 
     public function storeTeam(Request $request): void
     {
-        $this->persist($request, '/admin/teams', ['department_id', 'name', 'code'], function (array $data): void {
+        $this->persist($request, '/admin/teams', ['department_id', 'name'], function (array $data): void {
+            $code = $data['code'] !== '' ? strtoupper($data['code']) : $this->repository->nextTeamCode();
             $this->repository->createTeam([
-                'department_id' => (int) $data['department_id'], 'name' => $data['name'], 'code' => strtoupper($data['code']),
+                'department_id' => (int) $data['department_id'], 'name' => $data['name'], 'code' => $code,
                 'description' => $data['description'] ?: null, 'status' => $data['status'] ?: 'active',
             ]);
         }, 'Team created successfully.');
@@ -411,7 +423,7 @@ final class StructureController extends Controller
             ['name' => 'Job Title', 'code' => 'Code', 'level_rank' => 'Level', 'status' => 'Status'],
             [
                 ['name' => 'name', 'label' => 'Job Title', 'type' => 'text', 'required' => true],
-                ['name' => 'code', 'label' => 'Code', 'type' => 'text', 'required' => true],
+                ['name' => 'code', 'label' => 'Code', 'type' => 'text', 'hint' => 'Leave blank to auto-generate.'],
                 ['name' => 'level_rank', 'label' => 'Level Rank', 'type' => 'number', 'required' => true, 'value' => '1'],
                 ['name' => 'description', 'label' => 'Description', 'type' => 'textarea'],
                 ['name' => 'status', 'label' => 'Status', 'type' => 'select', 'required' => true, 'options' => ['active' => 'Active', 'inactive' => 'Inactive'], 'value' => 'active'],
@@ -422,9 +434,10 @@ final class StructureController extends Controller
 
     public function storeJobTitle(Request $request): void
     {
-        $this->persist($request, '/admin/job-titles', ['name', 'code', 'level_rank'], function (array $data): void {
+        $this->persist($request, '/admin/job-titles', ['name', 'level_rank'], function (array $data): void {
+            $code = $data['code'] !== '' ? strtoupper($data['code']) : $this->repository->nextJobTitleCode();
             $this->repository->createJobTitle([
-                'name' => $data['name'], 'code' => strtoupper($data['code']), 'level_rank' => (int) $data['level_rank'],
+                'name' => $data['name'], 'code' => $code, 'level_rank' => (int) $data['level_rank'],
                 'description' => $data['description'] ?: null, 'status' => $data['status'] ?: 'active',
             ]);
         }, 'Job title created successfully.');
@@ -440,7 +453,7 @@ final class StructureController extends Controller
             ['name' => 'Designation', 'code' => 'Code', 'status' => 'Status'],
             [
                 ['name' => 'name', 'label' => 'Designation', 'type' => 'text', 'required' => true],
-                ['name' => 'code', 'label' => 'Code', 'type' => 'text', 'required' => true],
+                ['name' => 'code', 'label' => 'Code', 'type' => 'text', 'hint' => 'Leave blank to auto-generate.'],
                 ['name' => 'description', 'label' => 'Description', 'type' => 'textarea'],
                 ['name' => 'status', 'label' => 'Status', 'type' => 'select', 'required' => true, 'options' => ['active' => 'Active', 'inactive' => 'Inactive'], 'value' => 'active'],
             ],
@@ -450,9 +463,10 @@ final class StructureController extends Controller
 
     public function storeDesignation(Request $request): void
     {
-        $this->persist($request, '/admin/designations', ['name', 'code'], function (array $data): void {
+        $this->persist($request, '/admin/designations', ['name'], function (array $data): void {
+            $code = $data['code'] !== '' ? strtoupper($data['code']) : $this->repository->nextDesignationCode();
             $this->repository->createDesignation([
-                'name' => $data['name'], 'code' => strtoupper($data['code']), 'description' => $data['description'] ?: null,
+                'name' => $data['name'], 'code' => $code, 'description' => $data['description'] ?: null,
                 'status' => $data['status'] ?: 'active',
             ]);
         }, 'Designation created successfully.');
@@ -532,7 +546,7 @@ final class StructureController extends Controller
         );
     }
 
-    private function renderManagePage(Request $request, string $section, string $title, string $description, array $columns, array $formFields, callable $loader): void
+    private function renderManagePage(Request $request, string $section, string $title, string $description, array $columns, array $formFields, callable $loader, array $extraViewData = []): void
     {
         $search = trim((string) $request->input('q', ''));
 
@@ -543,7 +557,7 @@ final class StructureController extends Controller
             $this->app->session()->flash('error', 'Unable to load records: ' . $throwable->getMessage());
         }
 
-        $this->render('structure.manage', [
+        $this->render('structure.manage', array_merge($extraViewData, [
             'title' => $title,
             'pageTitle' => $title,
             'activeSection' => $section,
@@ -553,7 +567,70 @@ final class StructureController extends Controller
             'columns' => $columns,
             'formFields' => $formFields,
             'formAction' => '/admin/' . str_replace('_', '-', $section),
-        ]);
+        ]));
+    }
+
+    public function updateBranch(Request $request, string $id): void
+    {
+        $this->persistUpdate($request, '/admin/branches', (int) $id, function (string $name, string $code, string $status, string $description, int $branchId) use ($id): void {
+            $this->repository->updateRecord('branches', (int) $id, $name, $code, $status);
+        });
+    }
+
+    public function updateDepartment(Request $request, string $id): void
+    {
+        $this->persistUpdate($request, '/admin/departments', (int) $id, function (string $name, string $code, string $status, string $description, int $branchId) use ($id): void {
+            $this->repository->updateRecord('departments', (int) $id, $name, $code, $status, $description, $branchId);
+        });
+    }
+
+    public function updateTeam(Request $request, string $id): void
+    {
+        $this->persistUpdate($request, '/admin/teams', (int) $id, function (string $name, string $code, string $status, string $description, int $branchId) use ($id): void {
+            $this->repository->updateRecord('teams', (int) $id, $name, $code, $status, $description);
+        });
+    }
+
+    public function updateJobTitle(Request $request, string $id): void
+    {
+        $this->persistUpdate($request, '/admin/job-titles', (int) $id, function (string $name, string $code, string $status, string $description, int $branchId) use ($id): void {
+            $this->repository->updateRecord('job_titles', (int) $id, $name, $code, $status, $description);
+        });
+    }
+
+    public function updateDesignation(Request $request, string $id): void
+    {
+        $this->persistUpdate($request, '/admin/designations', (int) $id, function (string $name, string $code, string $status, string $description, int $branchId) use ($id): void {
+            $this->repository->updateRecord('designations', (int) $id, $name, $code, $status, $description);
+        });
+    }
+
+    private function persistUpdate(Request $request, string $redirect, int $id, callable $callback): void
+    {
+        if (!$this->app->csrf()->validate((string) $request->input('_token'))) {
+            $this->app->session()->flash('error', 'Invalid form submission token.');
+            $this->redirect($redirect);
+        }
+
+        $name        = trim((string) $request->input('name', ''));
+        $code        = trim((string) $request->input('code', ''));
+        $status      = trim((string) $request->input('status', 'active'));
+        $description = trim((string) $request->input('description', ''));
+        $branchId    = (int) $request->input('branch_id', 0);
+
+        if ($name === '') {
+            $this->app->session()->flash('error', 'Name is required.');
+            $this->redirect($redirect);
+        }
+
+        try {
+            $callback($name, $code, $status, $description, $branchId);
+            $this->app->session()->flash('success', 'Record updated successfully.');
+        } catch (Throwable $throwable) {
+            $this->app->session()->flash('error', 'Unable to update record: ' . $throwable->getMessage());
+        }
+
+        $this->redirect($redirect);
     }
 
     private function persist(Request $request, string $redirect, array $required, callable $callback, string $successMessage, ?callable $validator = null): void

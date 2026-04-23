@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Notifications;
 
 use App\Core\Database;
+use App\Support\Branding;
+use App\Support\EmailTemplate;
 use App\Support\Mailer;
 use Throwable;
 
@@ -96,6 +98,15 @@ final class NotificationRepository
         ?string $relatedType = null,
         ?int $relatedId = null
     ): void {
+        $bodyHtml = EmailTemplate::notification(
+            $subject,
+            $bodyHtml,
+            null,
+            null,
+            Branding::companyLogoUrlForUser($userId, $toEmail)
+        );
+        $bodyText ??= trim(strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $bodyHtml)));
+
         $this->database->execute(
             'INSERT INTO email_queue (user_id, to_email, subject, body_html, body_text, related_type, related_id, scheduled_at)
              VALUES (:user_id, :to_email, :subject, :body_html, :body_text, :related_type, :related_id, NOW())',
@@ -123,6 +134,15 @@ final class NotificationRepository
         ?string $relatedType = null,
         ?int $relatedId = null
     ): void {
+        $bodyHtml = EmailTemplate::notification(
+            $subject,
+            $bodyHtml,
+            null,
+            null,
+            Branding::companyLogoUrlForUser($userId, $toEmail)
+        );
+        $bodyText ??= trim(strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $bodyHtml)));
+
         $this->queueEmail($toEmail, $subject, $bodyHtml, $bodyText, $userId, $relatedType, $relatedId);
 
         $emailQueueId = (int) $this->database->lastInsertId();

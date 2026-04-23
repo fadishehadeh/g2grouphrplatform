@@ -219,6 +219,60 @@ final class SettingsController extends Controller
         ]);
     }
 
+    public function updateShift(Request $request, string $id): void
+    {
+        $redirectPath = '/settings/shifts';
+        $this->validateCsrf($request, $redirectPath);
+        $name = trim((string) $request->input('name', ''));
+        $code = strtoupper(trim((string) $request->input('code', '')));
+
+        if ($name === '' || $code === '') {
+            $this->app->session()->flash('error', 'Name and code are required.');
+            $this->redirect($redirectPath);
+        }
+
+        if (strlen($code) > 50 || !preg_match('/^[A-Z0-9_]+$/', $code)) {
+            $this->app->session()->flash('error', 'Code may only contain uppercase letters, numbers, and underscores.');
+            $this->redirect($redirectPath);
+        }
+
+        try {
+            $this->repository->updateShift((int) $id, $name, $code);
+            $this->app->session()->flash('success', 'Shift updated successfully.');
+        } catch (Throwable $throwable) {
+            $this->app->session()->flash('error', 'Unable to update shift: ' . $throwable->getMessage());
+        }
+
+        $this->redirect($redirectPath);
+    }
+
+    public function updateSchedule(Request $request, string $id): void
+    {
+        $redirectPath = '/settings/schedules';
+        $this->validateCsrf($request, $redirectPath);
+        $name = trim((string) $request->input('name', ''));
+        $code = strtoupper(trim((string) $request->input('code', '')));
+
+        if ($name === '' || $code === '') {
+            $this->app->session()->flash('error', 'Name and code are required.');
+            $this->redirect($redirectPath);
+        }
+
+        if (strlen($code) > 50 || !preg_match('/^[A-Z0-9_]+$/', $code)) {
+            $this->app->session()->flash('error', 'Code may only contain uppercase letters, numbers, and underscores.');
+            $this->redirect($redirectPath);
+        }
+
+        try {
+            $this->repository->updateSchedule((int) $id, $name, $code);
+            $this->app->session()->flash('success', 'Schedule updated successfully.');
+        } catch (Throwable $throwable) {
+            $this->app->session()->flash('error', 'Unable to update schedule: ' . $throwable->getMessage());
+        }
+
+        $this->redirect($redirectPath);
+    }
+
     public function storeShift(Request $request): void
     {
         $redirectPath = '/settings/shifts';
@@ -226,6 +280,9 @@ final class SettingsController extends Controller
         $data = $this->shiftPayload($request);
 
         try {
+            if (($data['code'] ?? '') === '') {
+                $data['code'] = $this->repository->nextShiftCode();
+            }
             $companies = $this->rowsById($this->repository->companyOptions());
             $this->validateShiftPayload($data, $companies);
             $this->repository->createShift($this->normalizeShiftPayload($data));
@@ -268,6 +325,9 @@ final class SettingsController extends Controller
         $data = $this->schedulePayload($request);
 
         try {
+            if (($data['code'] ?? '') === '') {
+                $data['code'] = $this->repository->nextScheduleCode();
+            }
             $companies = $this->rowsById($this->repository->companyOptions());
             $shifts = $this->rowsById($this->repository->shiftOptions());
             $this->validateSchedulePayload($data, $companies, $shifts);
@@ -618,7 +678,7 @@ final class SettingsController extends Controller
 
     private function validateShiftPayload(array $data, array $companies): void
     {
-        foreach (['company_id', 'name', 'code', 'start_time', 'end_time'] as $field) {
+        foreach (['company_id', 'name', 'start_time', 'end_time'] as $field) {
             if (($data[$field] ?? '') === '') {
                 $this->invalid('/settings/shifts', $data, 'Please complete all required shift fields.');
             }
@@ -716,7 +776,7 @@ final class SettingsController extends Controller
 
     private function validateSchedulePayload(array $data, array $companies, array $shifts): void
     {
-        foreach (['company_id', 'name', 'code', 'weekly_hours'] as $field) {
+        foreach (['company_id', 'name', 'weekly_hours'] as $field) {
             if (($data[$field] ?? '') === '') {
                 $this->invalid('/settings/schedules', $data, 'Please complete all required schedule fields.');
             }

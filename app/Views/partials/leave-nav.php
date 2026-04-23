@@ -1,6 +1,6 @@
 <?php declare(strict_types=1); ?>
 <div class="card content-card mb-4">
-    <div class="card-body p-3 d-flex flex-wrap gap-2">
+    <div class="card-body p-3 d-flex flex-wrap gap-2 module-nav">
         <?php if (can('leave.view_self')): ?>
             <a href="<?= e(url('/leave/my')); ?>" class="btn btn-outline-secondary btn-sm">My Leave</a>
         <?php endif; ?>

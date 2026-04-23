@@ -8,7 +8,7 @@
             <div class="card content-card mb-4"><div class="card-body p-4">
                 <div class="form-section-title">Personal Information</div>
                 <div class="row g-3">
-                    <div class="col-md-4"><label class="form-label">Employee Code *</label><input type="text" name="employee_code" class="form-control" value="<?= e((string) old('employee_code', $employee['employee_code'] ?? '')); ?>" required></div>
+                    <div class="col-md-4"><label class="form-label">Employee Code</label><input type="text" name="employee_code" class="form-control" value="<?= e((string) old('employee_code', $isEdit ? ($employee['employee_code'] ?? '') : '')); ?>" placeholder="<?= $isEdit ? '' : e((string) ($employee['employee_code'] ?? 'Auto-generated')); ?>"><div class="form-text">Leave blank to auto-generate.</div></div>
                     <div class="col-md-4"><label class="form-label">First Name *</label><input type="text" name="first_name" class="form-control" value="<?= e((string) old('first_name', $employee['first_name'] ?? '')); ?>" required></div>
                     <div class="col-md-4"><label class="form-label">Middle Name</label><input type="text" name="middle_name" class="form-control" value="<?= e((string) old('middle_name', $employee['middle_name'] ?? '')); ?>"></div>
                     <div class="col-md-4"><label class="form-label">Last Name *</label><input type="text" name="last_name" class="form-control" value="<?= e((string) old('last_name', $employee['last_name'] ?? '')); ?>" required></div>
@@ -45,6 +45,54 @@
                     <div class="col-12"><label class="form-label">Notes</label><textarea name="notes" class="form-control" rows="4"><?= e((string) old('notes', $employee['notes'] ?? '')); ?></textarea></div>
                 </div>
             </div></div>
+
+            <div class="card content-card mt-4"><div class="card-body p-4">
+                <div class="form-section-title">Emergency Contacts</div>
+                <div id="ec-wrapper">
+                <?php
+                $ecList = $emergencyContacts ?? [];
+                if (empty($ecList)) {
+                    $ecList = [['full_name'=>'','relationship'=>'','phone'=>'','alternate_phone'=>'','email'=>'','is_primary'=>0]];
+                }
+                foreach ($ecList as $ecIdx => $ec):
+                ?>
+                <div class="ec-row border rounded p-3 mb-3 position-relative">
+                    <?php if ($ecIdx > 0): ?>
+                    <button type="button" class="btn-close position-absolute top-0 end-0 m-2 ec-remove" aria-label="Remove"></button>
+                    <?php endif; ?>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Full Name</label>
+                            <input type="text" name="emergency_contacts[<?= $ecIdx; ?>][full_name]" class="form-control" value="<?= e((string)($ec['full_name']??'')); ?>">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Relationship</label>
+                            <input type="text" name="emergency_contacts[<?= $ecIdx; ?>][relationship]" class="form-control" value="<?= e((string)($ec['relationship']??'')); ?>" placeholder="e.g. Spouse, Parent">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Phone</label>
+                            <input type="text" name="emergency_contacts[<?= $ecIdx; ?>][phone]" class="form-control" value="<?= e((string)($ec['phone']??'')); ?>">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Alternate Phone</label>
+                            <input type="text" name="emergency_contacts[<?= $ecIdx; ?>][alternate_phone]" class="form-control" value="<?= e((string)($ec['alternate_phone']??'')); ?>">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Email</label>
+                            <input type="email" name="emergency_contacts[<?= $ecIdx; ?>][email]" class="form-control" value="<?= e((string)($ec['email']??'')); ?>">
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" name="emergency_contacts[<?= $ecIdx; ?>][is_primary]" value="1" id="ec_primary_<?= $ecIdx; ?>" <?= !empty($ec['is_primary']) ? 'checked' : ''; ?>>
+                                <label class="form-check-label" for="ec_primary_<?= $ecIdx; ?>">Primary contact</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+                </div>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="ec-add-btn">+ Add Another Contact</button>
+            </div></div>
         </div>
         <div class="col-xl-4">
             <div class="card content-card mb-4"><div class="card-body p-4">
@@ -60,7 +108,7 @@
             </div></div>
             <div class="card content-card"><div class="card-body p-4">
                 <h5 class="mb-2"><?= e($isEdit ? 'Update employee record' : 'Create employee record'); ?></h5>
-                <p class="text-muted small mb-4">Capture the master record first. Emergency contacts, documents, and leave history are connected from the profile page.</p>
+                <p class="text-muted small mb-4">Fill in the details below and add emergency contacts in the section on the left. Documents and leave history are managed from the profile page after saving.</p>
                 <div class="d-grid gap-2">
                     <button type="submit" class="btn btn-primary"><?= e($submitLabel); ?></button>
                     <a href="<?= e(url($isEdit ? '/employees/' . ($employee['id'] ?? '') : '/employees')); ?>" class="btn btn-outline-secondary"><?= e($isEdit ? 'Back to Profile' : 'Back to Directory'); ?></a>
@@ -69,3 +117,59 @@
         </div>
     </div>
 </form>
+<script>
+(function () {
+    var wrapper = document.getElementById('ec-wrapper');
+    var addBtn  = document.getElementById('ec-add-btn');
+    if (!addBtn) return;
+
+    function rowCount() { return wrapper.querySelectorAll('.ec-row').length; }
+
+    function buildRow(idx) {
+        var div = document.createElement('div');
+        div.className = 'ec-row border rounded p-3 mb-3 position-relative';
+        div.innerHTML =
+            '<button type="button" class="btn-close position-absolute top-0 end-0 m-2 ec-remove" aria-label="Remove"></button>' +
+            '<div class="row g-3">' +
+                '<div class="col-md-4"><label class="form-label">Full Name</label>' +
+                '<input type="text" name="emergency_contacts[' + idx + '][full_name]" class="form-control"></div>' +
+                '<div class="col-md-4"><label class="form-label">Relationship</label>' +
+                '<input type="text" name="emergency_contacts[' + idx + '][relationship]" class="form-control" placeholder="e.g. Spouse, Parent"></div>' +
+                '<div class="col-md-4"><label class="form-label">Phone</label>' +
+                '<input type="text" name="emergency_contacts[' + idx + '][phone]" class="form-control"></div>' +
+                '<div class="col-md-4"><label class="form-label">Alternate Phone</label>' +
+                '<input type="text" name="emergency_contacts[' + idx + '][alternate_phone]" class="form-control"></div>' +
+                '<div class="col-md-4"><label class="form-label">Email</label>' +
+                '<input type="email" name="emergency_contacts[' + idx + '][email]" class="form-control"></div>' +
+                '<div class="col-md-4 d-flex align-items-end"><div class="form-check mb-2">' +
+                '<input class="form-check-input" type="checkbox" name="emergency_contacts[' + idx + '][is_primary]" value="1" id="ec_primary_' + idx + '">' +
+                '<label class="form-check-label" for="ec_primary_' + idx + '">Primary contact</label>' +
+                '</div></div>' +
+            '</div>';
+        return div;
+    }
+
+    function reindex() {
+        wrapper.querySelectorAll('.ec-row').forEach(function (row, i) {
+            row.querySelectorAll('[name]').forEach(function (el) {
+                el.name = el.name.replace(/emergency_contacts\[\d+\]/, 'emergency_contacts[' + i + ']');
+            });
+            var cb = row.querySelector('[type=checkbox]');
+            var lbl = row.querySelector('label[for^="ec_primary_"]');
+            if (cb)  { cb.id  = 'ec_primary_' + i; }
+            if (lbl) { lbl.setAttribute('for', 'ec_primary_' + i); }
+        });
+    }
+
+    addBtn.addEventListener('click', function () {
+        var idx = rowCount();
+        wrapper.appendChild(buildRow(idx));
+    });
+
+    wrapper.addEventListener('click', function (e) {
+        if (!e.target.classList.contains('ec-remove')) return;
+        e.target.closest('.ec-row').remove();
+        reindex();
+    });
+}());
+</script>

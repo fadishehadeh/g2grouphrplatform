@@ -23,7 +23,9 @@ $router->get('/settings/attendance/assignments', [SettingsController::class, 'at
 $router->post('/settings/attendance/assignments', [SettingsController::class, 'storeAttendanceAssignment'], $settingsBaseMiddleware);
 $router->get('/settings/shifts', [SettingsController::class, 'shifts'], $settingsBaseMiddleware);
 $router->post('/settings/shifts', [SettingsController::class, 'storeShift'], $settingsBaseMiddleware);
+$router->post('/settings/shifts/{id}/update', [SettingsController::class, 'updateShift'], $settingsBaseMiddleware);
 $router->get('/settings/schedules', [SettingsController::class, 'schedules'], $settingsBaseMiddleware);
 $router->post('/settings/schedules', [SettingsController::class, 'storeSchedule'], $settingsBaseMiddleware);
+$router->post('/settings/schedules/{id}/update', [SettingsController::class, 'updateSchedule'], $settingsBaseMiddleware);
 $router->get('/settings/attendance-statuses', [SettingsController::class, 'attendanceStatuses'], $settingsBaseMiddleware);
 $router->post('/settings/attendance-statuses', [SettingsController::class, 'storeAttendanceStatus'], $settingsBaseMiddleware);

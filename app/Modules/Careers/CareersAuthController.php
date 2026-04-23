@@ -9,6 +9,8 @@ use App\Core\Controller;
 use App\Core\Request;
 use App\Support\CareersAuth;
 use App\Support\CareersDatabase;
+use App\Support\Branding;
+use App\Support\EmailTemplate;
 use App\Support\Mailer;
 use Throwable;
 
@@ -337,16 +339,6 @@ final class CareersAuthController extends Controller
 
     private function otpEmailHtml(string $username, string $code): string
     {
-        return '<!DOCTYPE html><html><body style="font-family:sans-serif;background:#f8f9fa;padding:40px">
-<div style="max-width:480px;margin:auto;background:#fff;border-radius:8px;padding:40px;border:1px solid #dee2e6">
-  <h2 style="color:#212529;margin-top:0">Verify Your Login</h2>
-  <p>Hi <strong>' . htmlspecialchars($username, ENT_QUOTES) . '</strong>,</p>
-  <p>Use the code below to complete your sign-in to the Careers Portal. It expires in <strong>10 minutes</strong>.</p>
-  <div style="font-size:36px;font-weight:700;letter-spacing:12px;text-align:center;padding:24px;background:#f1f3f5;border-radius:6px;margin:24px 0">
-    ' . htmlspecialchars($code, ENT_QUOTES) . '
-  </div>
-  <p style="color:#6c757d;font-size:13px">If you did not attempt to log in, you can safely ignore this email.</p>
-</div>
-</body></html>';
+        return EmailTemplate::otp($username, $code, 'Careers Portal', Branding::defaultLogoUrl());
     }
 }

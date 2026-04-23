@@ -35,7 +35,7 @@ final class MasterDataRepository
 
     public function listCompanies(string $search = ''): array
     {
-        $sql = 'SELECT id, name, code, email, phone, city, country, status FROM companies';
+        $sql = 'SELECT id, name, code, email, phone, city, country, status, logo_path FROM companies';
         $params = [];
 
         if ($search !== '') {
@@ -134,6 +134,49 @@ final class MasterDataRepository
         );
     }
 
+    public function updateRecord(string $table, int $id, string $name, string $code, string $status, ?string $description = null, ?int $branchId = null): void
+    {
+        $sql    = "UPDATE {$table} SET name = :name, status = :status";
+        $params = ['name' => $name, 'status' => $status, 'id' => $id];
+
+        if ($code !== '') {
+            $sql .= ', code = :code';
+            $params['code'] = strtoupper($code);
+        }
+
+        if ($description !== null) {
+            $sql .= ', description = :description';
+            $params['description'] = $description !== '' ? $description : null;
+        }
+
+        if ($branchId !== null) {
+            $sql .= ', branch_id = :branch_id';
+            $params['branch_id'] = $branchId > 0 ? $branchId : null;
+        }
+
+        $sql .= ' WHERE id = :id';
+        $this->database->execute($sql, $params);
+    }
+
+    public function nextCompanyCode(): string     { return $this->nextCode('companies', 'CO-'); }
+    public function nextBranchCode(): string      { return $this->nextCode('branches', 'BR-'); }
+    public function nextDepartmentCode(): string  { return $this->nextCode('departments', 'DEPT-'); }
+    public function nextTeamCode(): string        { return $this->nextCode('teams', 'TEAM-'); }
+    public function nextJobTitleCode(): string    { return $this->nextCode('job_titles', 'JT-'); }
+    public function nextDesignationCode(): string { return $this->nextCode('designations', 'DESG-'); }
+
+    private function nextCode(string $table, string $prefix): string
+    {
+        $rows = $this->database->fetchAll("SELECT code FROM {$table} WHERE code LIKE :prefix", ['prefix' => $prefix . '%']);
+        $max  = 0;
+        foreach ($rows as $row) {
+            if (preg_match('/([0-9]+)$/', (string) $row['code'], $m)) {
+                $max = max($max, (int) $m[1]);
+            }
+        }
+        return $prefix . str_pad((string) ($max + 1), 3, '0', STR_PAD_LEFT);
+    }
+
     public function createCompany(array $data): int
     {
         $this->database->execute(
@@ -204,7 +247,7 @@ final class MasterDataRepository
 
     public function listDepartments(string $search = ''): array
     {
-        $sql = 'SELECT d.id, d.name, d.code, c.name AS company_name, b.name AS branch_name, d.status
+        $sql = 'SELECT d.id, d.name, d.code, d.description, d.branch_id, c.name AS company_name, b.name AS branch_name, d.status
                 FROM departments d
                 INNER JOIN companies c ON c.id = d.company_id
                 LEFT JOIN branches b ON b.id = d.branch_id';
@@ -236,7 +279,7 @@ final class MasterDataRepository
 
     public function listTeams(string $search = ''): array
     {
-        $sql = 'SELECT t.id, t.name, t.code, d.name AS department_name, t.status
+        $sql = 'SELECT t.id, t.name, t.code, t.description, d.name AS department_name, t.status
                 FROM teams t
                 INNER JOIN departments d ON d.id = t.department_id';
         $params = [];
@@ -267,7 +310,7 @@ final class MasterDataRepository
 
     public function listJobTitles(string $search = ''): array
     {
-        $sql = 'SELECT id, name, code, level_rank, status FROM job_titles';
+        $sql = 'SELECT id, name, code, level_rank, description, status FROM job_titles';
         $params = [];
 
         if ($search !== '') {
@@ -293,7 +336,7 @@ final class MasterDataRepository
 
     public function listDesignations(string $search = ''): array
     {
-        $sql = 'SELECT id, name, code, status FROM designations';
+        $sql = 'SELECT id, name, code, description, status FROM designations';
         $params = [];
 
         if ($search !== '') {

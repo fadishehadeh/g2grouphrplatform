@@ -69,6 +69,85 @@ final class DocumentRepository
         );
     }
 
+    // ── Document Types ──────────────────────────────────────────────────────
+
+    public function listDocumentTypes(string $search = ''): array
+    {
+        $sql = 'SELECT dt.id, dt.name, dt.category_id, dt.requires_expiry, dt.is_active, dt.sort_order,
+                       dc.name AS category_name, dc.code AS category_code
+                FROM document_types dt
+                INNER JOIN document_categories dc ON dc.id = dt.category_id
+                WHERE 1 = 1';
+        $params = [];
+
+        if ($search !== '') {
+            $sql .= ' AND (dt.name LIKE :search OR dc.name LIKE :search_cat)';
+            $params['search']     = '%' . $search . '%';
+            $params['search_cat'] = '%' . $search . '%';
+        }
+
+        $sql .= ' ORDER BY dt.is_active DESC, dc.name ASC, dt.sort_order ASC, dt.name ASC';
+
+        return $this->database->fetchAll($sql, $params);
+    }
+
+    public function activeDocumentTypes(): array
+    {
+        return $this->database->fetchAll(
+            'SELECT dt.id, dt.name, dt.category_id, dt.requires_expiry,
+                    dc.name AS category_name, dc.code AS category_code
+             FROM document_types dt
+             INNER JOIN document_categories dc ON dc.id = dt.category_id
+             WHERE dt.is_active = 1
+             ORDER BY dc.name ASC, dt.sort_order ASC, dt.name ASC'
+        );
+    }
+
+    public function findDocumentType(int $id): ?array
+    {
+        return $this->database->fetch(
+            'SELECT dt.id, dt.name, dt.category_id, dt.requires_expiry, dt.is_active, dt.sort_order,
+                    dc.name AS category_name
+             FROM document_types dt
+             INNER JOIN document_categories dc ON dc.id = dt.category_id
+             WHERE dt.id = :id LIMIT 1',
+            ['id' => $id]
+        );
+    }
+
+    public function createDocumentType(array $data): void
+    {
+        $this->database->execute(
+            'INSERT INTO document_types (name, category_id, requires_expiry, is_active, sort_order)
+             VALUES (:name, :category_id, :requires_expiry, :is_active, :sort_order)',
+            [
+                'name'            => $data['name'],
+                'category_id'     => (int) $data['category_id'],
+                'requires_expiry' => (int) ($data['requires_expiry'] ?? 0),
+                'is_active'       => (int) ($data['is_active'] ?? 1),
+                'sort_order'      => (int) ($data['sort_order'] ?? 0),
+            ]
+        );
+    }
+
+    public function updateDocumentType(int $id, array $data): void
+    {
+        $this->database->execute(
+            'UPDATE document_types
+             SET name = :name, category_id = :category_id,
+                 requires_expiry = :requires_expiry, is_active = :is_active, sort_order = :sort_order
+             WHERE id = :id',
+            [
+                'name'            => $data['name'],
+                'category_id'     => (int) $data['category_id'],
+                'requires_expiry' => (int) ($data['requires_expiry'] ?? 0),
+                'is_active'       => (int) ($data['is_active'] ?? 1),
+                'sort_order'      => (int) ($data['sort_order'] ?? 0),
+                'id'              => $id,
+            ]
+        );
+    }
+
     public function listDocuments(string $search = '', string $expiryFilter = 'all', string $viewerRoleCode = 'employee'): array
     {
         $sql = "SELECT ed.id, ed.employee_id, ed.title, ed.document_number, ed.original_file_name, ed.file_size,
@@ -145,13 +224,16 @@ final class DocumentRepository
     public function findDocument(int $documentId): ?array
     {
         return $this->database->fetch(
-            "SELECT ed.id, ed.employee_id, ed.category_id, ed.title, ed.document_number, ed.issue_date, ed.expiry_date,
+            "SELECT ed.id, ed.employee_id, ed.category_id, ed.document_type_id, ed.title, ed.document_number,
+                    ed.issue_date, ed.expiry_date,
                     ed.original_file_name, ed.stored_file_name, ed.file_path,
                     ed.file_extension, ed.mime_type, ed.file_size, ed.visibility_scope, ed.status,
                     CONCAT_WS(' ', e.first_name, e.middle_name, e.last_name) AS employee_name,
-                    e.employee_code
+                    e.employee_code,
+                    dt.name AS document_type_name, dt.requires_expiry AS type_requires_expiry
              FROM employee_documents ed
              INNER JOIN employees e ON e.id = ed.employee_id
+             LEFT JOIN document_types dt ON dt.id = ed.document_type_id
              WHERE ed.id = :id AND ed.is_current = 1
              LIMIT 1",
             ['id' => $documentId]
@@ -160,9 +242,12 @@ final class DocumentRepository
 
     public function updateDocumentDetails(int $documentId, array $data, ?int $actorId): void
     {
+        $typeId = ($data['document_type_id'] ?? '') !== '' ? (int) $data['document_type_id'] : null;
+
         $this->database->execute(
             "UPDATE employee_documents SET
                 category_id       = :category_id,
+                document_type_id  = :document_type_id,
                 title             = :title,
                 document_number   = :document_number,
                 issue_date        = :issue_date,
@@ -171,14 +256,15 @@ final class DocumentRepository
                 status            = :status
              WHERE id = :id AND is_current = 1",
             [
-                'category_id'     => (int) $data['category_id'],
-                'title'           => (string) $data['title'],
-                'document_number' => ($data['document_number'] ?? '') !== '' ? (string) $data['document_number'] : null,
-                'issue_date'      => ($data['issue_date'] ?? '') !== '' ? (string) $data['issue_date'] : null,
-                'expiry_date'     => ($data['expiry_date'] ?? '') !== '' ? (string) $data['expiry_date'] : null,
-                'visibility_scope'=> (string) $data['visibility_scope'],
-                'status'          => in_array((string) ($data['status'] ?? ''), ['active', 'expired', 'revoked'], true) ? (string) $data['status'] : 'active',
-                'id'              => $documentId,
+                'category_id'      => (int) $data['category_id'],
+                'document_type_id' => $typeId,
+                'title'            => (string) $data['title'],
+                'document_number'  => ($data['document_number'] ?? '') !== '' ? (string) $data['document_number'] : null,
+                'issue_date'       => ($data['issue_date'] ?? '') !== '' ? (string) $data['issue_date'] : null,
+                'expiry_date'      => ($data['expiry_date'] ?? '') !== '' ? (string) $data['expiry_date'] : null,
+                'visibility_scope' => (string) $data['visibility_scope'],
+                'status'           => in_array((string) ($data['status'] ?? ''), ['active', 'expired', 'revoked'], true) ? (string) $data['status'] : 'active',
+                'id'               => $documentId,
             ]
         );
     }
@@ -204,32 +290,37 @@ final class DocumentRepository
     public function createDocument(int $employeeId, array $data, array $fileMeta, ?int $actorId): int
     {
         return $this->database->transaction(function (Database $database) use ($employeeId, $data, $fileMeta, $actorId): int {
+            $typeId = ($data['document_type_id'] ?? '') !== '' ? (int) $data['document_type_id'] : null;
+
             $database->execute(
                 'INSERT INTO employee_documents (
-                    employee_id, category_id, title, document_number, original_file_name, stored_file_name, file_path,
+                    employee_id, category_id, document_type_id, title, document_number,
+                    original_file_name, stored_file_name, file_path,
                     file_extension, mime_type, file_size, issue_date, expiry_date, version_no, is_current,
                     visibility_scope, status, uploaded_by
                  ) VALUES (
-                    :employee_id, :category_id, :title, :document_number, :original_file_name, :stored_file_name, :file_path,
+                    :employee_id, :category_id, :document_type_id, :title, :document_number,
+                    :original_file_name, :stored_file_name, :file_path,
                     :file_extension, :mime_type, :file_size, :issue_date, :expiry_date, 1, 1,
                     :visibility_scope, :status, :uploaded_by
                  )',
                 [
-                    'employee_id' => $employeeId,
-                    'category_id' => (int) $data['category_id'],
-                    'title' => $data['title'],
-                    'document_number' => $this->nullable($data['document_number'] ?? null),
+                    'employee_id'      => $employeeId,
+                    'category_id'      => (int) $data['category_id'],
+                    'document_type_id' => $typeId,
+                    'title'            => $data['title'],
+                    'document_number'  => $this->nullable($data['document_number'] ?? null),
                     'original_file_name' => $fileMeta['original_file_name'],
-                    'stored_file_name' => $fileMeta['stored_file_name'],
-                    'file_path' => $fileMeta['file_path'],
-                    'file_extension' => $this->nullable($fileMeta['file_extension'] ?? null),
-                    'mime_type' => $this->nullable($fileMeta['mime_type'] ?? null),
-                    'file_size' => (int) ($fileMeta['file_size'] ?? 0),
-                    'issue_date' => $this->nullable($data['issue_date'] ?? null),
-                    'expiry_date' => $this->nullable($data['expiry_date'] ?? null),
-                    'visibility_scope' => $data['visibility_scope'],
-                    'status' => 'active',
-                    'uploaded_by' => $actorId,
+                    'stored_file_name'   => $fileMeta['stored_file_name'],
+                    'file_path'          => $fileMeta['file_path'],
+                    'file_extension'     => $this->nullable($fileMeta['file_extension'] ?? null),
+                    'mime_type'          => $this->nullable($fileMeta['mime_type'] ?? null),
+                    'file_size'          => (int) ($fileMeta['file_size'] ?? 0),
+                    'issue_date'         => $this->nullable($data['issue_date'] ?? null),
+                    'expiry_date'        => $this->nullable($data['expiry_date'] ?? null),
+                    'visibility_scope'   => $data['visibility_scope'],
+                    'status'             => 'active',
+                    'uploaded_by'        => $actorId,
                 ]
             );
 
