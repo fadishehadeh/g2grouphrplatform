@@ -21,8 +21,22 @@
                     <?= csrf_field(); ?>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Letter Body</label>
-                        <div class="form-text mb-2">Use the placeholders on the right to insert dynamic values. HTML tags like &lt;strong&gt;, &lt;p&gt;, &lt;br&gt; are supported.</div>
-                        <textarea name="body_content" class="form-control font-monospace" rows="18" required><?= e((string) $body); ?></textarea>
+                        <div class="form-text mb-2">Use the editor to format the template visually. Placeholders on the right can be inserted into the content and will be replaced when the letter is generated.</div>
+                        <div class="border rounded overflow-hidden bg-white">
+                            <div class="d-flex flex-wrap gap-2 p-2 border-bottom bg-light">
+                                <button type="button" class="btn btn-sm btn-outline-secondary editor-action" data-command="bold"><i class="bi bi-type-bold"></i></button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary editor-action" data-command="italic"><i class="bi bi-type-italic"></i></button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary editor-action" data-command="underline"><i class="bi bi-type-underline"></i></button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary editor-action" data-command="insertUnorderedList"><i class="bi bi-list-ul"></i></button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary editor-action" data-command="insertOrderedList"><i class="bi bi-list-ol"></i></button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary editor-action" data-command="formatBlock" data-value="p">P</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary editor-action" data-command="formatBlock" data-value="h3">H3</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary editor-action" data-command="createLink" data-prompt="Enter URL">Link</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary editor-action" data-command="removeFormat">Clear</button>
+                            </div>
+                            <div id="letterBodyVisualEditor" class="form-control border-0 rounded-0 editor-surface" contenteditable="true" spellcheck="false" aria-label="Letter body editor"></div>
+                        </div>
+                        <textarea id="letterBodyEditor" name="body_content" class="d-none" required><?= e((string) $body); ?></textarea>
                     </div>
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> Save Template</button>
@@ -36,7 +50,7 @@
         <div class="card content-card mb-3">
             <div class="card-body p-4">
                 <h6 class="mb-3">Available Placeholders</h6>
-                <p class="text-muted small mb-3">Click any placeholder to copy it, then paste into the body.</p>
+                <p class="text-muted small mb-3">Click any placeholder to insert it into the editor. It is also copied to the clipboard as a fallback.</p>
                 <?php
                 $placeholders = [
                     '{{employee_name}}'   => 'Full name',
@@ -57,7 +71,7 @@
                 foreach ($placeholders as $tag => $desc): ?>
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <span class="text-muted small"><?= e($desc); ?></span>
-                    <code class="placeholder-chip" style="cursor:pointer;user-select:all;" title="Click to copy"><?= e($tag); ?></code>
+                    <code class="placeholder-chip" data-placeholder="<?= e($tag); ?>" style="cursor:pointer;user-select:all;" title="Click to insert"><?= e($tag); ?></code>
                 </div>
                 <?php endforeach; ?>
             </div>
@@ -79,12 +93,79 @@
 </div>
 
 <script>
+var sourceField = document.getElementById('letterBodyEditor');
+var visualEditor = document.getElementById('letterBodyVisualEditor');
+
+if (visualEditor && sourceField) {
+    visualEditor.innerHTML = sourceField.value;
+
+    var syncEditor = function() {
+        sourceField.value = visualEditor.innerHTML.trim();
+    };
+
+    visualEditor.addEventListener('input', syncEditor);
+    visualEditor.addEventListener('blur', syncEditor);
+
+    document.querySelectorAll('.editor-action').forEach(function(button) {
+        button.addEventListener('click', function() {
+            var command = this.dataset.command;
+            var value = this.dataset.value || null;
+
+            visualEditor.focus();
+
+            if (command === 'createLink') {
+                value = window.prompt(this.dataset.prompt || 'Enter value', 'https://');
+                if (!value) {
+                    return;
+                }
+            }
+
+            document.execCommand(command, false, value);
+            syncEditor();
+        });
+    });
+
+    var form = sourceField.closest('form');
+    if (form) {
+        form.addEventListener('submit', syncEditor);
+    }
+}
+
 document.querySelectorAll('.placeholder-chip').forEach(function(chip) {
     chip.addEventListener('click', function() {
-        navigator.clipboard.writeText(this.textContent).then(function() {
-            chip.style.background = '#d1fae5';
-            setTimeout(function() { chip.style.background = ''; }, 800);
-        });
+        var placeholder = this.dataset.placeholder || this.textContent;
+
+        if (visualEditor) {
+            visualEditor.focus();
+            document.execCommand('insertText', false, placeholder);
+            sourceField.value = visualEditor.innerHTML.trim();
+        }
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(placeholder).catch(function() {});
+        }
+
+        chip.style.background = '#d1fae5';
+        setTimeout(function() { chip.style.background = ''; }, 800);
     });
 });
 </script>
+
+<style>
+.editor-surface {
+    min-height: 28rem;
+    padding: 1rem 1.1rem;
+    line-height: 1.7;
+    font-size: 1.05rem;
+    overflow-y: auto;
+}
+
+.editor-surface:focus {
+    outline: none;
+    box-shadow: none;
+}
+
+.editor-surface p:last-child {
+    margin-bottom: 0;
+}
+</style>

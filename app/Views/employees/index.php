@@ -1,23 +1,38 @@
 <?php declare(strict_types=1); ?>
+<?php
+$pageHeaderTitle = 'Employee Directory';
+$pageHeaderDescription = 'Browse, search, and maintain employee records from one consistent workspace.';
+$pageHeaderChips = [
+    ['label' => (int) ($total ?? count($employees ?? [])) . ' employees', 'tone' => 'neutral'],
+    ['label' => ($search ?? '') !== '' ? 'Filtered results' : 'All records', 'tone' => ($search ?? '') !== '' ? 'brand' : 'calm'],
+];
+$pageHeaderActions = [
+    ['label' => 'Export Excel', 'href' => url('/employees/export-excel'), 'class' => 'btn btn-outline-secondary', 'icon' => 'bi-file-earmark-excel'],
+    ['label' => 'Export PDF', 'href' => url('/employees/export-pdf'), 'class' => 'btn btn-outline-secondary', 'icon' => 'bi-file-earmark-pdf'],
+];
+if (can('employee.create')) {
+    $pageHeaderActions[] = ['label' => 'Import', 'href' => url('/employees/import'), 'class' => 'btn btn-outline-secondary', 'icon' => 'bi-upload'];
+    $pageHeaderActions[] = ['label' => 'Add Employee', 'href' => url('/employees/create'), 'class' => 'btn btn-primary', 'icon' => 'bi-plus-lg'];
+}
+require base_path('app/Views/partials/page-header.php');
+?>
 <div class="card content-card">
     <div class="card-body p-4">
-        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
-            <div>
-                <h5 class="mb-1">Employee Directory</h5>
-                <p class="text-muted mb-0">Browse and maintain the core employee master records.</p>
-            </div>
-            <div class="d-flex gap-2">
-                <form method="get" action="<?= e(url('/employees')); ?>" class="d-flex gap-2">
-                    <input type="text" name="q" class="form-control" placeholder="Search employees..." value="<?= e((string) ($search ?? '')); ?>">
+        <div class="employee-filter-bar mb-4">
+            <form method="get" action="<?= e(url('/employees')); ?>" class="row g-2 align-items-end">
+                <div class="col-lg-6">
+                    <label class="form-label">Search Employees</label>
+                    <input type="text" name="q" class="form-control" placeholder="Search by name, code, email, department..." value="<?= e((string) ($search ?? '')); ?>">
+                </div>
+                <div class="col-auto">
                     <button type="submit" class="btn btn-outline-secondary">Search</button>
-                </form>
-                <a href="<?= e(url('/employees/export-excel')); ?>" class="btn btn-outline-success" title="Export Excel"><i class="bi bi-file-earmark-excel"></i> Excel</a>
-                <a href="<?= e(url('/employees/export-pdf')); ?>" class="btn btn-outline-danger" title="Export PDF"><i class="bi bi-file-earmark-pdf"></i> PDF</a>
-                <?php if (can('employee.create')): ?>
-                    <a href="<?= e(url('/employees/import')); ?>" class="btn btn-outline-primary" title="Import Employees"><i class="bi bi-upload"></i> Import</a>
-                    <a href="<?= e(url('/employees/create')); ?>" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Add Employee</a>
+                </div>
+                <?php if (($search ?? '') !== ''): ?>
+                    <div class="col-auto">
+                        <a href="<?= e(url('/employees')); ?>" class="btn btn-light">Clear</a>
+                    </div>
                 <?php endif; ?>
-            </div>
+            </form>
         </div>
 
         <?php if (($employees ?? []) === []): ?>

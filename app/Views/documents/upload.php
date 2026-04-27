@@ -174,7 +174,7 @@ $selectedTypeId = (int) old('document_type_id', '0');
                                         };
                                         $scopeLabel = match ((string) $document['visibility_scope']) {
                                             'admin'   => 'Admin only',
-                                            'hr'      => 'HR + Admin',
+                                            'hr'      => 'HR only',
                                             'manager' => 'Manager+',
                                             'hr_only' => 'HR Only',
                                             default   => 'Employee',

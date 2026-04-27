@@ -19,3 +19,7 @@ Desktop.ini
 # Zip archives
 *.zip
 
+# User-generated uploads and content
+public-hr/assets/uploads/
+public-careers/assets/uploads/
+

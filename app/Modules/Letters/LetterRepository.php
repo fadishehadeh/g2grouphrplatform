@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace App\Modules\Letters;
 
 use App\Core\Database;
-
 final class LetterRepository
 {
     private Database $database;
+    private bool $letterTemplatesTableChecked = false;
 
     public function __construct(Database $database)
     {
@@ -364,6 +364,8 @@ final class LetterRepository
 
     public function getTemplate(string $letterType): ?string
     {
+        $this->ensureLetterTemplatesTable();
+
         $row = $this->database->fetch(
             'SELECT body_content FROM letter_templates WHERE letter_type = :type LIMIT 1',
             ['type' => $letterType]
@@ -373,6 +375,8 @@ final class LetterRepository
 
     public function saveTemplate(string $letterType, string $bodyContent, int $updatedBy): void
     {
+        $this->ensureLetterTemplatesTable();
+
         $exists = $this->database->fetchValue(
             'SELECT id FROM letter_templates WHERE letter_type = :type LIMIT 1',
             ['type' => $letterType]
@@ -435,6 +439,24 @@ final class LetterRepository
         $search  = array_map(fn($k) => '{{' . $k . '}}', array_keys($vars));
         $replace = array_values($vars);
         return str_replace($search, $replace, $template);
+    }
+
+    private function ensureLetterTemplatesTable(): void
+    {
+        if ($this->letterTemplatesTableChecked) {
+            return;
+        }
+
+        $this->database->execute(
+            'CREATE TABLE IF NOT EXISTS letter_templates (
+                id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                letter_type VARCHAR(50) NOT NULL UNIQUE,
+                body_content TEXT NOT NULL,
+                updated_by BIGINT UNSIGNED NULL,
+                updated_at DATETIME NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+        );
+        $this->letterTemplatesTableChecked = true;
     }
 
     public static function letterTypeLabel(string $type): string

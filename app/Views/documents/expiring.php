@@ -1,21 +1,35 @@
 <?php declare(strict_types=1); ?>
 <?php require base_path('app/Views/partials/document-nav.php'); ?>
+<?php
+$pageHeaderTitle = 'Expiring and Expired Documents';
+$pageHeaderDescription = 'Monitor renewal risk across employee documents and act before records become overdue.';
+$pageHeaderChips = [
+    ['label' => 'Window: next ' . (int) ($days ?? 30) . ' days', 'tone' => 'neutral'],
+    ['label' => count($documents ?? []) . ' matching documents', 'tone' => (($documents ?? []) === []) ? 'calm' : 'warning'],
+];
+require base_path('app/Views/partials/page-header.php');
+?>
 <div class="card content-card mb-4">
     <div class="card-body p-4">
-        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-start gap-3">
-            <div>
-                <h5 class="mb-1">Expiring and Expired Documents</h5>
-                <p class="text-muted mb-0">Monitor renewal risk across all current employee documents.</p>
-            </div>
-            <div class="d-flex flex-wrap gap-2 align-items-start">
-                <form method="get" action="<?= e(url('/documents/expiring')); ?>" class="d-flex gap-2">
-                    <select name="days" class="form-select"><?php foreach ([7, 15, 30, 60, 90] as $window): ?><option value="<?= e((string) $window); ?>" <?= (int) ($days ?? 30) === $window ? 'selected' : ''; ?>>Next <?= e((string) $window); ?> days</option><?php endforeach; ?></select>
-                    <button type="submit" class="btn btn-outline-secondary">Apply</button>
-                </form>
-                <form method="post" action="<?= e(url('/documents/send-expiry-alerts')); ?>" onsubmit="return confirm('Send 30-day expiry alert emails to all HR/Admin users for documents without an existing alert? This cannot be undone.');">
-                    <?= csrf_field(); ?>
-                    <button type="submit" class="btn btn-warning"><i class="bi bi-bell"></i> Send 30-Day Alerts to HR</button>
-                </form>
+        <div class="employee-filter-bar">
+            <div class="row g-2 align-items-end">
+                <div class="col-lg-6">
+                    <form method="get" action="<?= e(url('/documents/expiring')); ?>" class="row g-2 align-items-end">
+                        <div class="col-sm-8">
+                            <label class="form-label">Alert Window</label>
+                            <select name="days" class="form-select"><?php foreach ([7, 15, 30, 60, 90] as $window): ?><option value="<?= e((string) $window); ?>" <?= (int) ($days ?? 30) === $window ? 'selected' : ''; ?>>Next <?= e((string) $window); ?> days</option><?php endforeach; ?></select>
+                        </div>
+                        <div class="col-sm-4">
+                            <button type="submit" class="btn btn-outline-secondary w-100">Apply</button>
+                        </div>
+                    </form>
+                </div>
+                <div class="col-lg-6">
+                    <form id="documentExpiryAlertForm" method="post" action="<?= e(url('/documents/send-expiry-alerts')); ?>" onsubmit="return confirm('Send 30-day expiry alert emails to all HR/Admin users for documents without an existing alert? This cannot be undone.');" class="justify-content-lg-end d-flex">
+                        <?= csrf_field(); ?>
+                        <button type="submit" class="btn btn-warning"><i class="bi bi-bell"></i> Send 30-Day Alerts to HR</button>
+                    </form>
+                </div>
             </div>
         </div>
     </div>

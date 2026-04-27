@@ -1,5 +1,14 @@
 <?php declare(strict_types=1); ?>
 <?php require base_path('app/Views/partials/reports-nav.php'); ?>
+<?php
+$pageHeaderTitle = 'Reports Overview';
+$pageHeaderDescription = 'Track workforce movement, leave activity, expiring documents, and offboarding from one reporting surface.';
+$pageHeaderChips = [
+    ['label' => (($canHr ?? false) ? 'Company-wide view' : 'Direct reports view'), 'tone' => 'brand'],
+    ['label' => (string) (($overview['documents_expiring_30'] ?? 0)) . ' docs expiring', 'tone' => (($overview['documents_expiring_30'] ?? 0) > 0 ? 'warning' : 'calm')],
+];
+require base_path('app/Views/partials/page-header.php');
+?>
 <div class="row g-3 mb-4">
     <div class="col-md-6 col-xl-2"><div class="card content-card h-100"><div class="card-body"><div class="text-muted small">Employees</div><div class="display-6 fw-semibold"><?= e((string) ($overview['total_employees'] ?? 0)); ?></div></div></div></div>
     <div class="col-md-6 col-xl-2"><div class="card content-card h-100"><div class="card-body"><div class="text-muted small">Active</div><div class="display-6 fw-semibold"><?= e((string) ($overview['active_employees'] ?? 0)); ?></div></div></div></div>

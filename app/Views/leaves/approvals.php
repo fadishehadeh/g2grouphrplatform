@@ -1,5 +1,21 @@
 <?php declare(strict_types=1); ?>
 <?php require base_path('app/Views/partials/leave-nav.php'); ?>
+<?php
+$managerCount = count($managerQueue ?? []);
+$hrCount = count($hrQueue ?? []);
+$pageHeaderTitle = 'Leave Approvals';
+$pageHeaderDescription = 'Review manager and HR queues in one place and move pending leave requests forward quickly.';
+$pageHeaderChips = [
+    ['label' => $managerCount . ' manager queue', 'tone' => $managerCount > 0 ? 'warning' : 'calm'],
+    ['label' => $hrCount . ' HR queue', 'tone' => $hrCount > 0 ? 'brand' : 'calm'],
+];
+$pageHeaderActions = [];
+if (can('leave.manage_types')) {
+    $pageHeaderActions[] = ['label' => 'Manage Types', 'href' => url('/admin/leave/types'), 'class' => 'btn btn-outline-secondary', 'icon' => 'bi-sliders'];
+}
+require base_path('app/Views/partials/page-header.php');
+?>
+
 <div class="row g-4">
     <div class="col-xl-6">
         <div class="card content-card h-100">
@@ -37,6 +53,7 @@
             </div>
         </div>
     </div>
+
     <div class="col-xl-6">
         <div class="card content-card h-100">
             <div class="card-body p-4">
@@ -45,9 +62,6 @@
                         <h5 class="mb-1">HR Approval Queue</h5>
                         <p class="text-muted mb-0">Requests escalated to HR for final review.</p>
                     </div>
-                    <?php if (can('leave.manage_types')): ?>
-                        <a href="<?= e(url('/admin/leave/types')); ?>" class="btn btn-outline-secondary btn-sm">Manage Types</a>
-                    <?php endif; ?>
                 </div>
                 <?php if (($hrQueue ?? []) === []): ?>
                     <div class="empty-state">No pending HR approvals right now.</div>
