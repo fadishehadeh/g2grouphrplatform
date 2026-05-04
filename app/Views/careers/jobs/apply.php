@@ -15,7 +15,7 @@ $skillCount = count($sections['skill'] ?? []);
     </div>
 </div>
 
-<div class="container-fluid px-3 px-lg-5 py-4" style="max-width:900px">
+<div class="container-fluid careers-content-container px-3 px-lg-5 py-4">
     <div class="row g-4">
 
         <!-- Application summary -->
@@ -74,7 +74,7 @@ $skillCount = count($sections['skill'] ?? []);
                         By submitting, you agree to share your full profile and any uploaded CV with <?= !empty($job['company_name']) ? e((string)$job['company_name']) : 'the employer'; ?>.
                     </div>
 
-                    <div class="d-flex gap-2">
+                    <div class="careers-section-actions mt-2">
                         <button type="submit" class="btn btn-danger fw-semibold px-4 py-2">
                             <i class="bi bi-send me-2"></i>Submit Application
                         </button>

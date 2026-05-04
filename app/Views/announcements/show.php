@@ -1,6 +1,18 @@
 <?php declare(strict_types=1); ?>
 <?php require base_path('app/Views/partials/communications-nav.php'); ?>
-<?php $priorityClass = match ((string) ($announcement['priority'] ?? 'normal')) { 'urgent' => 'text-bg-danger', 'high' => 'text-bg-warning', 'low' => 'text-bg-secondary', default => 'text-bg-primary' }; $statusClass = match ((string) ($announcement['status'] ?? 'draft')) { 'published' => 'text-bg-success', 'archived' => 'text-bg-dark', default => 'text-bg-secondary' }; ?>
+<?php
+$priorityClass = match ((string) ($announcement['priority'] ?? 'normal')) {
+    'urgent' => 'text-bg-danger',
+    'high' => 'text-bg-warning',
+    'low' => 'text-bg-secondary',
+    default => 'text-bg-primary',
+};
+$statusClass = match ((string) ($announcement['status'] ?? 'draft')) {
+    'published' => 'text-bg-success',
+    'archived' => 'text-bg-dark',
+    default => 'text-bg-secondary',
+};
+?>
 <div class="card content-card">
     <div class="card-body p-4">
         <div class="d-flex flex-column flex-md-row justify-content-between gap-3 mb-4">
@@ -11,7 +23,7 @@
                     <span class="badge <?= (int) ($announcement['is_read'] ?? 0) === 1 ? 'text-bg-success' : 'text-bg-light'; ?>"><?= e((string) ((int) ($announcement['is_read'] ?? 0) === 1 ? 'Marked Read' : 'Unread')); ?></span>
                 </div>
                 <h4 class="mb-1"><?= e((string) ($announcement['title'] ?? 'Announcement')); ?></h4>
-                <p class="text-muted mb-0">Published by <?= e((string) ($announcement['created_by_name'] ?? 'System')); ?> • <?= e((string) ($announcement['created_at'] ?? '')); ?></p>
+                <p class="text-muted mb-0">Published by <?= e((string) ($announcement['created_by_name'] ?? 'System')); ?> &bull; <?= e((string) ($announcement['created_at'] ?? '')); ?></p>
             </div>
             <div class="text-md-end small text-muted">
                 <div>Audience: <?= e((string) ($announcement['target_summary'] ?? 'All Employees')); ?></div>
@@ -19,7 +31,8 @@
                 <div>Ends: <?= e((string) (($announcement['ends_at'] ?? null) !== null ? $announcement['ends_at'] : 'Open ended')); ?></div>
             </div>
         </div>
-        <div class="border rounded p-4 bg-light-subtle">
+
+        <div class="border rounded p-3 p-md-4 bg-light-subtle" style="overflow-wrap:anywhere;">
             <?= nl2br(e((string) ($announcement['content'] ?? ''))); ?>
         </div>
 
@@ -48,7 +61,7 @@
         </div>
         <?php endif; ?>
 
-        <div class="mt-4 d-flex flex-wrap gap-2 align-items-center">
+        <div class="mt-4 mobile-action-group align-items-stretch">
             <a href="<?= e(url('/announcements')); ?>" class="btn btn-outline-secondary">Back to Announcements</a>
             <?php if (($canManage ?? false) === true): ?>
                 <a href="<?= e(url('/announcements/' . (int) ($announcement['id'] ?? 0) . '/edit')); ?>" class="btn btn-outline-primary"><i class="bi bi-pencil"></i> Edit</a>
@@ -61,7 +74,7 @@
                     </button>
                 </form>
                 <?php if (($announcement['email_send_at'] ?? null) !== null && !$emailsSent): ?>
-                    <span class="text-muted small align-self-center">Scheduled: <?= e((string) $announcement['email_send_at']); ?></span>
+                    <span class="text-muted small align-self-center d-block">Scheduled: <?= e((string) $announcement['email_send_at']); ?></span>
                 <?php endif; ?>
             <?php endif; ?>
         </div>

@@ -15,6 +15,7 @@ $careersUser = (new CareersAuth(app()->session()))->user();
     <style>
         .careers-topbar { background: #1a1a2e; border-bottom: 3px solid #FF3D33; }
         .careers-topbar .navbar-brand { font-weight: 700; color: #fff !important; letter-spacing:.5px; }
+        .careers-topbar .navbar-toggler { box-shadow: none; }
         .careers-topbar .nav-link { color: rgba(255,255,255,.8) !important; }
         .careers-topbar .nav-link:hover { color: #FF3D33 !important; }
         .careers-topbar .btn-portal { background: #FF3D33; color: #fff; border: none; }
@@ -37,10 +38,34 @@ $careersUser = (new CareersAuth(app()->session()))->user();
         .job-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,.1); transform: translateY(-2px); }
         .job-card .job-type-badge { font-size: .75rem; }
         .featured-ribbon { position: absolute; top: 12px; right: 12px; }
-        @media (max-width: 768px) { .careers-hero h1 { font-size: 1.6rem; } }
+        .careers-page-shell { background:#f8f9fa; min-height: 100vh; overflow-x: hidden; }
+        .careers-nav-actions { min-width: 0; }
+        .careers-flash-wrap { max-width: 1200px; margin: 0 auto; }
+        .careers-auth-container { max-width: 480px; }
+        .careers-content-container { max-width: 900px; }
+        .careers-empty-container { max-width: 600px; margin: 0 auto; }
+        @media (max-width: 991.98px) {
+            .careers-topbar .navbar-collapse { padding-top: .9rem; }
+            .careers-nav-actions { width: 100%; flex-wrap: wrap; }
+        }
+        @media (max-width: 767.98px) {
+            .careers-hero { padding: 32px 0 24px; }
+            .careers-hero h1 { font-size: 1.6rem; }
+            .careers-topbar { padding-left: .75rem !important; padding-right: .75rem !important; }
+            .careers-topbar .navbar-brand { font-size: 1rem; min-width: 0; }
+            .careers-topbar .navbar-brand img { height: 28px; }
+            .careers-topbar .nav-link { padding-left: 0; padding-right: 0; }
+            .careers-nav-actions { gap: .6rem !important; }
+            .careers-nav-actions > * { width: 100%; }
+            .careers-nav-actions .btn,
+            .careers-nav-actions form,
+            .careers-nav-actions form .btn { width: 100%; }
+            .careers-flash-wrap { padding-left: 0; padding-right: 0; }
+            .careers-page-shell footer { margin-top: 2rem !important; padding-left: .75rem; padding-right: .75rem; }
+        }
     </style>
 </head>
-<body style="background:#f8f9fa">
+<body class="careers-page-shell">
 
 <nav class="navbar navbar-expand-lg careers-topbar px-3 px-lg-4">
     <a class="navbar-brand" href="<?= e(url('/careers')); ?>">
@@ -54,7 +79,7 @@ $careersUser = (new CareersAuth(app()->session()))->user();
         <ul class="navbar-nav me-auto">
             <li class="nav-item"><a class="nav-link" href="<?= e(url('/careers')); ?>"><i class="bi bi-briefcase me-1"></i>Jobs</a></li>
         </ul>
-        <div class="d-flex align-items-center gap-2">
+        <div class="d-flex align-items-center gap-2 careers-nav-actions">
             <?php if ($careersUser): ?>
                 <span class="text-white-50 small d-none d-md-inline">Hi, <?= e($careersUser['username']); ?></span>
                 <a href="<?= e(url('/careers/dashboard')); ?>" class="btn btn-sm btn-outline-light">Dashboard</a>
@@ -79,9 +104,11 @@ $careersUser = (new CareersAuth(app()->session()))->user();
     ?>
     <?php if ($flash_error || $flash_success || $flash_info): ?>
     <div class="container-fluid px-3 px-lg-4 pt-3">
+        <div class="careers-flash-wrap">
         <?php if ($flash_error): ?><div class="alert alert-danger alert-dismissible mb-0" role="alert"><?= e((string) $flash_error); ?><button type="button" class="btn-close" data-bs-dismiss="alert"></button></div><?php endif; ?>
         <?php if ($flash_success): ?><div class="alert alert-success alert-dismissible mb-0" role="alert"><?= e((string) $flash_success); ?><button type="button" class="btn-close" data-bs-dismiss="alert"></button></div><?php endif; ?>
         <?php if ($flash_info): ?><div class="alert alert-info alert-dismissible mb-0" role="alert"><?= e((string) $flash_info); ?><button type="button" class="btn-close" data-bs-dismiss="alert"></button></div><?php endif; ?>
+        </div>
     </div>
     <?php endif; ?>
     <?= $content; ?>

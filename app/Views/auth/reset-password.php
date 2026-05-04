@@ -15,7 +15,7 @@
                 <input type="password" name="password_confirmation" class="form-control" required>
             </div>
             <p class="text-muted small mb-4"><?= e((string) ($passwordPolicy ?? '')); ?></p>
-            <div class="d-flex gap-2">
+            <div class="compact-action-row">
                 <a href="<?= e(url('/login')); ?>" class="btn btn-light w-50">Back to Login</a>
                 <button type="submit" class="btn btn-primary w-50">Reset Password</button>
             </div>

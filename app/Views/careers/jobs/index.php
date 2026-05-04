@@ -12,7 +12,7 @@ $expLevels = ['entry'=>'Entry Level','junior'=>'Junior','mid'=>'Mid Level','seni
                 <input type="text" name="q" class="form-control form-control-lg" placeholder="Search job title, company..."
                        value="<?= e((string)($filters['q'] ?? '')); ?>">
             </div>
-            <div class="col-6 col-md-2">
+            <div class="col-12 col-sm-6 col-md-2">
                 <select name="job_type" class="form-select form-select-lg">
                     <option value="">All Types</option>
                     <?php foreach ($jobTypes as $v => $l): ?>
@@ -20,7 +20,7 @@ $expLevels = ['entry'=>'Entry Level','junior'=>'Junior','mid'=>'Mid Level','seni
                     <?php endforeach; ?>
                 </select>
             </div>
-            <div class="col-6 col-md-2">
+            <div class="col-12 col-sm-6 col-md-2">
                 <select name="experience_level" class="form-select form-select-lg">
                     <option value="">All Levels</option>
                     <?php foreach ($expLevels as $v => $l): ?>
@@ -43,7 +43,7 @@ $expLevels = ['entry'=>'Entry Level','junior'=>'Junior','mid'=>'Mid Level','seni
             <div class="section-card p-3 mb-3">
                 <h6 class="fw-bold mb-3 px-1">Browse by Category</h6>
                 <div class="d-flex flex-column gap-1">
-                    <a href="<?= e(url('/careers')); ?>" class="nav-link px-3 py-2 d-flex justify-content-between align-items-center <?= empty($filters['category']) ? 'active text-danger fw-semibold' : ''; ?>">
+                    <a href="<?= e(url('/careers')); ?>" class="nav-link careers-category-link px-3 py-2 d-flex justify-content-between align-items-center gap-2 <?= empty($filters['category']) ? 'active text-danger fw-semibold' : ''; ?>">
                         <span><i class="bi bi-grid me-2"></i>All Categories</span>
                         <span class="badge text-bg-light"><?= count($jobs); ?></span>
                     </a>
@@ -53,7 +53,7 @@ $expLevels = ['entry'=>'Entry Level','junior'=>'Junior','mid'=>'Mid Level','seni
                         $isActive = ($filters['category'] ?? '') === $cat['slug'];
                         ?>
                         <a href="<?= e(url('/careers?category=' . urlencode($cat['slug']))); ?>"
-                           class="nav-link px-3 py-2 d-flex justify-content-between align-items-center <?= $isActive ? 'active text-danger fw-semibold' : ''; ?>">
+                           class="nav-link careers-category-link px-3 py-2 d-flex justify-content-between align-items-center gap-2 <?= $isActive ? 'active text-danger fw-semibold' : ''; ?>">
                             <span><i class="<?= e((string)$cat['icon']); ?> me-2"></i><?= e((string)$cat['name']); ?></span>
                             <span class="badge text-bg-light"><?= (int)$cat['job_count']; ?></span>
                         </a>
@@ -64,7 +64,7 @@ $expLevels = ['entry'=>'Entry Level','junior'=>'Junior','mid'=>'Mid Level','seni
 
         <!-- Job listing -->
         <div class="col-lg-9">
-            <div class="d-flex justify-content-between align-items-center mb-3">
+            <div class="careers-stack-mobile justify-content-between align-items-center mb-3">
                 <p class="text-muted mb-0"><?= count($jobs); ?> position<?= count($jobs) !== 1 ? 's' : ''; ?> found</p>
                 <?php if (!empty(array_filter($filters))): ?>
                     <a href="<?= e(url('/careers')); ?>" class="btn btn-sm btn-outline-secondary"><i class="bi bi-x-circle me-1"></i>Clear filters</a>
@@ -99,7 +99,7 @@ $expLevels = ['entry'=>'Entry Level','junior'=>'Junior','mid'=>'Mid Level','seni
                                             <?= e((string)$job['title']); ?>
                                         </a>
                                     </h5>
-                                    <div class="text-muted small mb-2">
+                                    <div class="text-muted small mb-2 careers-job-meta">
                                         <?php if (!empty($job['company_name'])): ?><i class="bi bi-building me-1"></i><?= e((string)$job['company_name']); ?><?php endif; ?>
                                         <?php if (!empty($job['location_city'])): ?> &nbsp;·&nbsp; <i class="bi bi-geo-alt me-1"></i><?= e((string)$job['location_city']); ?><?= !empty($job['location_country']) ? ', ' . e((string)$job['location_country']) : ''; ?><?php endif; ?>
                                     </div>
@@ -121,9 +121,11 @@ $expLevels = ['entry'=>'Entry Level','junior'=>'Junior','mid'=>'Mid Level','seni
                                         <?php endif; ?>
                                     </div>
                                 </div>
-                                <div class="col-md-4 text-md-end">
-                                    <a href="<?= e(url('/careers/jobs/' . $job['slug'])); ?>" class="btn btn-danger btn-sm mb-1">View & Apply</a>
-                                    <div class="small text-muted"><?= (int)$job['views_count']; ?> views</div>
+                                <div class="col-md-4">
+                                    <div class="careers-job-card-actions">
+                                        <a href="<?= e(url('/careers/jobs/' . $job['slug'])); ?>" class="btn btn-danger btn-sm">View & Apply</a>
+                                        <div class="small text-muted"><?= (int)$job['views_count']; ?> views</div>
+                                    </div>
                                 </div>
                             </div>
                         </div>

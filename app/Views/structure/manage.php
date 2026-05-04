@@ -1,5 +1,6 @@
 <?php declare(strict_types=1); ?>
 <?php require base_path('app/Views/partials/structure-nav.php'); ?>
+
 <div class="row g-4">
     <div class="col-xl-4">
         <div class="card content-card h-100">
@@ -40,6 +41,7 @@
             </div>
         </div>
     </div>
+
     <div class="col-xl-8">
         <div class="card content-card">
             <div class="card-body p-4">
@@ -48,7 +50,7 @@
                         <h5 class="mb-1"><?= e($pageTitle ?? $title ?? 'Records'); ?></h5>
                         <p class="text-muted mb-0"><?= e($description ?? ''); ?></p>
                     </div>
-                    <form method="get" action="<?= e(url($formAction)); ?>" class="d-flex flex-column flex-md-row gap-2">
+                    <form method="get" action="<?= e(url($formAction)); ?>" class="mobile-action-group">
                         <input type="text" name="q" class="form-control" placeholder="Search records..." value="<?= e((string) ($search ?? '')); ?>">
                         <?php foreach (($filters ?? []) as $filter): ?>
                             <?php if (($filter['type'] ?? 'select') === 'select'): ?>
@@ -63,27 +65,38 @@
                         <button type="submit" class="btn btn-outline-secondary">Search</button>
                     </form>
                 </div>
+
                 <?php
-                    $editableSections = ['branches', 'departments', 'teams', 'job_titles', 'designations'];
-                    $supportsEdit = in_array($activeSection ?? '', $editableSections, true);
+                $editableSections = ['branches', 'departments', 'teams', 'job_titles', 'designations'];
+                $supportsEdit = in_array($activeSection ?? '', $editableSections, true);
                 ?>
+
                 <?php if ($items === []): ?>
                     <div class="empty-state">No records found yet for this section.</div>
                 <?php else: ?>
                     <div class="table-responsive">
-                        <table class="table align-middle mb-0">
-                            <thead><tr><?php foreach ($columns as $label): ?><th><?= e($label); ?></th><?php endforeach; ?><?php if (($activeSection ?? '') === 'companies' || $supportsEdit): ?><th></th><?php endif; ?></tr></thead>
+                        <table class="table align-middle mb-0 mobile-stack-table">
+                            <thead>
+                            <tr>
+                                <?php foreach ($columns as $label): ?>
+                                    <th><?= e($label); ?></th>
+                                <?php endforeach; ?>
+                                <?php if (($activeSection ?? '') === 'companies' || $supportsEdit): ?>
+                                    <th></th>
+                                <?php endif; ?>
+                            </tr>
+                            </thead>
                             <tbody>
                             <?php foreach ($items as $item): ?>
                                 <tr>
                                     <?php foreach ($columns as $key => $label): ?>
-                                        <td>
+                                        <td data-label="<?= e((string) $label); ?>">
                                             <?php $cell = $item[$key] ?? ''; ?>
                                             <?php if ($key === 'status'): ?>
                                                 <span class="badge <?= $cell === 'active' ? 'text-bg-success' : 'text-bg-secondary'; ?>"><?= e((string) $cell); ?></span>
                                             <?php elseif ($key === 'name' && ($activeSection ?? '') === 'companies' && isset($item['id'])): ?>
                                                 <div class="d-flex align-items-center gap-2">
-                                                    <?php if (!empty($item['logo_path']) && is_file(base_path('public-hr/' . ltrim((string) $item['logo_path'], '/')))):  ?>
+                                                    <?php if (!empty($item['logo_path']) && is_file(base_path('public-hr/' . ltrim((string) $item['logo_path'], '/')))): ?>
                                                         <img src="<?= e(url('/' . ltrim((string) $item['logo_path'], '/'))); ?>" alt="" style="height:28px;width:28px;object-fit:contain;border-radius:3px;flex-shrink:0;">
                                                     <?php else: ?>
                                                         <span style="height:28px;width:28px;display:inline-block;border-radius:3px;background:#f1f3f5;flex-shrink:0;"></span>
@@ -96,16 +109,19 @@
                                         </td>
                                     <?php endforeach; ?>
                                     <?php if (($activeSection ?? '') === 'companies' && isset($item['id'])): ?>
-                                        <td><a href="<?= e(url('/admin/companies/' . (int) $item['id'])); ?>" class="btn btn-outline-primary btn-sm"><i class="bi bi-gear"></i> Manage</a></td>
+                                        <td data-label="Action" class="mobile-action-group"><a href="<?= e(url('/admin/companies/' . (int) $item['id'])); ?>" class="btn btn-outline-primary btn-sm"><i class="bi bi-gear"></i> Manage</a></td>
                                     <?php elseif ($supportsEdit && isset($item['id'])): ?>
-                                        <td>
-                                            <button type="button" class="btn btn-outline-secondary btn-sm edit-record-btn"
+                                        <td data-label="Action" class="mobile-action-group">
+                                            <button
+                                                type="button"
+                                                class="btn btn-outline-secondary btn-sm edit-record-btn"
                                                 data-id="<?= e((string) $item['id']); ?>"
                                                 data-name="<?= e((string) ($item['name'] ?? '')); ?>"
                                                 data-code="<?= e((string) ($item['code'] ?? '')); ?>"
                                                 data-status="<?= e((string) ($item['status'] ?? 'active')); ?>"
                                                 data-description="<?= e((string) ($item['description'] ?? '')); ?>"
-                                                data-branch-id="<?= e((string) ($item['branch_id'] ?? '')); ?>">
+                                                data-branch-id="<?= e((string) ($item['branch_id'] ?? '')); ?>"
+                                            >
                                                 <i class="bi bi-pencil"></i>
                                             </button>
                                         </td>
@@ -145,7 +161,7 @@
                     <div class="mb-3">
                         <label class="form-label">Branch</label>
                         <select name="branch_id" id="editBranchId" class="form-select">
-                            <option value="">— No branch —</option>
+                            <option value="">- No branch -</option>
                             <?php foreach ($branchOptions as $opt): ?>
                                 <option value="<?= e((string) $opt['value']); ?>"><?= e((string) $opt['label']); ?></option>
                             <?php endforeach; ?>
@@ -164,7 +180,7 @@
                         </select>
                     </div>
                 </div>
-                <div class="modal-footer">
+                <div class="modal-footer compact-action-row">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                     <button type="submit" class="btn btn-primary">Save Changes</button>
                 </div>

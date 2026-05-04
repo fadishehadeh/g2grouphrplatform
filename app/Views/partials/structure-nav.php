@@ -11,7 +11,7 @@ $links = [
     'reporting_lines' => ['/admin/reporting-lines', 'Reporting Lines'],
 ];
 ?>
-<ul class="nav nav-pills section-nav mb-4 gap-2">
+<ul class="nav nav-pills section-nav module-nav mb-4 gap-2">
     <?php foreach ($links as $key => $link): ?>
         <li class="nav-item">
             <a class="nav-link <?= ($activeSection ?? '') === $key ? 'active' : ''; ?>" href="<?= e(url($link[0])); ?>"><?= e($link[1]); ?></a>

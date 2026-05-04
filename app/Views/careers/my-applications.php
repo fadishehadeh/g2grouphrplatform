@@ -10,19 +10,19 @@ $statusLabels = ['new'=>'New','reviewing'=>'Under Review','shortlisted'=>'Shortl
 
 <div class="container-fluid px-3 px-lg-5 py-4">
     <?php if (empty($applications)): ?>
-        <div class="section-card p-5 text-center text-muted" style="max-width:600px;margin:auto">
+        <div class="section-card careers-empty-container p-5 text-center text-muted">
             <i class="bi bi-inbox fs-1 d-block mb-3 opacity-25"></i>
             <h5>No applications yet</h5>
             <p class="small">Browse our open positions and apply to opportunities that match your profile.</p>
             <a href="<?= e(url('/careers')); ?>" class="btn btn-danger">Browse Jobs</a>
         </div>
     <?php else: ?>
-        <div class="d-flex flex-column gap-3" style="max-width:900px">
+        <div class="d-flex flex-column gap-3 careers-content-container">
             <?php foreach ($applications as $app): ?>
             <div class="section-card p-4">
                 <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
                     <div class="flex-grow-1">
-                        <div class="d-flex align-items-center gap-2 mb-1">
+                        <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
                             <h6 class="fw-bold mb-0">
                                 <?= $app['job_id'] ? e((string)$app['job_title']) : '<span class="text-muted">General Job Bank</span>'; ?>
                             </h6>
@@ -58,10 +58,10 @@ $statusLabels = ['new'=>'New','reviewing'=>'Under Review','shortlisted'=>'Shortl
                 ?>
                 <?php if (!$isRejected && !$isWithdrawn): ?>
                 <div class="mt-3">
-                    <div class="d-flex justify-content-between align-items-center gap-1">
+                    <div class="d-flex justify-content-between align-items-center gap-1 careers-progress-track">
                         <?php foreach ($statuses as $i => $s): ?>
                             <?php $done = $currentIdx !== false && $i <= $currentIdx; ?>
-                            <div class="flex-grow-1 text-center" style="font-size:.68rem">
+                            <div class="flex-grow-1 careers-progress-segment">
                                 <div class="rounded-pill mb-1 mx-1" style="height:6px;background:<?= $done ? '#FF3D33' : '#dee2e6'; ?>"></div>
                                 <span class="text-muted d-none d-md-block"><?= e($statusLabels[$s] ?? $s); ?></span>
                             </div>
@@ -73,7 +73,7 @@ $statusLabels = ['new'=>'New','reviewing'=>'Under Review','shortlisted'=>'Shortl
                 <?php endif; ?>
 
                 <!-- Actions -->
-                <div class="d-flex gap-2 mt-3">
+                <div class="careers-section-actions mt-3">
                     <?php if ($app['job_id'] && !empty($app['job_slug'])): ?>
                         <a href="<?= e(url('/careers/jobs/' . $app['job_slug'])); ?>" class="btn btn-sm btn-outline-secondary">View Job</a>
                     <?php endif; ?>

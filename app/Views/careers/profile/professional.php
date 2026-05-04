@@ -103,7 +103,7 @@ $currencies = ['USD','EUR','GBP','AED','SAR','QAR','KWD','BHD','OMR','EGP','JOD'
                         </div>
                     </div>
 
-                    <div class="d-flex gap-2">
+                    <div class="careers-section-actions">
                         <button type="submit" class="btn btn-danger px-4">Save Professional Info</button>
                         <a href="<?= e(url('/careers/profile')); ?>" class="btn btn-outline-secondary">Cancel</a>
                     </div>

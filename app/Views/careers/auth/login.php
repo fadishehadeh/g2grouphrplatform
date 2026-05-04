@@ -3,13 +3,13 @@
 <script src="https://www.google.com/recaptcha/api.js?render=<?= e($recaptchaSiteKey); ?>"></script>
 <?php endif; ?>
 <div class="careers-hero">
-    <div class="container" style="max-width:480px">
+    <div class="container careers-auth-container">
         <h1 class="mb-1"><i class="bi bi-box-arrow-in-right me-2"></i>Sign In</h1>
         <p class="mb-0 opacity-75">Access your profile and track your applications.</p>
     </div>
 </div>
 
-<div class="container py-5" style="max-width:480px">
+<div class="container careers-auth-container py-5">
     <div class="section-card p-4 p-md-5">
         <form method="post" action="<?= e(url('/careers/login')); ?>" id="careersLoginForm">
             <?= csrf_field(); ?>

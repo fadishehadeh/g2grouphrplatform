@@ -52,6 +52,16 @@ document.addEventListener('DOMContentLoaded', function () {
         document.body.style.overflow = '';
     }
 
+    function isMobileSidebarMode() {
+        return window.matchMedia('(max-width: 991.98px)').matches;
+    }
+
+    function handleSidebarNavigation() {
+        if (isMobileSidebarMode()) {
+            closeSidebar();
+        }
+    }
+
     if (toggleBtn) {
         toggleBtn.addEventListener('click', openSidebar);
         toggleBtn.addEventListener('touchend', openSidebar);
@@ -63,4 +73,14 @@ document.addEventListener('DOMContentLoaded', function () {
     if (overlay) {
         overlay.addEventListener('click', closeSidebar);
     }
+    if (sidebar) {
+        sidebar.querySelectorAll('a.sidebar-link, a.sidebar-sublink').forEach(function (link) {
+            link.addEventListener('click', handleSidebarNavigation);
+        });
+    }
+    window.addEventListener('resize', function () {
+        if (!isMobileSidebarMode()) {
+            closeSidebar();
+        }
+    });
 });

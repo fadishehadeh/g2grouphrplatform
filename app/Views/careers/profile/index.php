@@ -20,13 +20,13 @@ $navItems = [
 
 <div class="careers-hero">
     <div class="container-fluid px-3 px-lg-5">
-        <div class="d-flex align-items-center gap-4">
+        <div class="careers-stack-mobile align-items-center gap-4">
             <?php if (!empty($profile['photo_path']) && is_file(base_path((string)$profile['photo_path']))): ?>
                 <img src="<?= e(url('/' . ltrim((string)$profile['photo_path'], '/'))); ?>"
-                     class="rounded-circle border border-3 border-white" style="width:80px;height:80px;object-fit:cover">
+                     class="rounded-circle border border-3 border-white careers-avatar-lg">
             <?php else: ?>
                 <div class="rounded-circle bg-danger d-flex align-items-center justify-content-center border border-3 border-white"
-                     style="width:80px;height:80px;font-size:2rem;color:#fff;flex-shrink:0">
+                     style="font-size:2rem;color:#fff;" class="careers-avatar-lg">
                     <?= e(strtoupper(substr($fullName !== '' ? $fullName : ($seeker['username'] ?? 'U'), 0, 1))); ?>
                 </div>
             <?php endif; ?>
@@ -35,9 +35,9 @@ $navItems = [
                 <?php if (!empty($profile['current_job_title'])): ?>
                     <p class="mb-0 opacity-75"><?= e((string)$profile['current_job_title']); ?><?= !empty($profile['current_employer']) ? ' at ' . e((string)$profile['current_employer']) : ''; ?></p>
                 <?php endif; ?>
-                <div class="d-flex align-items-center gap-3 mt-2">
+                <div class="careers-inline-meter mt-2">
                     <small class="opacity-75">Completeness: <strong><?= $score; ?>%</strong></small>
-                    <div class="progress score-bar" style="width:120px">
+                    <div class="progress score-bar careers-progress-bar-inline">
                         <div class="progress-bar bg-<?= $scoreColor; ?>" style="width:<?= $score; ?>%"></div>
                     </div>
                 </div>
@@ -73,7 +73,7 @@ $navItems = [
                     <p class="small text-muted mb-2">Profile Photo (JPG/PNG, max 2 MB)</p>
                     <?php if (!empty($profile['photo_path']) && is_file(base_path((string)$profile['photo_path']))): ?>
                         <img src="<?= e(url('/' . ltrim((string)$profile['photo_path'], '/'))); ?>"
-                             class="rounded mb-2" style="max-height:80px;max-width:100%;object-fit:contain;border:1px solid #dee2e6">
+                             class="rounded mb-2" style="max-height:80px;object-fit:contain;border:1px solid #dee2e6">
                     <?php endif; ?>
                     <form method="post" action="<?= e(url('/careers/profile/photo')); ?>" enctype="multipart/form-data">
                         <?= csrf_field(); ?>
@@ -108,7 +108,7 @@ $navItems = [
             <!-- Summary card -->
             <?php if (!empty($profile['professional_summary'])): ?>
             <div class="section-card p-4 mb-4">
-                <div class="d-flex justify-content-between align-items-start mb-3">
+                <div class="careers-stack-mobile justify-content-between align-items-start mb-3">
                     <h5 class="fw-bold mb-0"><i class="bi bi-file-person me-2 text-danger"></i>Professional Summary</h5>
                     <a href="<?= e(url('/careers/profile/professional')); ?>" class="btn btn-sm btn-outline-secondary">Edit</a>
                 </div>

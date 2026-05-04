@@ -9,7 +9,7 @@
                 <label class="form-label">Work Email</label>
                 <input type="email" name="email" class="form-control" value="<?= e((string) old('email')); ?>" required>
             </div>
-            <div class="d-flex gap-2">
+            <div class="compact-action-row">
                 <a href="<?= e(url('/login')); ?>" class="btn btn-light w-50">Back to Login</a>
                 <button type="submit" class="btn btn-primary w-50">Send Reset Link</button>
             </div>

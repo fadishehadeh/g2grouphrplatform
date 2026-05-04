@@ -1,6 +1,6 @@
 <?php declare(strict_types=1); ?>
 <div class="card content-card mb-4">
-    <div class="card-body p-3 d-flex flex-wrap gap-2">
+    <div class="card-body p-3 module-nav">
         <?php if (can('announcements.view') || can('announcements.manage')): ?>
             <a href="<?= e(url('/announcements')); ?>" class="btn btn-outline-secondary btn-sm">Announcements</a>
         <?php endif; ?>

@@ -1,9 +1,9 @@
 <?php declare(strict_types=1); ?>
 <?php require base_path('app/Views/partials/document-nav.php'); ?>
 <?php
-$hasTypes     = ($documentTypes ?? []) !== [];
+$hasTypes = ($documentTypes ?? []) !== [];
 $hasEmployees = ($employees ?? []) !== [];
-$canUpload    = $hasTypes && $hasEmployees;
+$canUpload = $hasTypes && $hasEmployees;
 ?>
 <div class="card content-card mb-4">
     <div class="card-body p-4">
@@ -12,16 +12,12 @@ $canUpload    = $hasTypes && $hasEmployees;
                 <h5 class="mb-1">HR Document Center</h5>
                 <p class="text-muted mb-0">Review current employee documents, missing-expiry gaps, and upcoming renewals.</p>
             </div>
-            <div class="d-flex gap-2">
+            <div class="mobile-action-group">
                 <a href="<?= e(url('/documents/expiring')); ?>" class="btn btn-outline-secondary">Expiring Report</a>
                 <?php if ($canUpload): ?>
-                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#uploadModal">
-                        Upload Document
-                    </button>
+                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#uploadModal">Upload Document</button>
                 <?php elseif (!$hasTypes): ?>
-                    <a href="<?= e(url('/documents/types')); ?>" class="btn btn-warning">
-                        Setup Document Types First
-                    </a>
+                    <a href="<?= e(url('/documents/types')); ?>" class="btn btn-warning">Setup Document Types First</a>
                 <?php endif; ?>
             </div>
         </div>
@@ -31,21 +27,17 @@ $canUpload    = $hasTypes && $hasEmployees;
 <div class="card content-card">
     <div class="card-body p-4">
         <form method="get" action="<?= e(url('/documents')); ?>" class="row g-3 mb-4">
-            <div class="col-md-7">
-                <input type="text" name="q" class="form-control"
-                       placeholder="Search by employee, category, title, or number..."
-                       value="<?= e((string) ($search ?? '')); ?>">
+            <div class="col-12 col-md-7">
+                <input type="text" name="q" class="form-control" placeholder="Search by employee, category, title, or number..." value="<?= e((string) ($search ?? '')); ?>">
             </div>
-            <div class="col-md-3">
+            <div class="col-12 col-md-3">
                 <select name="expiry" class="form-select">
                     <?php foreach (['all' => 'All documents', 'expiring' => 'Expiring in 30 days', 'expired' => 'Expired', 'missing_expiry' => 'Missing expiry on required category'] as $value => $label): ?>
-                        <option value="<?= e($value); ?>" <?= (string) ($expiryFilter ?? 'all') === $value ? 'selected' : ''; ?>>
-                            <?= e($label); ?>
-                        </option>
+                        <option value="<?= e($value); ?>" <?= (string) ($expiryFilter ?? 'all') === $value ? 'selected' : ''; ?>><?= e($label); ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>
-            <div class="col-md-2 d-grid">
+            <div class="col-12 col-md-2 d-grid">
                 <button type="submit" class="btn btn-outline-secondary">Filter</button>
             </div>
         </form>
@@ -54,59 +46,72 @@ $canUpload    = $hasTypes && $hasEmployees;
             <div class="empty-state">No documents matched the selected filters.</div>
         <?php else: ?>
             <div class="table-responsive">
-                <table class="table align-middle mb-0">
+                <table class="table align-middle mb-0 mobile-stack-table">
                     <thead>
                     <tr>
-                        <th>Employee</th><th>Category</th><th>Title</th><th>Number</th><th>Expiry</th><th>Visibility</th><th>File</th><th></th>
+                        <th>Employee</th>
+                        <th>Category</th>
+                        <th>Title</th>
+                        <th>Number</th>
+                        <th>Expiry</th>
+                        <th>Visibility</th>
+                        <th>File</th>
+                        <th></th>
                     </tr>
                     </thead>
                     <tbody>
                     <?php foreach ($documents as $document): ?>
                         <?php $days = $document['days_until_expiry']; ?>
                         <tr>
-                            <td>
+                            <td data-label="Employee">
                                 <div class="fw-semibold"><?= e((string) $document['employee_name']); ?></div>
                                 <div class="small text-muted"><?= e((string) $document['employee_code']); ?></div>
                             </td>
-                            <td><?= e((string) $document['category_name']); ?></td>
-                            <td>
+                            <td data-label="Category"><?= e((string) $document['category_name']); ?></td>
+                            <td data-label="Title">
                                 <div class="fw-semibold"><?= e((string) $document['title']); ?></div>
                                 <div class="small text-muted"><?= e((string) ($document['status'] ?? 'active')); ?></div>
                             </td>
-                            <td><?= e((string) (($document['document_number'] ?? '') !== '' ? $document['document_number'] : '—')); ?></td>
-                            <td>
+                            <td data-label="Number"><?= e((string) (($document['document_number'] ?? '') !== '' ? $document['document_number'] : '-')); ?></td>
+                            <td data-label="Expiry">
                                 <?php if (($document['expiry_date'] ?? null) === null): ?>
-                                    <span class="text-muted">—</span>
+                                    <span class="text-muted">-</span>
                                 <?php else: ?>
                                     <div><?= e((string) $document['expiry_date']); ?></div>
                                     <div class="small <?= $days !== null && (int) $days < 0 ? 'text-danger' : 'text-muted'; ?>">
-                                        <?php if ((int) $days < 0): ?>Expired <?= e((string) abs((int) $days)); ?> day(s) ago
-                                        <?php else: ?><?= e((string) $days); ?> day(s) left<?php endif; ?>
+                                        <?php if ((int) $days < 0): ?>
+                                            Expired <?= e((string) abs((int) $days)); ?> day(s) ago
+                                        <?php else: ?>
+                                            <?= e((string) $days); ?> day(s) left
+                                        <?php endif; ?>
                                     </div>
                                 <?php endif; ?>
                             </td>
-                            <td><?php
+                            <td data-label="Visibility">
+                                <?php
                                 $scopeClass = match ((string) $document['visibility_scope']) {
-                                    'admin'   => 'text-bg-danger',
-                                    'hr'      => 'text-bg-warning',
+                                    'admin' => 'text-bg-danger',
+                                    'hr' => 'text-bg-warning',
                                     'manager' => 'text-bg-info',
                                     'hr_only' => 'text-bg-dark',
-                                    default   => 'text-bg-secondary',
+                                    default => 'text-bg-secondary',
                                 };
                                 $scopeLabel = match ((string) $document['visibility_scope']) {
-                                    'admin'   => 'Admin only',
-                                    'hr'      => 'HR only',
+                                    'admin' => 'Admin only',
+                                    'hr' => 'HR only',
                                     'manager' => 'Manager+',
                                     'hr_only' => 'HR Only',
-                                    default   => 'Employee',
+                                    default => 'Employee',
                                 };
-                            ?><span class="badge <?= e($scopeClass); ?>"><?= e($scopeLabel); ?></span></td>
-                            <td>
+                                ?>
+                                <span class="badge <?= e($scopeClass); ?>"><?= e($scopeLabel); ?></span>
+                            </td>
+                            <td data-label="File">
                                 <div><?= e((string) $document['original_file_name']); ?></div>
                                 <div class="small text-muted"><?= e(number_format(((int) ($document['file_size'] ?? 0)) / 1024, 1)); ?> KB</div>
                                 <a href="<?= e(url('/documents/' . $document['id'] . '/download')); ?>" class="btn btn-link btn-sm px-0" target="_blank" rel="noopener">Open / Download</a>
                             </td>
-                            <td>
+                            <td data-label="Actions">
                                 <a href="<?= e(url('/documents/' . $document['id'] . '/edit')); ?>" class="btn btn-sm btn-outline-secondary">Edit</a>
                             </td>
                         </tr>
@@ -119,20 +124,6 @@ $canUpload    = $hasTypes && $hasEmployees;
 </div>
 
 <?php if ($canUpload): ?>
-<?php
-// Build type map for JS
-$typeMapJson = '{}';
-$typeMapArr  = [];
-foreach (($documentTypes ?? []) as $t) {
-    $typeMapArr[(int) $t['id']] = [
-        'name'            => $t['name'],
-        'requires_expiry' => (int) $t['requires_expiry'],
-        'category_name'   => $t['category_name'],
-    ];
-}
-$typeMapJson = json_encode($typeMapArr, JSON_HEX_TAG);
-?>
-<!-- Upload Document Modal -->
 <div class="modal fade" id="uploadModal" tabindex="-1" aria-labelledby="uploadModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -149,9 +140,7 @@ $typeMapJson = json_encode($typeMapArr, JSON_HEX_TAG);
                             <select name="employee_id" id="modal-employee" class="form-select" required>
                                 <option value="">Select employee...</option>
                                 <?php foreach (($employees ?? []) as $emp): ?>
-                                    <option value="<?= e((string) $emp['id']); ?>">
-                                        <?= e((string) $emp['full_name']); ?> (<?= e((string) $emp['employee_code']); ?>)
-                                    </option>
+                                    <option value="<?= e((string) $emp['id']); ?>"><?= e((string) $emp['full_name']); ?> (<?= e((string) $emp['employee_code']); ?>)</option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
@@ -164,14 +153,14 @@ $typeMapJson = json_encode($typeMapArr, JSON_HEX_TAG);
                                 $currentGroup = '';
                                 foreach (($documentTypes ?? []) as $t):
                                     if ($t['category_name'] !== $currentGroup):
-                                        if ($currentGroup !== '') echo '</optgroup>';
+                                        if ($currentGroup !== '') {
+                                            echo '</optgroup>';
+                                        }
                                         $currentGroup = $t['category_name'];
                                         echo '<optgroup label="' . e($currentGroup) . '">';
                                     endif;
                                 ?>
-                                <option value="<?= e((string) $t['id']); ?>"
-                                    data-name="<?= e((string) $t['name']); ?>"
-                                    data-requires-expiry="<?= (int) $t['requires_expiry']; ?>">
+                                <option value="<?= e((string) $t['id']); ?>" data-name="<?= e((string) $t['name']); ?>" data-requires-expiry="<?= (int) $t['requires_expiry']; ?>">
                                     <?= e((string) $t['name']); ?>
                                 </option>
                                 <?php endforeach; ?>
@@ -182,8 +171,7 @@ $typeMapJson = json_encode($typeMapArr, JSON_HEX_TAG);
 
                         <div class="col-12">
                             <label class="form-label">Title *</label>
-                            <input type="text" name="title" id="modal-title" class="form-control" required
-                                   placeholder="Auto-filled from document type, or enter manually">
+                            <input type="text" name="title" id="modal-title" class="form-control" required placeholder="Auto-filled from document type, or enter manually">
                         </div>
 
                         <div class="col-md-6">
@@ -214,9 +202,8 @@ $typeMapJson = json_encode($typeMapArr, JSON_HEX_TAG);
 
                         <div class="col-md-6">
                             <label class="form-label">File *</label>
-                            <input type="file" name="document_file" class="form-control"
-                                   accept=".pdf,.png,.jpg,.jpeg,.doc,.docx" required>
-                            <div class="form-text">PDF, PNG, JPG, DOC, DOCX — max 5 MB.</div>
+                            <input type="file" name="document_file" class="form-control" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx" required>
+                            <div class="form-text">PDF, PNG, JPG, DOC, DOCX - max 5 MB.</div>
                         </div>
                     </div>
                 </div>
@@ -231,35 +218,39 @@ $typeMapJson = json_encode($typeMapArr, JSON_HEX_TAG);
 
 <script>
 (function () {
-    var typeSelect   = document.getElementById('modal-doc-type');
-    var titleInput   = document.getElementById('modal-title');
-    var expiryInput  = document.getElementById('modal-expiry');
-    var expiryLabel  = document.getElementById('modal-expiry-label');
-    var expiryHint   = document.getElementById('modal-expiry-hint');
-    var typeHint     = document.getElementById('modal-type-hint');
+    var typeSelect = document.getElementById('modal-doc-type');
+    var titleInput = document.getElementById('modal-title');
+    var expiryInput = document.getElementById('modal-expiry');
+    var expiryLabel = document.getElementById('modal-expiry-label');
+    var expiryHint = document.getElementById('modal-expiry-hint');
+    var typeHint = document.getElementById('modal-type-hint');
+    var modal = document.getElementById('uploadModal');
 
-    if (!typeSelect) return;
+    if (!typeSelect || !titleInput || !expiryInput || !expiryLabel || !expiryHint || !typeHint || !modal) {
+        return;
+    }
 
     function applyType(option) {
         if (!option || option.value === '') {
             expiryLabel.textContent = 'Expiry Date';
             expiryInput.removeAttribute('required');
             expiryHint.textContent = '';
+            expiryHint.className = 'form-text';
             typeHint.textContent = '';
             return;
         }
 
-        var name   = option.dataset.name || '';
-        var reqExp = parseInt(option.dataset.requiresExpiry, 10) === 1;
+        var name = option.dataset.name || '';
+        var requiresExpiry = parseInt(option.dataset.requiresExpiry || '0', 10) === 1;
 
         if (titleInput.value === '' || titleInput.dataset.autofilled === 'true') {
             titleInput.value = name;
             titleInput.dataset.autofilled = 'true';
         }
 
-        typeHint.textContent = reqExp ? 'Expiry date is required for this type.' : 'Expiry date is optional for this type.';
+        typeHint.textContent = requiresExpiry ? 'Expiry date is required for this type.' : 'Expiry date is optional for this type.';
 
-        if (reqExp) {
+        if (requiresExpiry) {
             expiryLabel.textContent = 'Expiry Date *';
             expiryInput.setAttribute('required', 'required');
             expiryHint.textContent = 'Required.';
@@ -280,8 +271,7 @@ $typeMapJson = json_encode($typeMapArr, JSON_HEX_TAG);
         applyType(typeSelect.options[typeSelect.selectedIndex]);
     });
 
-    // Reset modal fields when it opens
-    document.getElementById('uploadModal').addEventListener('show.bs.modal', function () {
+    modal.addEventListener('show.bs.modal', function () {
         typeSelect.selectedIndex = 0;
         titleInput.value = '';
         titleInput.dataset.autofilled = 'false';
@@ -289,6 +279,7 @@ $typeMapJson = json_encode($typeMapArr, JSON_HEX_TAG);
         expiryLabel.textContent = 'Expiry Date';
         expiryInput.removeAttribute('required');
         expiryHint.textContent = '';
+        expiryHint.className = 'form-text';
         typeHint.textContent = '';
     });
 }());

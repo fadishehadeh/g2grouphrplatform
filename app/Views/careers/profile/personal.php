@@ -98,7 +98,7 @@ $genders = ['male' => 'Male', 'female' => 'Female', 'other' => 'Other', 'prefer_
                         <div class="col-md-6"><label class="form-label fw-semibold"><i class="bi bi-link-45deg me-1"></i>Other Website</label><input type="url" name="website_url" class="form-control" placeholder="https://..." value="<?= e((string)($profile['website_url'] ?? '')); ?>"></div>
                     </div>
 
-                    <div class="d-flex gap-2">
+                    <div class="careers-section-actions">
                         <button type="submit" class="btn btn-danger px-4">Save Personal Info</button>
                         <a href="<?= e(url('/careers/profile')); ?>" class="btn btn-outline-secondary">Cancel</a>
                     </div>

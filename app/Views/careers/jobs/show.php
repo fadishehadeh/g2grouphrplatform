@@ -9,7 +9,7 @@ $skills = is_string($job['skills_required'] ?? null) ? (json_decode((string)$job
             <li class="breadcrumb-item"><a href="<?= e(url('/careers')); ?>" class="text-white-50">Jobs</a></li>
             <li class="breadcrumb-item active text-white"><?= e((string)$job['title']); ?></li>
         </ol></nav>
-        <div class="d-flex align-items-start justify-content-between flex-wrap gap-3">
+        <div class="careers-stack-mobile align-items-start justify-content-between">
             <div>
                 <h1 class="fw-bold mb-1"><?= e((string)$job['title']); ?></h1>
                 <div class="text-white-50">
@@ -17,7 +17,7 @@ $skills = is_string($job['skills_required'] ?? null) ? (json_decode((string)$job
                     <?php if ($job['location_city']): ?><i class="bi bi-geo-alt me-1"></i><?= e((string)$job['location_city']); ?><?= $job['location_country'] ? ', ' . e((string)$job['location_country']) : ''; ?><?php endif; ?>
                 </div>
             </div>
-            <div class="d-flex flex-column align-items-end gap-2">
+            <div class="careers-section-actions justify-content-md-end">
                 <?php if ($hasApplied): ?>
                     <span class="badge text-bg-success fs-6 px-3 py-2"><i class="bi bi-check-circle me-1"></i>Applied</span>
                 <?php elseif ($seeker): ?>
@@ -107,35 +107,35 @@ $skills = is_string($job['skills_required'] ?? null) ? (json_decode((string)$job
             <?php if (!empty($job['description'])): ?>
             <div class="section-card p-4 mb-4">
                 <h5 class="fw-bold border-bottom pb-3 mb-3 text-danger"><i class="bi bi-file-text me-2"></i>About the Role</h5>
-                <div style="line-height:1.8"><?= nl2br(e((string)$job['description'])); ?></div>
+                <div class="careers-richtext"><?= nl2br(e((string)$job['description'])); ?></div>
             </div>
             <?php endif; ?>
 
             <?php if (!empty($job['responsibilities'])): ?>
             <div class="section-card p-4 mb-4">
                 <h5 class="fw-bold border-bottom pb-3 mb-3 text-danger"><i class="bi bi-list-check me-2"></i>Responsibilities</h5>
-                <div style="line-height:1.8"><?= nl2br(e((string)$job['responsibilities'])); ?></div>
+                <div class="careers-richtext"><?= nl2br(e((string)$job['responsibilities'])); ?></div>
             </div>
             <?php endif; ?>
 
             <?php if (!empty($job['requirements'])): ?>
             <div class="section-card p-4 mb-4">
                 <h5 class="fw-bold border-bottom pb-3 mb-3 text-danger"><i class="bi bi-check2-square me-2"></i>Requirements</h5>
-                <div style="line-height:1.8"><?= nl2br(e((string)$job['requirements'])); ?></div>
+                <div class="careers-richtext"><?= nl2br(e((string)$job['requirements'])); ?></div>
             </div>
             <?php endif; ?>
 
             <?php if (!empty($job['benefits'])): ?>
             <div class="section-card p-4 mb-4">
                 <h5 class="fw-bold border-bottom pb-3 mb-3 text-danger"><i class="bi bi-gift me-2"></i>Benefits & Perks</h5>
-                <div style="line-height:1.8"><?= nl2br(e((string)$job['benefits'])); ?></div>
+                <div class="careers-richtext"><?= nl2br(e((string)$job['benefits'])); ?></div>
             </div>
             <?php endif; ?>
 
             <!-- Final CTA -->
             <div class="text-center py-2">
                 <?php if ($hasApplied): ?>
-                    <div class="alert alert-success d-inline-flex align-items-center gap-2 px-4 py-3">
+                    <div class="alert alert-success d-flex flex-column flex-sm-row align-items-start align-items-sm-center gap-2 px-4 py-3 text-start">
                         <i class="bi bi-check-circle-fill fs-5"></i>
                         You have already applied for this position.
                         <a href="<?= e(url('/careers/my-applications')); ?>" class="ms-2 btn btn-sm btn-success">Track Application</a>
@@ -146,8 +146,10 @@ $skills = is_string($job['skills_required'] ?? null) ? (json_decode((string)$job
                     </a>
                 <?php else: ?>
                     <p class="text-muted mb-2">You need an account to apply.</p>
-                    <a href="<?= e(url('/careers/register')); ?>" class="btn btn-danger me-2">Create Account</a>
-                    <a href="<?= e(url('/careers/login')); ?>" class="btn btn-outline-secondary">Sign In</a>
+                    <div class="careers-section-actions justify-content-center">
+                        <a href="<?= e(url('/careers/register')); ?>" class="btn btn-danger">Create Account</a>
+                        <a href="<?= e(url('/careers/login')); ?>" class="btn btn-outline-secondary">Sign In</a>
+                    </div>
                 <?php endif; ?>
             </div>
         </div>

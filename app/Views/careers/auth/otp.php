@@ -1,12 +1,12 @@
 <?php declare(strict_types=1); ?>
 <div class="careers-hero">
-    <div class="container" style="max-width:480px">
+    <div class="container careers-auth-container">
         <h1 class="mb-1"><i class="bi bi-shield-check me-2"></i>Verify Your Identity</h1>
         <p class="mb-0 opacity-75">We sent a 6-digit code to your email — enter it below.</p>
     </div>
 </div>
 
-<div class="container py-5" style="max-width:480px">
+<div class="container careers-auth-container py-5">
     <div class="section-card p-4 p-md-5">
 
         <div class="alert alert-info d-flex align-items-start gap-2 mb-4">
@@ -23,7 +23,7 @@
                 <label class="form-label fw-semibold">Enter 6-Digit Code *</label>
                 <input type="text" name="otp" class="form-control form-control-lg text-center fw-bold"
                        placeholder="000000" maxlength="6" pattern="\d{6}" inputmode="numeric" autofocus required
-                       style="letter-spacing: 8px; font-size: 1.6rem;">
+                       style="letter-spacing: .4rem; font-size: 1.6rem;">
             </div>
             <button type="submit" class="btn btn-danger w-100 fw-semibold py-2">Verify Code</button>
         </form>

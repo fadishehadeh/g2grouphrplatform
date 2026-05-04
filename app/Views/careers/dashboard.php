@@ -7,13 +7,13 @@ foreach ($applications as $app) { if ($app['job_id'] === null) { $inBank = true;
 ?>
 <div class="careers-hero">
     <div class="container-fluid px-3 px-lg-5">
-        <div class="d-flex align-items-center gap-4">
+        <div class="careers-stack-mobile align-items-center gap-4">
             <?php if (!empty($profile['photo_path']) && is_file(base_path((string)$profile['photo_path']))): ?>
                 <img src="<?= e(url('/' . ltrim((string)$profile['photo_path'], '/'))); ?>"
-                     class="rounded-circle border border-3 border-white" style="width:72px;height:72px;object-fit:cover">
+                     class="rounded-circle border border-3 border-white careers-avatar-md">
             <?php else: ?>
                 <div class="rounded-circle bg-danger d-flex align-items-center justify-content-center border border-3 border-white"
-                     style="width:72px;height:72px;font-size:1.6rem;color:#fff;flex-shrink:0">
+                     style="font-size:1.6rem;color:#fff;" class="careers-avatar-md">
                     <?= e(strtoupper(substr($name, 0, 1))); ?>
                 </div>
             <?php endif; ?>
@@ -31,7 +31,7 @@ foreach ($applications as $app) { if ($app['job_id'] === null) { $inBank = true;
         <!-- Profile Completeness -->
         <div class="col-12">
             <div class="section-card p-4">
-                <div class="d-flex justify-content-between align-items-center mb-2">
+                <div class="careers-stack-mobile justify-content-between align-items-center mb-2">
                     <h6 class="fw-bold mb-0"><i class="bi bi-bar-chart-steps me-2 text-danger"></i>Profile Completeness</h6>
                     <span class="fw-bold text-<?= $scoreColor; ?>"><?= $score; ?>%</span>
                 </div>
@@ -84,7 +84,7 @@ foreach ($applications as $app) { if ($app['job_id'] === null) { $inBank = true;
         <!-- My Applications -->
         <div class="col-lg-8">
             <div class="section-card">
-                <div class="p-4 border-bottom d-flex justify-content-between align-items-center">
+                <div class="p-4 border-bottom careers-stack-mobile justify-content-between align-items-center">
                     <h6 class="fw-bold mb-0"><i class="bi bi-send me-2 text-danger"></i>My Applications</h6>
                     <a href="<?= e(url('/careers/my-applications')); ?>" class="btn btn-sm btn-outline-danger">View All</a>
                 </div>
@@ -95,17 +95,17 @@ foreach ($applications as $app) { if ($app['job_id'] === null) { $inBank = true;
                     </div>
                 <?php else: ?>
                     <div class="table-responsive">
-                        <table class="table align-middle mb-0">
+                        <table class="table align-middle mb-0 careers-mobile-table">
                             <thead class="table-light"><tr><th>Job / Type</th><th>Status</th><th>Applied</th></tr></thead>
                             <tbody>
                             <?php foreach (array_slice($applications, 0, 8) as $app): ?>
                                 <tr>
-                                    <td>
+                                    <td data-label="Job / Type">
                                         <div class="fw-semibold"><?= $app['job_id'] ? e((string)$app['job_title']) : 'General Job Bank'; ?></div>
                                         <?php if ($app['company_name']): ?><div class="small text-muted"><?= e((string)$app['company_name']); ?></div><?php endif; ?>
                                     </td>
-                                    <td><span class="badge rounded-pill badge-status-<?= e($app['status']); ?> px-3 py-2"><?= e(ucfirst($app['status'])); ?></span></td>
-                                    <td class="small text-muted"><?= e(date('d M Y', strtotime((string)$app['submitted_at']))); ?></td>
+                                    <td data-label="Status"><span class="badge rounded-pill badge-status-<?= e($app['status']); ?> px-3 py-2"><?= e(ucfirst($app['status'])); ?></span></td>
+                                    <td data-label="Applied" class="small text-muted"><?= e(date('d M Y', strtotime((string)$app['submitted_at']))); ?></td>
                                 </tr>
                             <?php endforeach; ?>
                             </tbody>

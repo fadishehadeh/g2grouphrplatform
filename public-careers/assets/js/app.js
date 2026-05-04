@@ -3,34 +3,38 @@ document.addEventListener('DOMContentLoaded', function () {
         element.focus();
     });
 
-    // Mobile sidebar toggle
-    var sidebar = document.getElementById('appSidebar');
-    var overlay = document.getElementById('sidebarOverlay');
-    var toggleBtn = document.getElementById('sidebarToggle');
-    var closeBtn = document.getElementById('sidebarClose');
+    var careersNav = document.getElementById('careersNav');
+    var careersToggler = document.querySelector('.careers-topbar .navbar-toggler');
 
-    function openSidebar(e) {
-        if (e) { e.preventDefault(); e.stopPropagation(); }
-        if (sidebar) sidebar.classList.add('sidebar-open');
-        if (overlay) overlay.classList.add('active');
-        document.body.style.overflow = 'hidden';
-    }
-    function closeSidebar(e) {
-        if (e) { e.preventDefault(); e.stopPropagation(); }
-        if (sidebar) sidebar.classList.remove('sidebar-open');
-        if (overlay) overlay.classList.remove('active');
-        document.body.style.overflow = '';
+    function isMobileNavMode() {
+        return window.matchMedia('(max-width: 991.98px)').matches;
     }
 
-    if (toggleBtn) {
-        toggleBtn.addEventListener('click', openSidebar);
-        toggleBtn.addEventListener('touchend', openSidebar);
+    function collapseCareersNav() {
+        if (!careersNav || !isMobileNavMode()) {
+            return;
+        }
+
+        var collapse = bootstrap.Collapse.getInstance(careersNav);
+        if (collapse) {
+            collapse.hide();
+        }
     }
-    if (closeBtn) {
-        closeBtn.addEventListener('click', closeSidebar);
-        closeBtn.addEventListener('touchend', closeSidebar);
+
+    if (careersNav) {
+        careersNav.querySelectorAll('a, button[type="submit"]').forEach(function (element) {
+            element.addEventListener('click', function () {
+                if (element === careersToggler) {
+                    return;
+                }
+                collapseCareersNav();
+            });
+        });
     }
-    if (overlay) {
-        overlay.addEventListener('click', closeSidebar);
-    }
+
+    window.addEventListener('resize', function () {
+        if (!isMobileNavMode() && careersNav) {
+            careersNav.classList.remove('show');
+        }
+    });
 });

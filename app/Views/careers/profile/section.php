@@ -206,7 +206,7 @@ $def = $fieldDefs[$type] ?? ['dateRange' => false, 'isCurrent' => false, 'titleL
                     $d = is_string($item['data']) ? (json_decode($item['data'], true) ?? []) : ($item['data'] ?? []);
                 ?>
                     <div class="border rounded p-3">
-                        <div class="d-flex justify-content-between align-items-start">
+                        <div class="careers-stack-mobile justify-content-between align-items-start">
                             <div class="flex-grow-1">
                                 <div class="fw-bold"><?= e((string)$item['title']); ?></div>
                                 <?php if (!empty($item['subtitle'])): ?><div class="text-muted small"><?= e((string)$item['subtitle']); ?></div><?php endif; ?>
@@ -220,7 +220,7 @@ $def = $fieldDefs[$type] ?? ['dateRange' => false, 'isCurrent' => false, 'titleL
                                 $desc = $d['description'] ?? $d['issuer'] ?? $d['level'] ?? $d['proficiency'] ?? $d['credential_id'] ?? '';
                                 if ($desc): ?><div class="small text-muted mt-1"><?= e(mb_strimwidth((string)$desc, 0, 120, '...')); ?></div><?php endif; ?>
                             </div>
-                            <div class="d-flex gap-2 ms-3">
+                            <div class="careers-section-actions ms-3">
                                 <a href="<?= e(url('/careers/profile/' . $type . '/' . $item['id'] . '/edit')); ?>" class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil"></i></a>
                                 <form method="post" action="<?= e(url('/careers/profile/' . $type . '/' . $item['id'] . '/delete')); ?>"
                                       onsubmit="return confirm('Delete this entry?')">
