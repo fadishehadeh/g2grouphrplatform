@@ -40,7 +40,7 @@ $nextId = static function () use (&$collapseId): string {
 
         <?php
             $peopleId = $nextId();
-            $peopleOpen = $groupOpen(['/employees', '/onboarding', '/offboarding']);
+            $peopleOpen = $groupOpen(['/employees', '/onboarding', '/offboarding', '/employee-registration']);
         ?>
         <div class="sidebar-group">
             <a class="sidebar-group-toggle<?= $peopleOpen === 'show' ? '' : ' collapsed'; ?>" href="#<?= e($peopleId); ?>" data-bs-toggle="collapse" aria-expanded="<?= $peopleOpen === 'show' ? 'true' : 'false'; ?>">
@@ -56,6 +56,7 @@ $nextId = static function () use (&$collapseId): string {
                 <?php if (can('offboarding.manage')): ?>
                 <a href="<?= e(url('/offboarding')); ?>" class="sidebar-sublink"><i class="bi bi-box-arrow-right"></i> Offboarding</a>
                 <?php endif; ?>
+                <a href="<?= e(url('/employee-registration/review')); ?>" class="sidebar-sublink"><i class="bi bi-person-plus-fill"></i> Employee Registration</a>
             </div>
         </div>
 
