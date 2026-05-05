@@ -381,7 +381,7 @@ $idDocTypes       = array_values(array_filter($identityDocTypes, fn($t) =>
                         </div>
                         <div class="col-12">
                             <label class="form-label small">File</label>
-                            <input type="file" name="documents[0][file]" class="form-control form-control-sm doc-file"
+                            <input type="file" name="documents[0]" class="form-control form-control-sm doc-file"
                                    accept=".pdf,.png,.jpg,.jpeg,.doc,.docx">
                         </div>
                     </div>
