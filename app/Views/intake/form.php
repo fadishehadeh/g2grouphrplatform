@@ -285,7 +285,7 @@ $idDocTypes       = array_values(array_filter($identityDocTypes, fn($t) =>
                     </div>
                     <div class="col-12">
                         <label class="form-label small">Upload Passport Copy <span class="text-danger">*</span></label>
-                        <input type="file" name="passport_doc" id="passportFile" class="form-control form-control-sm"
+                        <input type="file" name="passport_file" id="passportFile" class="form-control form-control-sm"
                                accept=".pdf,.png,.jpg,.jpeg" required>
                     </div>
                 </div>
@@ -328,7 +328,7 @@ $idDocTypes       = array_values(array_filter($identityDocTypes, fn($t) =>
                     </div>
                     <div class="col-12">
                         <label class="form-label small">Upload ID Copy <span class="text-danger">*</span></label>
-                        <input type="file" name="id_doc" id="idFile" class="form-control form-control-sm"
+                        <input type="file" name="id_file" id="idFile" class="form-control form-control-sm"
                                accept=".pdf,.png,.jpg,.jpeg" required>
                     </div>
                 </div>

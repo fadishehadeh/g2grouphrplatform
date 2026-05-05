@@ -108,7 +108,7 @@ final class IntakeController extends Controller
         }
 
         // Validate required passport document
-        $passportFile = $request->file('passport_doc') ?? [];
+        $passportFile = $request->file('passport_file') ?? [];
         if (($passportFile['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE || empty($passportFile['name'])) {
             flash('error', 'Passport document file is required.');
             $this->redirect('/employee-registration');
@@ -135,7 +135,7 @@ final class IntakeController extends Controller
         }
 
         // Validate required ID document
-        $idFile = $request->file('id_doc') ?? [];
+        $idFile = $request->file('id_file') ?? [];
         if (($idFile['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE || empty($idFile['name'])) {
             flash('error', 'National ID document file is required.');
             $this->redirect('/employee-registration');
@@ -200,7 +200,7 @@ final class IntakeController extends Controller
                 (string) ($_SERVER['HTTP_USER_AGENT'] ?? '')
             );
         } catch (Throwable $e) {
-            flash('error', 'Submission failed. Please try again.');
+            flash('error', 'Submission failed: ' . $e->getMessage());
             $this->redirect('/employee-registration');
         }
 
@@ -243,7 +243,7 @@ final class IntakeController extends Controller
         } catch (Throwable $e) {
             $this->cleanupIntakeFiles($storedPaths);
             $this->app->database()->execute('DELETE FROM employee_intake_submissions WHERE id = :id', ['id' => $submissionId]);
-            flash('error', 'Passport document upload failed. Please try again.');
+            flash('error', 'Passport document upload failed: ' . $e->getMessage());
             $this->redirect('/employee-registration');
         }
 
@@ -263,7 +263,7 @@ final class IntakeController extends Controller
         } catch (Throwable $e) {
             $this->cleanupIntakeFiles($storedPaths);
             $this->app->database()->execute('DELETE FROM employee_intake_submissions WHERE id = :id', ['id' => $submissionId]);
-            flash('error', 'National ID document upload failed. Please try again.');
+            flash('error', 'National ID document upload failed: ' . $e->getMessage());
             $this->redirect('/employee-registration');
         }
 
