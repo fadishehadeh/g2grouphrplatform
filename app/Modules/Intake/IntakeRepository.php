@@ -132,7 +132,7 @@ final class IntakeRepository
     public function findByToken(string $token): ?array
     {
         return $this->database->fetch(
-            'SELECT s.*, u.name AS reviewer_name
+            'SELECT s.*, CONCAT_WS(\' \', u.first_name, u.last_name) AS reviewer_name
              FROM employee_intake_submissions s
              LEFT JOIN users u ON u.id = s.reviewed_by
              WHERE s.token = :token
@@ -161,7 +161,8 @@ final class IntakeRepository
 
         return $this->database->fetchAll(
             "SELECT s.id, s.token, s.first_name, s.last_name, s.nationality,
-                    s.status, s.submitted_at, s.reviewed_at, u.name AS reviewer_name
+                    s.status, s.submitted_at, s.reviewed_at,
+                    CONCAT_WS(' ', u.first_name, u.last_name) AS reviewer_name
              FROM employee_intake_submissions s
              LEFT JOIN users u ON u.id = s.reviewed_by
              {$whereClause}

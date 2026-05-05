@@ -300,7 +300,7 @@ foreach ($documentTypes as $t) {
                             <?php foreach ($identityDocTypes as $t): ?>
                             <option value="<?= e((string) $t['id']); ?>"
                                     data-requires-expiry="<?= $t['requires_expiry'] ? '1' : '0'; ?>"
-                                    <?= (stripos($t['name'], 'qatar id') !== false || stripos($t['name'], 'national id') !== false) ? 'selected' : ''; ?>>
+                                    <?= (stripos($t['name'], 'qatar id') !== false || stripos($t['name'], 'national id') !== false || stripos($t['name'], 'qid') !== false || preg_match('/\bid\b/i', $t['name'])) ? 'selected' : ''; ?>>
                                 <?= e($t['name']); ?>
                             </option>
                             <?php endforeach; ?>
