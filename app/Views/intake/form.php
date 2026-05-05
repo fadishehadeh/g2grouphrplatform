@@ -1,11 +1,14 @@
 <?php
 declare(strict_types=1);
-$countries = ['Afghanistan','Albania','Algeria','Andorra','Angola','Antigua and Barbuda','Argentina','Armenia','Australia','Austria','Azerbaijan','Bahamas','Bahrain','Bangladesh','Barbados','Belarus','Belgium','Belize','Benin','Bhutan','Bolivia','Bosnia and Herzegovina','Botswana','Brazil','Brunei','Bulgaria','Burkina Faso','Burundi','Cabo Verde','Cambodia','Cameroon','Canada','Central African Republic','Chad','Chile','China','Colombia','Comoros','Congo','Costa Rica','Croatia','Cuba','Cyprus','Czech Republic','Denmark','Djibouti','Dominica','Dominican Republic','Ecuador','Egypt','El Salvador','Equatorial Guinea','Eritrea','Estonia','Eswatini','Ethiopia','Fiji','Finland','France','Gabon','Gambia','Georgia','Germany','Ghana','Greece','Grenada','Guatemala','Guinea','Guinea-Bissau','Guyana','Haiti','Honduras','Hungary','Iceland','India','Indonesia','Iran','Iraq','Ireland','Israel','Italy','Ivory Coast','Jamaica','Japan','Jordan','Kazakhstan','Kenya','Kiribati','Kosovo','Kuwait','Kyrgyzstan','Laos','Latvia','Lebanon','Lesotho','Liberia','Libya','Liechtenstein','Lithuania','Luxembourg','Madagascar','Malawi','Malaysia','Maldives','Mali','Malta','Marshall Islands','Mauritania','Mauritius','Mexico','Micronesia','Moldova','Monaco','Mongolia','Montenegro','Morocco','Mozambique','Myanmar','Namibia','Nauru','Nepal','Netherlands','New Zealand','Nicaragua','Niger','Nigeria','North Korea','North Macedonia','Norway','Oman','Pakistan','Palau','Palestine','Panama','Papua New Guinea','Paraguay','Peru','Philippines','Poland','Portugal','Qatar','Romania','Russia','Rwanda','Saint Kitts and Nevis','Saint Lucia','Saint Vincent and the Grenadines','Samoa','San Marino','Sao Tome and Principe','Saudi Arabia','Senegal','Serbia','Seychelles','Sierra Leone','Singapore','Slovakia','Slovenia','Solomon Islands','Somalia','South Africa','South Korea','South Sudan','Spain','Sri Lanka','Sudan','Suriname','Sweden','Switzerland','Syria','Taiwan','Tajikistan','Tanzania','Thailand','Timor-Leste','Togo','Tonga','Trinidad and Tobago','Tunisia','Turkey','Turkmenistan','Tuvalu','Uganda','Ukraine','United Arab Emirates','United Kingdom','United States','Uruguay','Uzbekistan','Vanuatu','Vatican City','Venezuela','Vietnam','Yemen','Zambia','Zimbabwe'];
+$countries = ['Afghanistan','Albania','Algeria','Andorra','Angola','Antigua and Barbuda','Argentina','Armenia','Australia','Austria','Azerbaijan','Bahamas','Bahrain','Bangladesh','Barbados','Belarus','Belgium','Belize','Benin','Bhutan','Bolivia','Bosnia and Herzegovina','Botswana','Brazil','Brunei','Bulgaria','Burkina Faso','Burundi','Cabo Verde','Cambodia','Cameroon','Canada','Central African Republic','Chad','Chile','China','Colombia','Comoros','Congo','Costa Rica','Croatia','Cuba','Cyprus','Czech Republic','Denmark','Djibouti','Dominica','Dominican Republic','Ecuador','Egypt','El Salvador','Equatorial Guinea','Eritrea','Estonia','Eswatini','Ethiopia','Fiji','Finland','France','Gabon','Gambia','Georgia','Germany','Ghana','Greece','Grenada','Guatemala','Guinea','Guinea-Bissau','Guyana','Haiti','Honduras','Hungary','Iceland','India','Indonesia','Iran','Iraq','Ireland','Italy','Ivory Coast','Jamaica','Japan','Jordan','Kazakhstan','Kenya','Kiribati','Kosovo','Kuwait','Kyrgyzstan','Laos','Latvia','Lebanon','Lesotho','Liberia','Libya','Liechtenstein','Lithuania','Luxembourg','Madagascar','Malawi','Malaysia','Maldives','Mali','Malta','Marshall Islands','Mauritania','Mauritius','Mexico','Micronesia','Moldova','Monaco','Mongolia','Montenegro','Morocco','Mozambique','Myanmar','Namibia','Nauru','Nepal','Netherlands','New Zealand','Nicaragua','Niger','Nigeria','North Korea','North Macedonia','Norway','Oman','Pakistan','Palau','Palestine','Panama','Papua New Guinea','Paraguay','Peru','Philippines','Poland','Portugal','Qatar','Romania','Russia','Rwanda','Saint Kitts and Nevis','Saint Lucia','Saint Vincent and the Grenadines','Samoa','San Marino','Sao Tome and Principe','Saudi Arabia','Senegal','Serbia','Seychelles','Sierra Leone','Singapore','Slovakia','Slovenia','Solomon Islands','Somalia','South Africa','South Korea','South Sudan','Spain','Sri Lanka','Sudan','Suriname','Sweden','Switzerland','Syria','Taiwan','Tajikistan','Tanzania','Thailand','Timor-Leste','Togo','Tonga','Trinidad and Tobago','Tunisia','Turkey','Turkmenistan','Tuvalu','Uganda','Ukraine','United Arab Emirates','United Kingdom','United States','Uruguay','Uzbekistan','Vanuatu','Vatican City','Venezuela','Vietnam','Yemen','Zambia','Zimbabwe'];
 
 $typesByCategory = [];
 foreach ($documentTypes as $t) {
     $typesByCategory[$t['category_name']][] = $t;
 }
+
+$passportDocTypes = array_values(array_filter($identityDocTypes, fn($t) => stripos($t['name'], 'passport') !== false));
+$idDocTypes       = array_values(array_filter($identityDocTypes, fn($t) => stripos($t['name'], 'passport') === false));
 ?>
 <div class="container py-2" style="max-width:860px">
 
@@ -74,8 +77,6 @@ foreach ($documentTypes as $t) {
                         <option value="">Select</option>
                         <option value="male">Male</option>
                         <option value="female">Female</option>
-                        <option value="other">Other</option>
-                        <option value="prefer_not_to_say">Prefer not to say</option>
                     </select>
                 </div>
                 <div class="col-md-4">
@@ -254,10 +255,10 @@ foreach ($documentTypes as $t) {
                         <label class="form-label small">Document Type <span class="text-danger">*</span></label>
                         <select name="passport_doc[document_type_id]" id="passportDocType" class="form-select form-select-sm">
                             <option value="">— Select —</option>
-                            <?php foreach ($identityDocTypes as $t): ?>
+                            <?php foreach ($passportDocTypes as $t): ?>
                             <option value="<?= e((string) $t['id']); ?>"
                                     data-requires-expiry="<?= $t['requires_expiry'] ? '1' : '0'; ?>"
-                                    <?= stripos($t['name'], 'passport') !== false ? 'selected' : ''; ?>>
+                                    selected>
                                 <?= e($t['name']); ?>
                             </option>
                             <?php endforeach; ?>
@@ -281,7 +282,7 @@ foreach ($documentTypes as $t) {
                     </div>
                     <div class="col-12">
                         <label class="form-label small">Upload Passport Copy <span class="text-danger">*</span></label>
-                        <input type="file" name="passport_doc[file]" id="passportFile" class="form-control form-control-sm"
+                        <input type="file" name="passport_doc" id="passportFile" class="form-control form-control-sm"
                                accept=".pdf,.png,.jpg,.jpeg" required>
                     </div>
                 </div>
@@ -297,10 +298,10 @@ foreach ($documentTypes as $t) {
                         <label class="form-label small">Document Type <span class="text-danger">*</span></label>
                         <select name="id_doc[document_type_id]" id="idDocType" class="form-select form-select-sm">
                             <option value="">— Select —</option>
-                            <?php foreach ($identityDocTypes as $t): ?>
+                            <?php foreach ($idDocTypes as $t): ?>
                             <option value="<?= e((string) $t['id']); ?>"
                                     data-requires-expiry="<?= $t['requires_expiry'] ? '1' : '0'; ?>"
-                                    <?= (stripos($t['name'], 'qatar id') !== false || stripos($t['name'], 'national id') !== false || stripos($t['name'], 'qid') !== false || preg_match('/\bid\b/i', $t['name'])) ? 'selected' : ''; ?>>
+                                    selected>
                                 <?= e($t['name']); ?>
                             </option>
                             <?php endforeach; ?>
@@ -324,7 +325,7 @@ foreach ($documentTypes as $t) {
                     </div>
                     <div class="col-12">
                         <label class="form-label small">Upload ID Copy <span class="text-danger">*</span></label>
-                        <input type="file" name="id_doc[file]" id="idFile" class="form-control form-control-sm"
+                        <input type="file" name="id_doc" id="idFile" class="form-control form-control-sm"
                                accept=".pdf,.png,.jpg,.jpeg" required>
                     </div>
                 </div>
@@ -673,5 +674,36 @@ foreach ($documentTypes as $t) {
     });
 
     showStep(1);
+
+    // File selected feedback
+    function attachFilePreview(inputEl) {
+        inputEl.addEventListener('change', function () {
+            var existing = this.parentElement.querySelector('.file-chosen');
+            if (existing) existing.remove();
+            if (this.files && this.files.length) {
+                var badge = document.createElement('div');
+                badge.className = 'file-chosen mt-1 d-flex align-items-center gap-1 small text-success';
+                badge.innerHTML = '<i class="bi bi-paperclip"></i><span class="text-truncate" style="max-width:320px">' +
+                    this.files[0].name + ' (' + (this.files[0].size / 1024).toFixed(0) + ' KB)</span>';
+                this.parentElement.appendChild(badge);
+            }
+        });
+    }
+    document.querySelectorAll('input[type="file"]').forEach(attachFilePreview);
+    // Also attach to dynamically added doc rows
+    document.getElementById('docRows').addEventListener('change', function (e) {
+        if (e.target.type === 'file' && !e.target._previewAttached) {
+            e.target._previewAttached = true;
+            attachFilePreview(e.target);
+            e.target.dispatchEvent(new Event('change'));
+        }
+    });
+
+    // Submit loading state
+    document.getElementById('intakeForm').addEventListener('submit', function () {
+        var btn = document.getElementById('btnSubmit');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Submitting…';
+    });
 })();
 </script>
