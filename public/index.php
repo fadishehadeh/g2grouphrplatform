@@ -6,6 +6,17 @@ define('BASE_PATH', dirname(__DIR__));
 
 require BASE_PATH . '/app/Support/helpers.php';
 
+// Set APP_URL dynamically for local development
+(static function () {
+    $scheme = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    $host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    $dir    = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? ''), '/\\');
+    $url    = $scheme . '://' . $host . $dir;
+    $_ENV['APP_URL']    = $url;
+    $_SERVER['APP_URL'] = $url;
+    putenv('APP_URL=' . $url);
+})();
+
 require BASE_PATH . '/vendor/autoload.php';
 
 spl_autoload_register(static function (string $class): void {

@@ -8,7 +8,10 @@ foreach ($documentTypes as $t) {
 }
 
 $passportDocTypes = array_values(array_filter($identityDocTypes, fn($t) => stripos($t['name'], 'passport') !== false));
-$idDocTypes       = array_values(array_filter($identityDocTypes, fn($t) => stripos($t['name'], 'passport') === false));
+$idDocTypes       = array_values(array_filter($identityDocTypes, fn($t) =>
+    stripos($t['name'], 'passport') === false &&
+    (stripos($t['name'], 'qid') !== false || preg_match('/\bid\b/i', $t['name']))
+));
 ?>
 <div class="container py-2" style="max-width:860px">
 
