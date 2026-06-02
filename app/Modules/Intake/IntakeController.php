@@ -165,18 +165,7 @@ final class IntakeController extends Controller
         }
 
         $idPost = (array) ($request->input('id_doc') ?? []);
-        if (empty($idPost['document_number'])) {
-            flash('error', 'National ID document number is required.');
-            $this->redirect('/employee-registration');
-        }
-        if (empty($idPost['issue_date'])) {
-            flash('error', 'National ID issue date is required.');
-            $this->redirect('/employee-registration');
-        }
-        if (empty($idPost['expiry_date'])) {
-            flash('error', 'National ID expiry date is required.');
-            $this->redirect('/employee-registration');
-        }
+        // Document number, issue date, and expiry date are now optional
 
         // Validate optional additional document uploads
         $rawFiles    = $request->file('documents') ?? [];
