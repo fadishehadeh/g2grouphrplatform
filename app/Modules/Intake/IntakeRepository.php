@@ -304,6 +304,9 @@ final class IntakeRepository
             $contacts = $this->contactsBySubmission($submissionId);
             $employeeRepo->saveEmergencyContacts($employeeId, $contacts);
 
+            // Migrate identifications
+            $this->migrateIdentificationsToEmployee($submissionId, $employeeId);
+
             $stagedDocs  = $this->documentsBySubmission($submissionId);
             $employeeDir = base_path('storage/uploads/documents/employee_' . $employeeId);
 
@@ -400,5 +403,108 @@ final class IntakeRepository
     private function ni(mixed $value): ?int
     {
         return ($value === null || $value === '') ? null : (int) $value;
+    }
+
+    // ─── Identification Type Support ──────────────────────────────────────────
+
+    public function getIdentificationTypes(): array
+    {
+        return $this->database->fetchAll(
+            'SELECT id, code, name, country, is_active
+             FROM identification_types
+             WHERE is_active = 1
+             ORDER BY sort_order ASC, name ASC'
+        );
+    }
+
+    public function saveIdentifications(int $submissionId, array $identifications): void
+    {
+        if (empty($identifications)) {
+            return;
+        }
+
+        $this->database->transaction(function (Database $db) use ($submissionId, $identifications): void {
+            // Delete existing identifications for this submission
+            $db->execute(
+                'DELETE FROM intake_submission_identifications WHERE submission_id = :sid',
+                ['sid' => $submissionId]
+            );
+
+            // Insert new identifications
+            foreach ($identifications as $id) {
+                if (empty($id['type_id']) || empty($id['number'])) {
+                    continue;
+                }
+
+                $db->execute(
+                    'INSERT INTO intake_submission_identifications
+                     (submission_id, identification_type_id, id_number, is_primary, issue_date, expiry_date)
+                     VALUES (:sid, :type_id, :id_number, :primary, :issue_date, :expiry_date)',
+                    [
+                        'sid'         => $submissionId,
+                        'type_id'     => (int) $id['type_id'],
+                        'id_number'   => encrypt_field(trim((string) $id['number'])),
+                        'primary'     => isset($id['is_primary']) && (string) $id['is_primary'] === '1' ? 1 : 0,
+                        'issue_date'  => $this->ns($id['issue_date'] ?? null),
+                        'expiry_date' => $this->ns($id['expiry_date'] ?? null),
+                    ]
+                );
+            }
+        });
+    }
+
+    public function getIdentifications(int $submissionId): array
+    {
+        return $this->database->fetchAll(
+            'SELECT
+                isi.id,
+                isi.identification_type_id,
+                it.code as type_code,
+                it.name as type_name,
+                it.country,
+                isi.id_number,
+                isi.is_primary,
+                isi.issue_date,
+                isi.expiry_date
+             FROM intake_submission_identifications isi
+             JOIN identification_types it ON it.id = isi.identification_type_id
+             WHERE isi.submission_id = :sid
+             ORDER BY isi.is_primary DESC, isi.created_at ASC',
+            ['sid' => $submissionId]
+        );
+    }
+
+    public function migrateIdentificationsToEmployee(int $submissionId, int $employeeId): void
+    {
+        $identifications = $this->getIdentifications($submissionId);
+
+        if (empty($identifications)) {
+            return;
+        }
+
+        $this->database->transaction(function (Database $db) use ($employeeId, $identifications): void {
+            // Delete existing employee identifications
+            $db->execute(
+                'DELETE FROM employee_identifications WHERE employee_id = :eid',
+                ['eid' => $employeeId]
+            );
+
+            // Insert migrated identifications
+            foreach ($identifications as $id) {
+                $db->execute(
+                    'INSERT INTO employee_identifications
+                     (employee_id, identification_type_id, id_number, is_primary, issue_date, expiry_date)
+                     VALUES (:eid, :type_id, :id_number, :primary, :issue_date, :expiry_date)',
+                    [
+                        'eid'        => $employeeId,
+                        'type_id'    => $id['identification_type_id'],
+                        'id_number'  => $id['id_number'], // already encrypted
+                        'primary'    => $id['is_primary'],
+                        'issue_date' => $id['issue_date'],
+                        'expiry_date' => $id['expiry_date'],
+                    ]
+                );
+            }
+        });
     }
 }

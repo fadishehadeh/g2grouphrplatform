@@ -177,16 +177,120 @@ $idDocTypes       = array_values(array_filter($identityDocTypes, fn($t) =>
                 <i class="bi bi-lock me-1"></i> ID and passport numbers are encrypted and only visible to authorised HR staff.
             </div>
 
-            <div class="row g-3">
+            <!-- Legacy fields (kept for backward compatibility) -->
+            <div class="row g-3 mb-3" style="display: none;">
                 <div class="col-md-6">
                     <label class="form-label">National ID Number <span class="text-danger">*</span></label>
-                    <input type="text" name="id_number" id="id_number" class="form-control" required placeholder="e.g. Qatar ID number">
+                    <input type="text" name="id_number" id="id_number" class="form-control" placeholder="e.g. Qatar ID number">
                 </div>
                 <div class="col-md-6">
                     <label class="form-label">Passport Number <span class="text-danger">*</span></label>
-                    <input type="text" name="passport_number" id="passport_number" class="form-control" required>
+                    <input type="text" name="passport_number" id="passport_number" class="form-control">
                 </div>
             </div>
+
+            <!-- Identifications (Multiple IDs) -->
+            <div class="mb-3">
+                <label class="form-label fw-semibold mb-2">Identifications <span class="text-danger">*</span></label>
+                <p class="text-muted small mb-3">Add at least one form of identification. You can add multiple IDs (e.g., National ID + Passport).</p>
+
+                <div id="identifications-container">
+                    <!-- Rows will be populated here via JavaScript -->
+                </div>
+
+                <button type="button" id="add-identification-btn" class="btn btn-secondary btn-sm mt-3">
+                    <i class="bi bi-plus-circle me-1"></i>Add Another ID
+                </button>
+            </div>
+
+            <!-- Hidden template for ID type options -->
+            <template id="id-type-template">
+                <option value="">Select ID Type</option>
+                <?php foreach ($identificationTypes ?? [] as $type): ?>
+                <option value="<?= (int)$type['id']; ?>"><?= e($type['name']); ?> <?php if ($type['country']): ?>(<?= e($type['country']); ?>)<?php endif; ?></option>
+                <?php endforeach; ?>
+            </template>
+
+            <script>
+                const idRowTemplate = `
+                    <div class="identification-row mb-3 p-3" style="border:1px solid #e5e7eb; border-radius:0.375rem; background:#f9fafb">
+                        <div class="row g-2">
+                            <div class="col-md-5">
+                                <label class="form-label small">ID Type <span class="text-danger">*</span></label>
+                                <select name="identifications[{INDEX}][type_id]" class="form-select form-select-sm id-type-select" required>
+                                    {ID_TYPE_OPTIONS}
+                                </select>
+                            </div>
+                            <div class="col-md-7">
+                                <label class="form-label small">ID Number <span class="text-danger">*</span></label>
+                                <input type="text" name="identifications[{INDEX}][number]" class="form-control form-control-sm" required placeholder="Enter ID number">
+                            </div>
+                        </div>
+                        <div class="row g-2 mt-2">
+                            <div class="col-md-5">
+                                <label class="form-label small">Issue Date (optional)</label>
+                                <input type="date" name="identifications[{INDEX}][issue_date]" class="form-control form-control-sm">
+                            </div>
+                            <div class="col-md-5">
+                                <label class="form-label small">Expiry Date (optional)</label>
+                                <input type="date" name="identifications[{INDEX}][expiry_date]" class="form-control form-control-sm">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label small">&nbsp;</label>
+                                <button type="button" class="btn btn-danger btn-sm w-100 remove-id-btn" {REMOVE_DISABLED}>
+                                    <i class="bi bi-trash me-1"></i>Remove
+                                </button>
+                            </div>
+                        </div>
+                        <div class="row g-2 mt-2">
+                            <div class="col-12">
+                                <label class="form-check">
+                                    <input type="checkbox" name="identifications[{INDEX}][is_primary]" value="1" class="form-check-input">
+                                    <span class="form-check-label small">Mark as primary ID</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                let idCount = 0;
+
+                function getIdTypeOptions() {
+                    const template = document.getElementById('id-type-template');
+                    return template ? template.innerHTML : '';
+                }
+
+                function addIdentificationRow(focus = false) {
+                    const container = document.getElementById('identifications-container');
+                    const html = idRowTemplate
+                        .replace(/{INDEX}/g, idCount)
+                        .replace(/{ID_TYPE_OPTIONS}/g, getIdTypeOptions())
+                        .replace(/{REMOVE_DISABLED}/g, idCount === 0 ? 'disabled' : '');
+
+                    const div = document.createElement('div');
+                    div.innerHTML = html;
+                    container.appendChild(div.firstElementChild);
+
+                    const newRow = container.lastElementChild;
+                    if (focus) newRow.querySelector('.id-type-select')?.focus();
+
+                    newRow.querySelector('.remove-id-btn')?.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        newRow.remove();
+                    });
+
+                    idCount++;
+                }
+
+                // Initialize with one row
+                document.addEventListener('DOMContentLoaded', () => {
+                    addIdentificationRow();
+                    document.getElementById('add-identification-btn')?.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        addIdentificationRow(true);
+                    });
+                });
+            </script>
         </div>
 
         <!-- ═══ Step 3: Emergency Contacts ══════════════════════════════════ -->
@@ -495,8 +599,19 @@ $idDocTypes       = array_values(array_filter($identityDocTypes, fn($t) =>
             if (!val('address_line_1')) { showError('Address line 1 is required.');   return false; }
             if (!val('city'))           { showError('City is required.');              return false; }
             if (!val('country'))        { showError('Country is required.');           return false; }
-            if (!val('id_number'))      { showError('National ID number is required.'); return false; }
-            if (!val('passport_number')){ showError('Passport number is required.');  return false; }
+
+            // Check for at least one identification
+            var idRows = document.querySelectorAll('.identification-row');
+            if (idRows.length === 0) { showError('At least one form of identification is required.'); return false; }
+            var hasValidId = false;
+            idRows.forEach(function(row) {
+                var typeSelect = row.querySelector('.id-type-select');
+                var numberInput = row.querySelector('input[name*="[number]"]');
+                if (typeSelect && typeSelect.value && numberInput && numberInput.value.trim()) {
+                    hasValidId = true;
+                }
+            });
+            if (!hasValidId) { showError('Please provide at least one ID type and number.'); return false; }
         }
         if (n === 3) {
             var firstRow = document.querySelector('#contactRows .contact-row');
@@ -561,11 +676,26 @@ $idDocTypes       = array_values(array_filter($identityDocTypes, fn($t) =>
         ]);
 
         var addrParts = [getVal('address_line_1'), getVal('address_line_2'), getVal('city'), getVal('state'), getSelText('country'), getVal('postal_code')].filter(Boolean);
-        html += section('Address & Identity', [
-            ['Address', addrParts.join(', ') || '—'],
-            ['National ID', getVal('id_number') ? '•••• (provided)' : '—'],
-            ['Passport', getVal('passport_number') ? '•••• (provided)' : '—'],
-        ]);
+        // Build identifications display
+        var idRows = document.querySelectorAll('.identification-row');
+        var idLines = [];
+        var idCount = 0;
+        idRows.forEach(function(row) {
+            var typeSelect = row.querySelector('.id-type-select');
+            var numberInput = row.querySelector('input[name*="[number]"]');
+            var typeName = typeSelect && typeSelect.options[typeSelect.selectedIndex] ? typeSelect.options[typeSelect.selectedIndex].text : '';
+            var number = numberInput && numberInput.value.trim() ? '•••• (provided)' : '';
+            if (typeName && number) {
+                idCount++;
+                idLines.push([typeName, number]);
+            }
+        });
+
+        var addrIdLines = [['Address', addrParts.join(', ') || '—']];
+        if (idLines.length > 0) {
+            addrIdLines = addrIdLines.concat(idLines);
+        }
+        html += section('Address & Identity', addrIdLines);
 
         // Contacts
         var contactRows = document.querySelectorAll('#contactRows .contact-row');

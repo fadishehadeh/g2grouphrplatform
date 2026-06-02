@@ -56,10 +56,13 @@ final class IntakeController extends Controller
              ORDER BY dt.sort_order ASC, dt.name ASC"
         );
 
+        $identificationTypes = $this->repository->getIdentificationTypes();
+
         $this->render('intake/form', [
-            'documentTypes'    => $documentTypes,
-            'companies'        => $companies,
-            'identityDocTypes' => $identityDocTypes,
+            'documentTypes'       => $documentTypes,
+            'companies'           => $companies,
+            'identityDocTypes'    => $identityDocTypes,
+            'identificationTypes' => $identificationTypes,
         ], 'intake');
     }
 
@@ -89,6 +92,20 @@ final class IntakeController extends Controller
         if (empty($data['country']))      $errors[] = 'Country is required.';
         if (empty($data['id_number']))    $errors[] = 'National ID number is required.';
         if (empty($data['passport_number'])) $errors[] = 'Passport number is required.';
+
+        // Validate identifications (at least one ID required)
+        $identifications = (array) ($request->input('identifications') ?? []);
+        if (empty($identifications)) {
+            $errors[] = 'At least one form of identification is required.';
+        } else {
+            foreach ($identifications as $idx => $id) {
+                $typeId = (int) ($id['type_id'] ?? 0);
+                $number = trim((string) ($id['number'] ?? ''));
+                if ($typeId === 0 || empty($number)) {
+                    $errors[] = 'Identification ' . ($idx + 1) . ': Please select a type and enter an ID number.';
+                }
+            }
+        }
 
         if ($errors) {
             flash('error', implode(' ', $errors));
@@ -201,6 +218,15 @@ final class IntakeController extends Controller
             );
         } catch (Throwable $e) {
             flash('error', 'Submission failed: ' . $e->getMessage());
+            $this->redirect('/employee-registration');
+        }
+
+        // Save identifications to intake submission
+        try {
+            $this->repository->saveIdentifications($submissionId, $identifications);
+        } catch (Throwable $e) {
+            $this->app->database()->execute('DELETE FROM employee_intake_submissions WHERE id = :id', ['id' => $submissionId]);
+            flash('error', 'Failed to save identifications: ' . $e->getMessage());
             $this->redirect('/employee-registration');
         }
 
@@ -391,13 +417,16 @@ final class IntakeController extends Controller
         $submission = $this->decryptSubmission($submission);
         $contacts   = $this->repository->contactsBySubmission((int) $submission['id']);
         $documents  = $this->repository->documentsBySubmission((int) $submission['id']);
+        $identifications = $this->repository->getIdentifications((int) $submission['id']);
         $formOptions = $this->employees->formOptions();
 
         $this->render('intake/review-show', [
-            'submission'  => $submission,
-            'contacts'    => $contacts,
-            'documents'   => $documents,
-            'formOptions' => $formOptions,
+            'submission'       => $submission,
+            'contacts'         => $contacts,
+            'documents'        => $documents,
+            'identifications'  => $identifications,
+            'formOptions'      => $formOptions,
+            'token'            => $token,
         ]);
     }
 
@@ -618,5 +647,88 @@ final class IntakeController extends Controller
         }
 
         return $result;
+    }
+
+    public function downloadDocument(Request $request, string $token, int $docId): void
+    {
+        // Verify token and get submission
+        $submission = $this->app->database()->fetch(
+            'SELECT id FROM employee_intake_submissions WHERE review_token = :token',
+            ['token' => $token]
+        );
+
+        if (!$submission) {
+            Response::abort(404, 'Submission not found.');
+        }
+
+        $submissionId = (int) $submission['id'];
+
+        // Get document
+        $doc = $this->app->database()->fetch(
+            'SELECT * FROM employee_intake_documents WHERE id = :id AND submission_id = :sid',
+            ['id' => $docId, 'sid' => $submissionId]
+        );
+
+        if (!$doc) {
+            Response::abort(404, 'Document not found.');
+        }
+
+        // Build absolute path and verify it exists
+        $absPath = base_path($doc['file_path']);
+        if (!file_exists($absPath) || !is_file($absPath)) {
+            Response::abort(404, 'File not found on server.');
+        }
+
+        // Serve file
+        header('Content-Type: ' . ($doc['mime_type'] ?? 'application/octet-stream'));
+        header('Content-Length: ' . filesize($absPath));
+        header('Content-Disposition: attachment; filename="' . $doc['original_file_name'] . '"');
+        header('Cache-Control: no-cache, no-store, must-revalidate');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+
+        readfile($absPath);
+        exit;
+    }
+
+    public function previewDocument(Request $request, string $token, int $docId): void
+    {
+        // Verify token and get submission
+        $submission = $this->app->database()->fetch(
+            'SELECT id FROM employee_intake_submissions WHERE review_token = :token',
+            ['token' => $token]
+        );
+
+        if (!$submission) {
+            Response::abort(404, 'Submission not found.');
+        }
+
+        $submissionId = (int) $submission['id'];
+
+        // Get document
+        $doc = $this->app->database()->fetch(
+            'SELECT * FROM employee_intake_documents WHERE id = :id AND submission_id = :sid',
+            ['id' => $docId, 'sid' => $submissionId]
+        );
+
+        if (!$doc) {
+            Response::abort(404, 'Document not found.');
+        }
+
+        $absPath = base_path($doc['file_path']);
+        if (!file_exists($absPath) || !is_file($absPath)) {
+            Response::abort(404, 'File not found on server.');
+        }
+
+        // Serve inline for preview
+        header('Content-Type: ' . ($doc['mime_type'] ?? 'application/octet-stream'));
+        header('Content-Length: ' . filesize($absPath));
+        header('Content-Disposition: inline; filename="' . $doc['original_file_name'] . '"');
+        header('Cache-Control: no-cache, no-store, must-revalidate');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+
+        readfile($absPath);
+        exit;
     }
 }

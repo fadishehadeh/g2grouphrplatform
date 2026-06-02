@@ -25,3 +25,7 @@ $router->get('/employee-registration/review',                          [IntakeCo
 $router->get('/employee-registration/review/{token}',                  [IntakeController::class, 'reviewShow'], $hrMid);
 $router->post('/employee-registration/review/{token}/approve',         [IntakeController::class, 'approve'],    $hrMid);
 $router->post('/employee-registration/review/{token}/reject',          [IntakeController::class, 'reject'],     $hrMid);
+
+// Document download/preview (protected by token)
+$router->get('/employee-registration/review/{token}/document/{docId}/download', [IntakeController::class, 'downloadDocument'], $hrMid);
+$router->get('/employee-registration/review/{token}/document/{docId}/preview',  [IntakeController::class, 'previewDocument'],  $hrMid);
