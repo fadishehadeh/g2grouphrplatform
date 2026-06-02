@@ -183,7 +183,7 @@ $statusIcon  = $isPending ? 'clock'   : ($isApproved ? 'check-circle-fill' : 'x-
                     <div class="row g-2">
                         <div class="col-sm-6">
                             <div class="text-muted small mb-1"><?= e($id['type_name'] ?? 'ID Type'); ?></div>
-                            <div class="font-monospace fw-semibold"><?= e($id['id_number'] ?? '—'); ?></div>
+                            <div class="font-monospace fw-semibold"><?= e(decrypt_field($id['id_number']) ?? '—'); ?></div>
                             <?php if ($id['is_primary']): ?>
                             <span class="badge bg-info text-dark small mt-1">Primary ID</span>
                             <?php endif; ?>
