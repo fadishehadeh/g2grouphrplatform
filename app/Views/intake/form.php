@@ -36,6 +36,13 @@ $idDocTypes       = array_values(array_filter($identityDocTypes, fn($t) =>
     <form method="post" action="<?= e(url('/employee-registration')); ?>" enctype="multipart/form-data" id="intakeForm" novalidate>
         <?= csrf_field(); ?>
 
+        <!-- Dev Mode Banner -->
+        <script>
+            if (new URLSearchParams(window.location.search).get('dev') === '1') {
+                document.write('<div class="alert alert-warning mb-3" style="margin: 1rem 0;"><i class="bi bi-exclamation-circle me-2"></i><strong>DEV MODE ACTIVE:</strong> All validations disabled. Click "Next" to cycle through pages.</div>');
+            }
+        </script>
+
         <!-- ═══ Step 1: Personal Information ════════════════════════════════ -->
         <div class="intake-card p-4 wizard-panel active" id="step-1">
             <h5 class="mb-1 fw-semibold"><i class="bi bi-person me-2 text-primary"></i>Personal Information</h5>
@@ -589,6 +596,12 @@ $idDocTypes       = array_values(array_filter($identityDocTypes, fn($t) =>
     }
 
     function validateStep(n) {
+        // Dev mode: skip all validation when ?dev=1
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('dev') === '1') {
+            return true;
+        }
+
         if (n === 1) {
             if (!val('first_name'))     { showError('First name is required.');        return false; }
             if (!val('last_name'))      { showError('Last name is required.');         return false; }
