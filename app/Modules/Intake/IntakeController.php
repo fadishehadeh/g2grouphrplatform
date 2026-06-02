@@ -165,7 +165,22 @@ final class IntakeController extends Controller
         }
 
         $idPost = (array) ($request->input('id_doc') ?? []);
-        // Document number, issue date, and expiry date are now optional
+        if (empty($idPost['id_type_name'])) {
+            flash('error', 'National ID type is required.');
+            $this->redirect('/employee-registration');
+        }
+        if (empty($idPost['document_number'])) {
+            flash('error', 'National ID document number is required.');
+            $this->redirect('/employee-registration');
+        }
+        if (empty($idPost['issue_date'])) {
+            flash('error', 'National ID issue date is required.');
+            $this->redirect('/employee-registration');
+        }
+        if (empty($idPost['expiry_date'])) {
+            flash('error', 'National ID expiry date is required.');
+            $this->redirect('/employee-registration');
+        }
 
         // Validate optional additional document uploads
         $rawFiles    = $request->file('documents') ?? [];
@@ -266,11 +281,15 @@ final class IntakeController extends Controller
         try {
             $idMeta = $this->storeIntakeFile($validatedIdFile, $submissionId);
             $storedPaths[] = $idMeta['absolute_path'];
-            $idTypeId = ($idPost['document_type_id'] ?? '') !== '' ? (int) $idPost['document_type_id'] : null;
+            // Get document type ID for identity documents
+            $idDocTypeId = (int) ($this->app->database()->fetchValue(
+                'SELECT id FROM document_types WHERE code = :code LIMIT 1',
+                ['code' => 'IDENTITY']
+            ) ?? 0) ?: null;
             $docsMeta[] = array_merge($idMeta, [
-                'document_type_id' => $idTypeId,
-                'category_id'      => $resolveCategoryId($idTypeId),
-                'title'            => trim((string) ($idPost['title'] ?? 'National ID')),
+                'document_type_id' => $idDocTypeId,
+                'category_id'      => $resolveCategoryId($idDocTypeId),
+                'title'            => trim((string) ($idPost['id_type_name'] ?? 'National ID')),
                 'document_number'  => trim((string) ($idPost['document_number'] ?? '')),
                 'issue_date'       => trim((string) ($idPost['issue_date'] ?? '')) ?: null,
                 'expiry_date'      => trim((string) ($idPost['expiry_date'] ?? '')) ?: null,

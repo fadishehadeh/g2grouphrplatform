@@ -402,14 +402,12 @@ $idDocTypes       = array_values(array_filter($identityDocTypes, fn($t) =>
                 </div>
                 <div class="row g-2">
                     <div class="col-md-5">
-                        <label class="form-label small">Document Type <span class="text-danger">*</span></label>
-                        <select name="id_doc[document_type_id]" id="idDocType" class="form-select form-select-sm">
-                            <option value="">— Select —</option>
-                            <?php foreach ($idDocTypes as $t): ?>
-                            <option value="<?= e((string) $t['id']); ?>"
-                                    data-requires-expiry="<?= $t['requires_expiry'] ? '1' : '0'; ?>"
-                                    selected>
-                                <?= e($t['name']); ?>
+                        <label class="form-label small">ID Type <span class="text-danger">*</span></label>
+                        <select name="id_doc[id_type_name]" id="idDocType" class="form-select form-select-sm" required>
+                            <option value="">— Select ID Type —</option>
+                            <?php foreach ($identificationTypes ?? [] as $t): ?>
+                            <option value="<?= e($t['name']); ?>">
+                                <?= e($t['name']); ?> <?php if ($t['country']): ?>(<?= e($t['country']); ?>)<?php endif; ?>
                             </option>
                             <?php endforeach; ?>
                         </select>
@@ -419,16 +417,16 @@ $idDocTypes       = array_values(array_filter($identityDocTypes, fn($t) =>
                         <input type="text" name="id_doc[title]" class="form-control form-control-sm" value="National ID">
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label small">ID Number</label>
-                        <input type="text" name="id_doc[document_number]" id="idDocNumber" class="form-control form-control-sm">
+                        <label class="form-label small">ID Number <span class="text-danger">*</span></label>
+                        <input type="text" name="id_doc[document_number]" id="idDocNumber" class="form-control form-control-sm" required>
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label small">Issue Date</label>
-                        <input type="date" name="id_doc[issue_date]" id="idIssueDate" class="form-control form-control-sm">
+                        <label class="form-label small">Issue Date <span class="text-danger">*</span></label>
+                        <input type="date" name="id_doc[issue_date]" id="idIssueDate" class="form-control form-control-sm" required>
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label small">Expiry Date</label>
-                        <input type="date" name="id_doc[expiry_date]" id="idExpiryDate" class="form-control form-control-sm">
+                        <label class="form-label small">Expiry Date <span class="text-danger">*</span></label>
+                        <input type="date" name="id_doc[expiry_date]" id="idExpiryDate" class="form-control form-control-sm" required>
                     </div>
                     <div class="col-12">
                         <label class="form-label small">Upload ID Copy <span class="text-danger">*</span></label>
@@ -631,6 +629,11 @@ $idDocTypes       = array_values(array_filter($identityDocTypes, fn($t) =>
             var pFile = document.getElementById('passportFile');
             if (!pFile || !pFile.files.length) { showError('Please upload a copy of your passport.'); return false; }
 
+            var idTypeSelect = document.getElementById('idDocType');
+            if (!idTypeSelect || !idTypeSelect.value) { showError('National ID type is required.'); return false; }
+            if (!val('idDocNumber'))  { showError('National ID document number is required.');  return false; }
+            if (!val('idIssueDate'))  { showError('National ID issue date is required.');       return false; }
+            if (!val('idExpiryDate')) { showError('National ID expiry date is required.');      return false; }
             var iFile = document.getElementById('idFile');
             if (!iFile || !iFile.files.length) { showError('Please upload a copy of your National ID.'); return false; }
         }

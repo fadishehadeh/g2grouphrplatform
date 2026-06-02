@@ -1,0 +1,41 @@
+=== FILES TO REPLACE ON LIVE SERVER ===
+
+CRITICAL FILES FOR EDITOR UPDATE:
+1. app/Views/letters/template-edit.php
+
+RELATED LETTER FUNCTIONALITY:
+2. app/Modules/Letters/LetterRepository.php
+3. app/Views/partials/page-header.php (NEW FILE - create if missing)
+4. database/letter_templates_migration.sql (Run as SQL)
+
+SUPPORTING VIEWS:
+5. app/Views/dashboard/employee.php
+6. app/Views/dashboard/hr-admin.php
+7. app/Views/dashboard/manager.php
+8. app/Views/dashboard/super-admin.php
+9. app/Views/documents/index.php
+10. app/Views/documents/upload.php
+11. app/Views/documents/expiring.php
+12. app/Views/employees/index.php
+13. app/Views/leaves/approvals.php
+14. app/Views/reports/index.php
+
+STYLING:
+15. public/assets/css/app.css
+
+CONFIG:
+16. .gitignore (optional)
+
+=== DEPLOYMENT STEPS ===
+1. Replace all listed files maintaining directory structure
+2. Create app/Views/partials/page-header.php (it's NEW)
+3. Run the SQL migration
+4. Clear browser cache (Ctrl+Shift+Delete)
+5. Test the letter template editor
+
+=== IMMEDIATE FIX FOR EDITOR ===
+If the editor still shows old version:
+- Clear server-side cache (if any)
+- Check that app/Views/letters/template-edit.php is the newest version
+- Clear browser cache completely
+- Do a hard refresh (Ctrl+F5)

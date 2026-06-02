@@ -1,0 +1,344 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Modules\Careers;
+
+use App\Core\Application;
+use App\Core\Controller;
+use App\Core\Request;
+use App\Support\CareersAuth;
+use App\Support\CareersDatabase;
+use App\Support\Branding;
+use App\Support\EmailTemplate;
+use App\Support\Mailer;
+use Throwable;
+
+final class CareersAuthController extends Controller
+{
+    private CareersRepository $repo;
+    private CareersAuth $careersAuth;
+
+    public function __construct(Application $app)
+    {
+        parent::__construct($app);
+        $this->repo        = new CareersRepository(CareersDatabase::get());
+        $this->careersAuth = new CareersAuth($app->session());
+    }
+
+    // ------------------------------------------------------------------ //
+    //  Register
+    // ------------------------------------------------------------------ //
+
+    public function showRegister(Request $request): void
+    {
+        $this->render('careers.auth.register', [
+            'title'            => 'Create Account — Careers Portal',
+            'recaptchaSiteKey' => $this->recaptchaSiteKey(),
+        ], 'careers');
+    }
+
+    public function register(Request $request): void
+    {
+        if (!$this->app->csrf()->validate((string) $request->input('_token'))) {
+            $this->app->session()->flash('error', 'Invalid form token.');
+            $this->redirect('/careers/register');
+        }
+
+        if (!$this->verifyRecaptcha((string) $request->input('g-recaptcha-response', ''))) {
+            $this->app->session()->flash('error', 'CAPTCHA verification failed. Please try again.');
+            $this->redirect('/careers/register');
+        }
+
+        $username  = trim((string) $request->input('username', ''));
+        $email     = trim((string) $request->input('email', ''));
+        $password  = (string) $request->input('password', '');
+        $confirm   = (string) $request->input('password_confirmation', '');
+
+        $old = ['username' => $username, 'email' => $email];
+
+        if ($username === '' || $email === '' || $password === '') {
+            $this->app->session()->flash('error', 'All fields are required.');
+            $this->app->session()->flash('old_input', $old);
+            $this->redirect('/careers/register');
+        }
+
+        if (!preg_match('/^[a-zA-Z0-9_]{3,40}$/', $username)) {
+            $this->app->session()->flash('error', 'Username must be 3–40 characters and contain only letters, numbers, and underscores.');
+            $this->app->session()->flash('old_input', $old);
+            $this->redirect('/careers/register');
+        }
+
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $this->app->session()->flash('error', 'Please enter a valid email address.');
+            $this->app->session()->flash('old_input', $old);
+            $this->redirect('/careers/register');
+        }
+
+        if (strlen($password) < 8) {
+            $this->app->session()->flash('error', 'Password must be at least 8 characters.');
+            $this->app->session()->flash('old_input', $old);
+            $this->redirect('/careers/register');
+        }
+
+        if ($password !== $confirm) {
+            $this->app->session()->flash('error', 'Passwords do not match.');
+            $this->app->session()->flash('old_input', $old);
+            $this->redirect('/careers/register');
+        }
+
+        if ($this->repo->findSeekerByEmail($email) !== null) {
+            $this->app->session()->flash('error', 'An account with that email already exists.');
+            $this->app->session()->flash('old_input', $old);
+            $this->redirect('/careers/register');
+        }
+
+        if ($this->repo->findSeekerByUsername($username) !== null) {
+            $this->app->session()->flash('error', 'That username is already taken.');
+            $this->app->session()->flash('old_input', $old);
+            $this->redirect('/careers/register');
+        }
+
+        try {
+            $this->repo->createSeeker($username, $email, password_hash($password, PASSWORD_BCRYPT));
+            $this->app->session()->flash('success', 'Account created! Please log in.');
+            $this->redirect('/careers/login');
+        } catch (Throwable $e) {
+            $this->app->session()->flash('error', 'Registration failed. Please try again.');
+            $this->app->session()->flash('old_input', $old);
+            $this->redirect('/careers/register');
+        }
+    }
+
+    // ------------------------------------------------------------------ //
+    //  Login
+    // ------------------------------------------------------------------ //
+
+    public function showLogin(Request $request): void
+    {
+        $this->render('careers.auth.login', [
+            'title'            => 'Sign In — Careers Portal',
+            'recaptchaSiteKey' => $this->recaptchaSiteKey(),
+        ], 'careers');
+    }
+
+    public function login(Request $request): void
+    {
+        if (!$this->app->csrf()->validate((string) $request->input('_token'))) {
+            $this->app->session()->flash('error', 'Invalid form token.');
+            $this->redirect('/careers/login');
+        }
+
+        if (!$this->verifyRecaptcha((string) $request->input('g-recaptcha-response', ''))) {
+            $this->app->session()->flash('error', 'CAPTCHA verification failed. Please try again.');
+            $this->redirect('/careers/login');
+        }
+
+        $email    = trim((string) $request->input('email', ''));
+        $password = (string) $request->input('password', '');
+
+        $seeker = $this->repo->findSeekerByEmail($email);
+
+        if ($seeker === null || !password_verify($password, (string) $seeker['password_hash'])) {
+            $this->app->session()->flash('error', 'Invalid email or password.');
+            $this->app->session()->flash('old_input', ['email' => $email]);
+            $this->redirect('/careers/login');
+        }
+
+        if (!(bool) $seeker['is_active']) {
+            $this->app->session()->flash('error', 'Your account has been deactivated.');
+            $this->redirect('/careers/login');
+        }
+
+        // Generate and send OTP
+        $this->sendOtp($seeker);
+    }
+
+    // ------------------------------------------------------------------ //
+    //  OTP
+    // ------------------------------------------------------------------ //
+
+    public function showOtp(Request $request): void
+    {
+        if ($this->careersAuth->pendingOtpSeekerId() === null) {
+            $this->redirect('/careers/login');
+        }
+        $this->render('careers.auth.otp', ['title' => 'Verify OTP — Careers Portal'], 'careers');
+    }
+
+    public function verifyOtp(Request $request): void
+    {
+        if (!$this->app->csrf()->validate((string) $request->input('_token'))) {
+            $this->app->session()->flash('error', 'Invalid form token.');
+            $this->redirect('/careers/otp');
+        }
+
+        $seekerId = $this->careersAuth->pendingOtpSeekerId();
+        if ($seekerId === null) {
+            $this->redirect('/careers/login');
+        }
+
+        $seeker = $this->repo->findSeekerById($seekerId);
+        if ($seeker === null) {
+            $this->careersAuth->clearPendingOtp();
+            $this->redirect('/careers/login');
+        }
+
+        $submitted = trim((string) $request->input('otp', ''));
+
+        if ((int) $seeker['otp_attempts'] >= 5) {
+            $this->app->session()->flash('error', 'Too many incorrect attempts. Please log in again.');
+            $this->careersAuth->clearPendingOtp();
+            $this->redirect('/careers/login');
+        }
+
+        if ($seeker['otp_code'] === null || new \DateTimeImmutable() > new \DateTimeImmutable((string) $seeker['otp_expires_at'])) {
+            $this->app->session()->flash('error', 'Your OTP has expired. Please log in again to get a new one.');
+            $this->careersAuth->clearPendingOtp();
+            $this->redirect('/careers/login');
+        }
+
+        if (!hash_equals((string) $seeker['otp_code'], $submitted)) {
+            $this->repo->incrementOtpAttempts($seekerId);
+            $this->app->session()->flash('error', 'Incorrect code. Please try again.');
+            $this->redirect('/careers/otp');
+        }
+
+        $this->repo->clearOtp($seekerId);
+        $this->careersAuth->clearPendingOtp();
+        $this->careersAuth->login($seeker);
+        $this->redirect('/careers/dashboard');
+    }
+
+    public function resendOtp(Request $request): void
+    {
+        if (!$this->app->csrf()->validate((string) $request->input('_token'))) {
+            $this->redirect('/careers/otp');
+        }
+
+        $seekerId = $this->careersAuth->pendingOtpSeekerId();
+        if ($seekerId === null) {
+            $this->redirect('/careers/login');
+        }
+
+        $seeker = $this->repo->findSeekerById($seekerId);
+        if ($seeker === null) {
+            $this->redirect('/careers/login');
+        }
+
+        $this->sendOtp($seeker, isResend: true);
+    }
+
+    // ------------------------------------------------------------------ //
+    //  Logout
+    // ------------------------------------------------------------------ //
+
+    public function logout(Request $request): void
+    {
+        $this->careersAuth->logout();
+        $this->app->session()->flash('success', 'You have been signed out.');
+        $this->redirect('/careers/login');
+    }
+
+    // ------------------------------------------------------------------ //
+    //  OTP helper
+    // ------------------------------------------------------------------ //
+
+    private function sendOtp(array $seeker, bool $isResend = false): never
+    {
+        $seekerId = (int) $seeker['id'];
+
+        // Rate-limit: max 5 OTP sends per hour
+        $windowStart = $seeker['otp_sent_window_start']
+            ? new \DateTimeImmutable((string) $seeker['otp_sent_window_start'])
+            : null;
+        $sentCount = (int) $seeker['otp_sent_count'];
+
+        $now = new \DateTimeImmutable();
+        if ($windowStart !== null && ($now->getTimestamp() - $windowStart->getTimestamp()) < 3600) {
+            if ($sentCount >= 5) {
+                $this->app->session()->flash('error', 'Too many OTP requests. Please wait an hour and try again.');
+                $this->redirect('/careers/login');
+            }
+            $newSentCount  = $sentCount + 1;
+            $newWindowStart = $windowStart;
+        } else {
+            $newSentCount  = 1;
+            $newWindowStart = $now;
+        }
+
+        // Resend cooldown: 60 seconds
+        if ($isResend && $seeker['otp_expires_at'] !== null) {
+            $expiresAt = new \DateTimeImmutable((string) $seeker['otp_expires_at']);
+            $issuedAt  = $expiresAt->modify('-10 minutes');
+            if (($now->getTimestamp() - $issuedAt->getTimestamp()) < 60) {
+                $this->app->session()->flash('error', 'Please wait 60 seconds before requesting a new code.');
+                $this->redirect('/careers/otp');
+            }
+        }
+
+        $code    = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        $expires = $now->modify('+10 minutes');
+
+        $this->repo->saveOtp($seekerId, $code, $expires, $newSentCount, $newWindowStart);
+        $this->careersAuth->setPendingOtp($seekerId);
+
+        // Send email
+        $mailConfig = (array) $this->app->config('app.mail', []);
+        $mailer     = new Mailer($mailConfig);
+
+        if ($mailer->isEnabled()) {
+            $html = $this->otpEmailHtml((string) $seeker['username'], $code);
+            try {
+                $mailer->send((string) $seeker['email'], 'Your Careers Portal OTP Code', $html);
+            } catch (Throwable $e) {
+                error_log('[OTP Mail Error] ' . $e->getMessage());
+            }
+        }
+
+        if ($isResend) {
+            $this->app->session()->flash('success', 'A new code has been sent to your email.');
+        }
+
+        $this->redirect('/careers/otp');
+    }
+
+    private function recaptchaSiteKey(): string
+    {
+        if (!config('app.recaptcha.enabled', false)) {
+            return '';
+        }
+        return (string) config('app.recaptcha.site_key', '');
+    }
+
+    private function verifyRecaptcha(string $token): bool
+    {
+        if (!config('app.recaptcha.enabled', false)) {
+            return true;
+        }
+
+        $secretKey = (string) config('app.recaptcha.secret_key', '');
+        if ($secretKey === '' || $token === '') {
+            return false;
+        }
+
+        $response = @file_get_contents(
+            'https://www.google.com/recaptcha/api/siteverify?secret=' . urlencode($secretKey) . '&response=' . urlencode($token)
+        );
+
+        if ($response === false) {
+            return true; // Can't reach Google — fail open
+        }
+
+        $data = json_decode($response, true);
+        $minScore = (float) config('app.recaptcha.min_score', 0.5);
+
+        return isset($data['success']) && $data['success'] === true
+            && isset($data['score']) && (float) $data['score'] >= $minScore;
+    }
+
+    private function otpEmailHtml(string $username, string $code): string
+    {
+        return EmailTemplate::otp($username, $code, 'Careers Portal', Branding::defaultLogoUrl());
+    }
+}

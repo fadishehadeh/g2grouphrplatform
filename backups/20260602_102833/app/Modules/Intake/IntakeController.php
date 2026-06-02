@@ -1,0 +1,622 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Modules\Intake;
+
+use App\Core\Application;
+use App\Core\Controller;
+use App\Core\Request;
+use App\Core\Response;
+use App\Modules\Documents\DocumentRepository;
+use App\Modules\Employees\EmployeeRepository;
+use RuntimeException;
+use Throwable;
+
+final class IntakeController extends Controller
+{
+    private const MAX_FILE_SIZE        = 5242880; // 5 MB — matches DocumentController
+    private const MAX_PHOTO_SIZE       = 2097152; // 2 MB for profile photos
+    private const ALLOWED_EXTENSIONS   = ['pdf', 'png', 'jpg', 'jpeg', 'doc', 'docx'];
+    private const ALLOWED_PHOTO_EXTS   = ['jpg', 'jpeg', 'png'];
+
+    private IntakeRepository   $repository;
+    private EmployeeRepository $employees;
+    private DocumentRepository $documents;
+
+    public function __construct(Application $app)
+    {
+        parent::__construct($app);
+        $this->repository = new IntakeRepository($this->app->database());
+        $this->employees  = new EmployeeRepository($this->app->database());
+        $this->documents  = new DocumentRepository($this->app->database());
+    }
+
+    // ─── Public: wizard form ──────────────────────────────────────────────────
+
+    public function form(Request $request): void
+    {
+        $documentTypes = $this->app->database()->fetchAll(
+            "SELECT dt.id, dt.name, dt.requires_expiry, dc.id AS category_id, dc.name AS category_name
+             FROM document_types dt
+             JOIN document_categories dc ON dc.id = dt.category_id
+             WHERE dt.is_active = 1 AND dc.is_active = 1
+             ORDER BY dc.name ASC, dt.sort_order ASC, dt.name ASC"
+        );
+
+        $companies = $this->app->database()->fetchAll(
+            "SELECT id, name FROM companies WHERE status = 'active' ORDER BY name ASC"
+        );
+
+        $identityDocTypes = $this->app->database()->fetchAll(
+            "SELECT dt.id, dt.name, dt.requires_expiry
+             FROM document_types dt
+             JOIN document_categories dc ON dc.id = dt.category_id
+             WHERE dc.code = 'IDENTITY' AND dt.is_active = 1
+             ORDER BY dt.sort_order ASC, dt.name ASC"
+        );
+
+        $this->render('intake/form', [
+            'documentTypes'    => $documentTypes,
+            'companies'        => $companies,
+            'identityDocTypes' => $identityDocTypes,
+        ], 'intake');
+    }
+
+    // ─── Public: process submission ───────────────────────────────────────────
+
+    public function submit(Request $request): void
+    {
+        if (!$this->app->csrf()->validate((string) $request->input('_token'))) {
+            flash('error', 'Security token expired. Please try again.');
+            $this->redirect('/employee-registration');
+        }
+
+        $data = $this->trimmed($request);
+
+        $errors = [];
+        if (empty($data['first_name']))   $errors[] = 'First name is required.';
+        if (empty($data['last_name']))    $errors[] = 'Last name is required.';
+        if (empty($data['personal_email']) || !filter_var($data['personal_email'], FILTER_VALIDATE_EMAIL)) $errors[] = 'A valid personal email is required.';
+        if (empty($data['phone']))        $errors[] = 'Phone number is required.';
+        if (empty($data['company_id']))   $errors[] = 'Please select a company.';
+        if (empty($data['date_of_birth'])) $errors[] = 'Date of birth is required.';
+        if (empty($data['gender']))       $errors[] = 'Gender is required.';
+        if (empty($data['marital_status'])) $errors[] = 'Marital status is required.';
+        if (empty($data['nationality']))  $errors[] = 'Nationality is required.';
+        if (empty($data['address_line_1'])) $errors[] = 'Address line 1 is required.';
+        if (empty($data['city']))         $errors[] = 'City is required.';
+        if (empty($data['country']))      $errors[] = 'Country is required.';
+        if (empty($data['id_number']))    $errors[] = 'National ID number is required.';
+        if (empty($data['passport_number'])) $errors[] = 'Passport number is required.';
+
+        if ($errors) {
+            flash('error', implode(' ', $errors));
+            $this->redirect('/employee-registration');
+        }
+
+        // Validate profile photo (optional, images only)
+        $photoFile      = $request->file('profile_photo') ?? [];
+        $validatedPhoto = null;
+        if (($photoFile['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+            try {
+                $validatedPhoto = $this->validatePhoto($photoFile);
+            } catch (RuntimeException $e) {
+                flash('error', 'Profile photo: ' . $e->getMessage());
+                $this->redirect('/employee-registration');
+            }
+        }
+
+        // Validate required passport document
+        $passportFile = $request->file('passport_file') ?? [];
+        if (($passportFile['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE || empty($passportFile['name'])) {
+            flash('error', 'Passport document file is required.');
+            $this->redirect('/employee-registration');
+        }
+        try {
+            $validatedPassportFile = $this->validateFile($passportFile);
+        } catch (RuntimeException $e) {
+            flash('error', 'Passport document: ' . $e->getMessage());
+            $this->redirect('/employee-registration');
+        }
+
+        $passportPost = (array) ($request->input('passport_doc') ?? []);
+        if (empty($passportPost['document_number'])) {
+            flash('error', 'Passport document number is required.');
+            $this->redirect('/employee-registration');
+        }
+        if (empty($passportPost['issue_date'])) {
+            flash('error', 'Passport issue date is required.');
+            $this->redirect('/employee-registration');
+        }
+        if (empty($passportPost['expiry_date'])) {
+            flash('error', 'Passport expiry date is required.');
+            $this->redirect('/employee-registration');
+        }
+
+        // Validate required ID document
+        $idFile = $request->file('id_file') ?? [];
+        if (($idFile['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE || empty($idFile['name'])) {
+            flash('error', 'National ID document file is required.');
+            $this->redirect('/employee-registration');
+        }
+        try {
+            $validatedIdFile = $this->validateFile($idFile);
+        } catch (RuntimeException $e) {
+            flash('error', 'National ID document: ' . $e->getMessage());
+            $this->redirect('/employee-registration');
+        }
+
+        $idPost = (array) ($request->input('id_doc') ?? []);
+        if (empty($idPost['document_number'])) {
+            flash('error', 'National ID document number is required.');
+            $this->redirect('/employee-registration');
+        }
+        if (empty($idPost['issue_date'])) {
+            flash('error', 'National ID issue date is required.');
+            $this->redirect('/employee-registration');
+        }
+        if (empty($idPost['expiry_date'])) {
+            flash('error', 'National ID expiry date is required.');
+            $this->redirect('/employee-registration');
+        }
+
+        // Validate optional additional document uploads
+        $rawFiles    = $request->file('documents') ?? [];
+        $fileInputs  = $this->normalizeMultiFileInput($rawFiles);
+        $docsPost    = $request->input('documents') ?? [];
+        $validatedFiles = [];
+
+        foreach ($fileInputs as $idx => $file) {
+            if (($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+                continue;
+            }
+            try {
+                $validatedFiles[$idx] = $this->validateFile($file);
+            } catch (RuntimeException $e) {
+                flash('error', 'Document ' . ($idx + 1) . ': ' . $e->getMessage());
+                $this->redirect('/employee-registration');
+            }
+        }
+
+        // Parse emergency contacts
+        $contacts = [];
+        foreach ((array) ($request->input('emergency_contacts') ?? []) as $c) {
+            $name  = trim((string) ($c['full_name'] ?? ''));
+            $phone = trim((string) ($c['phone'] ?? ''));
+            if ($name === '' && $phone === '') {
+                continue;
+            }
+            $contacts[] = $c;
+        }
+
+        // INSERT submission header + contacts to get $submissionId
+        try {
+            $submissionId = $this->repository->createSubmission(
+                $data,
+                $contacts,
+                [], // document rows inserted after file move
+                (string) ($_SERVER['REMOTE_ADDR'] ?? ''),
+                (string) ($_SERVER['HTTP_USER_AGENT'] ?? '')
+            );
+        } catch (Throwable $e) {
+            flash('error', 'Submission failed: ' . $e->getMessage());
+            $this->redirect('/employee-registration');
+        }
+
+        // Move files and collect doc metadata for DB insert
+        $docsMeta    = [];
+        $storedPaths = [];
+
+        // Move profile photo if provided
+        if ($validatedPhoto !== null) {
+            try {
+                $photoMeta = $this->storeIntakeFile($validatedPhoto, $submissionId);
+                $this->repository->updatePhotoPath($submissionId, $photoMeta['file_path']);
+                $storedPaths[] = $photoMeta['absolute_path'];
+            } catch (Throwable $e) {
+                // Non-fatal — photo failure doesn't block submission
+            }
+        }
+
+        // Helper closure to resolve category_id from a document type
+        $resolveCategoryId = function (?int $typeId): ?int {
+            if ($typeId === null) return null;
+            return (int) ($this->app->database()->fetchValue(
+                'SELECT category_id FROM document_types WHERE id = :id', ['id' => $typeId]
+            ) ?? 0) ?: null;
+        };
+
+        // Store required Passport document
+        try {
+            $passportMeta = $this->storeIntakeFile($validatedPassportFile, $submissionId);
+            $storedPaths[] = $passportMeta['absolute_path'];
+            $passportTypeId = ($passportPost['document_type_id'] ?? '') !== '' ? (int) $passportPost['document_type_id'] : null;
+            $docsMeta[] = array_merge($passportMeta, [
+                'document_type_id' => $passportTypeId,
+                'category_id'      => $resolveCategoryId($passportTypeId),
+                'title'            => trim((string) ($passportPost['title'] ?? 'Passport')),
+                'document_number'  => trim((string) ($passportPost['document_number'] ?? '')),
+                'issue_date'       => trim((string) ($passportPost['issue_date'] ?? '')) ?: null,
+                'expiry_date'      => trim((string) ($passportPost['expiry_date'] ?? '')) ?: null,
+            ]);
+        } catch (Throwable $e) {
+            $this->cleanupIntakeFiles($storedPaths);
+            $this->app->database()->execute('DELETE FROM employee_intake_submissions WHERE id = :id', ['id' => $submissionId]);
+            flash('error', 'Passport document upload failed: ' . $e->getMessage());
+            $this->redirect('/employee-registration');
+        }
+
+        // Store required National ID document
+        try {
+            $idMeta = $this->storeIntakeFile($validatedIdFile, $submissionId);
+            $storedPaths[] = $idMeta['absolute_path'];
+            $idTypeId = ($idPost['document_type_id'] ?? '') !== '' ? (int) $idPost['document_type_id'] : null;
+            $docsMeta[] = array_merge($idMeta, [
+                'document_type_id' => $idTypeId,
+                'category_id'      => $resolveCategoryId($idTypeId),
+                'title'            => trim((string) ($idPost['title'] ?? 'National ID')),
+                'document_number'  => trim((string) ($idPost['document_number'] ?? '')),
+                'issue_date'       => trim((string) ($idPost['issue_date'] ?? '')) ?: null,
+                'expiry_date'      => trim((string) ($idPost['expiry_date'] ?? '')) ?: null,
+            ]);
+        } catch (Throwable $e) {
+            $this->cleanupIntakeFiles($storedPaths);
+            $this->app->database()->execute('DELETE FROM employee_intake_submissions WHERE id = :id', ['id' => $submissionId]);
+            flash('error', 'National ID document upload failed: ' . $e->getMessage());
+            $this->redirect('/employee-registration');
+        }
+
+        foreach ($validatedFiles as $idx => $fileInfo) {
+            try {
+                $meta          = $this->storeIntakeFile($fileInfo, $submissionId);
+                $storedPaths[] = $meta['absolute_path'];
+
+                $postDoc   = (array) ($docsPost[$idx] ?? []);
+                $typeId    = ($postDoc['document_type_id'] ?? '') !== '' ? (int) $postDoc['document_type_id'] : null;
+                $categoryId = null;
+
+                if ($typeId !== null) {
+                    $categoryId = (int) ($this->app->database()->fetchValue(
+                        'SELECT category_id FROM document_types WHERE id = :id',
+                        ['id' => $typeId]
+                    ) ?? 0) ?: null;
+                }
+
+                $docsMeta[] = array_merge($meta, [
+                    'document_type_id' => $typeId,
+                    'category_id'      => $categoryId,
+                    'title'            => trim((string) ($postDoc['title'] ?? '')),
+                    'document_number'  => trim((string) ($postDoc['document_number'] ?? '')) ?: null,
+                    'issue_date'       => trim((string) ($postDoc['issue_date'] ?? '')) ?: null,
+                    'expiry_date'      => trim((string) ($postDoc['expiry_date'] ?? '')) ?: null,
+                ]);
+            } catch (Throwable $e) {
+                $this->cleanupIntakeFiles($storedPaths);
+                $this->app->database()->execute(
+                    'DELETE FROM employee_intake_submissions WHERE id = :id',
+                    ['id' => $submissionId]
+                );
+                flash('error', 'File upload failed. Please try again.');
+                $this->redirect('/employee-registration');
+            }
+        }
+
+        // Insert document rows now that files are on disk
+        if ($docsMeta) {
+            try {
+                foreach ($docsMeta as $doc) {
+                    $this->app->database()->execute(
+                        'INSERT INTO employee_intake_documents
+                         (submission_id, document_type_id, category_id, title, document_number,
+                          original_file_name, stored_file_name, file_path,
+                          file_extension, mime_type, file_size, issue_date, expiry_date)
+                         VALUES
+                         (:sid, :type_id, :cat_id, :title, :doc_num,
+                          :orig, :stored, :path,
+                          :ext, :mime, :size, :issue, :expiry)',
+                        [
+                            'sid'     => $submissionId,
+                            'type_id' => $doc['document_type_id'],
+                            'cat_id'  => $doc['category_id'],
+                            'title'   => $doc['title'],
+                            'doc_num' => $doc['document_number'],
+                            'orig'    => $doc['original_file_name'],
+                            'stored'  => $doc['stored_file_name'],
+                            'path'    => $doc['file_path'],
+                            'ext'     => $doc['file_extension'],
+                            'mime'    => $doc['mime_type'],
+                            'size'    => $doc['file_size'],
+                            'issue'   => $doc['issue_date'],
+                            'expiry'  => $doc['expiry_date'],
+                        ]
+                    );
+                }
+            } catch (Throwable $e) {
+                $this->cleanupIntakeFiles($storedPaths);
+                $this->app->database()->execute(
+                    'DELETE FROM employee_intake_submissions WHERE id = :id',
+                    ['id' => $submissionId]
+                );
+                flash('error', 'Submission failed while saving documents. Please try again.');
+                $this->redirect('/employee-registration');
+            }
+        }
+
+        $this->redirect('/employee-registration/success');
+    }
+
+    public function success(Request $request): void
+    {
+        $this->render('intake/success', [], 'intake');
+    }
+
+    // ─── HR: list submissions ─────────────────────────────────────────────────
+
+    public function reviewList(Request $request): void
+    {
+        $status  = in_array($request->input('status'), ['pending', 'approved', 'rejected', 'all'], true)
+            ? (string) $request->input('status')
+            : 'pending';
+        $search  = trim((string) ($request->input('q') ?? ''));
+        $page    = max(1, (int) ($request->input('page') ?? 1));
+        $perPage = 25;
+
+        $submissions = $this->repository->listSubmissions($status, $search, $page, $perPage);
+        $total       = $this->repository->countSubmissions($status, $search);
+        $counts      = $this->repository->statusCounts();
+
+        $this->render('intake/review-list', [
+            'submissions' => $submissions,
+            'statusFilter'=> $status,
+            'search'      => $search,
+            'page'        => $page,
+            'perPage'     => $perPage,
+            'total'       => $total,
+            'totalPages'  => (int) ceil($total / $perPage),
+            'counts'      => $counts,
+        ]);
+    }
+
+    // ─── HR: view single submission ───────────────────────────────────────────
+
+    public function reviewShow(Request $request, string $token): void
+    {
+        $submission = $this->repository->findByToken($token);
+
+        if ($submission === null) {
+            Response::abort(404, 'Submission not found.');
+        }
+
+        $submission = $this->decryptSubmission($submission);
+        $contacts   = $this->repository->contactsBySubmission((int) $submission['id']);
+        $documents  = $this->repository->documentsBySubmission((int) $submission['id']);
+        $formOptions = $this->employees->formOptions();
+
+        $this->render('intake/review-show', [
+            'submission'  => $submission,
+            'contacts'    => $contacts,
+            'documents'   => $documents,
+            'formOptions' => $formOptions,
+        ]);
+    }
+
+    // ─── HR: approve ─────────────────────────────────────────────────────────
+
+    public function approve(Request $request, string $token): void
+    {
+        if (!$this->app->csrf()->validate((string) $request->input('_token'))) {
+            flash('error', 'Security token expired.');
+            $this->redirect('/employee-registration/review/' . $token);
+        }
+
+        $errors = [];
+        if (empty($request->input('work_email')) || !filter_var($request->input('work_email'), FILTER_VALIDATE_EMAIL)) {
+            $errors[] = 'A valid work email is required.';
+        }
+        if (empty($request->input('company_id'))) {
+            $errors[] = 'Company is required.';
+        }
+        if (empty($request->input('employment_type'))) {
+            $errors[] = 'Employment type is required.';
+        }
+        if (empty($request->input('joining_date'))) {
+            $errors[] = 'Joining date is required.';
+        }
+
+        if ($errors) {
+            flash('error', implode(' ', $errors));
+            $this->redirect('/employee-registration/review/' . $token);
+        }
+
+        $employmentData = [
+            'work_email'          => strtolower(trim((string) $request->input('work_email'))),
+            'company_id'          => (int) $request->input('company_id'),
+            'branch_id'           => $request->input('branch_id') ?: null,
+            'department_id'       => $request->input('department_id') ?: null,
+            'team_id'             => $request->input('team_id') ?: null,
+            'job_title_id'        => $request->input('job_title_id') ?: null,
+            'designation_id'      => $request->input('designation_id') ?: null,
+            'manager_employee_id' => $request->input('manager_employee_id') ?: null,
+            'employment_type'     => (string) $request->input('employment_type'),
+            'joining_date'        => (string) $request->input('joining_date'),
+            'employee_status'     => (string) ($request->input('employee_status') ?? 'active'),
+        ];
+
+        try {
+            $employeeId = $this->repository->approveSubmission(
+                $token,
+                $employmentData,
+                (int) $this->app->auth()->id(),
+                $this->employees,
+                $this->documents
+            );
+
+            $this->auditLog(
+                'intake',
+                'employee_intake_submissions',
+                null,
+                'approved',
+                (string) ($_SERVER['REMOTE_ADDR'] ?? ''),
+                (string) ($_SERVER['HTTP_USER_AGENT'] ?? ''),
+                null,
+                ['employee_id' => $employeeId]
+            );
+
+            flash('success', 'Submission approved. Employee record created successfully.');
+        } catch (Throwable $e) {
+            flash('error', 'Approval failed: ' . $e->getMessage());
+        }
+
+        $this->redirect('/employee-registration/review/' . $token);
+    }
+
+    // ─── HR: reject ───────────────────────────────────────────────────────────
+
+    public function reject(Request $request, string $token): void
+    {
+        if (!$this->app->csrf()->validate((string) $request->input('_token'))) {
+            flash('error', 'Security token expired.');
+            $this->redirect('/employee-registration/review/' . $token);
+        }
+
+        $reason = trim((string) ($request->input('rejection_reason') ?? ''));
+
+        $this->repository->rejectSubmission($token, $reason, (int) $this->app->auth()->id());
+
+        $this->auditLog(
+            'intake',
+            'employee_intake_submissions',
+            null,
+            'rejected',
+            (string) ($_SERVER['REMOTE_ADDR'] ?? ''),
+            (string) ($_SERVER['HTTP_USER_AGENT'] ?? '')
+        );
+
+        flash('success', 'Submission rejected.');
+        $this->redirect('/employee-registration/review/' . $token);
+    }
+
+    // ─── Private helpers ──────────────────────────────────────────────────────
+
+    private function validatePhoto(array $file): array
+    {
+        if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            throw new RuntimeException('Upload error code ' . $file['error'] . '.');
+        }
+
+        if (($file['size'] ?? 0) > self::MAX_PHOTO_SIZE) {
+            throw new RuntimeException('Photo exceeds 2 MB limit.');
+        }
+
+        $ext = strtolower(pathinfo((string) ($file['name'] ?? ''), PATHINFO_EXTENSION));
+
+        if (!in_array($ext, self::ALLOWED_PHOTO_EXTS, true)) {
+            throw new RuntimeException('Only JPG and PNG files are allowed for the profile photo.');
+        }
+
+        return array_merge($file, ['extension' => $ext]);
+    }
+
+    private function validateFile(array $file): array
+    {
+        if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            throw new RuntimeException('Upload error code ' . $file['error'] . '.');
+        }
+
+        if (($file['size'] ?? 0) > self::MAX_FILE_SIZE) {
+            throw new RuntimeException('File exceeds 5 MB limit.');
+        }
+
+        $originalName = (string) ($file['name'] ?? '');
+        $ext          = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+
+        if (!in_array($ext, self::ALLOWED_EXTENSIONS, true)) {
+            throw new RuntimeException('File type ".' . $ext . '" is not allowed.');
+        }
+
+        return array_merge($file, ['extension' => $ext]);
+    }
+
+    private function storeIntakeFile(array $fileInfo, int $submissionId): array
+    {
+        $dir = base_path('storage/uploads/intake/' . $submissionId);
+
+        if (!is_dir($dir)) {
+            mkdir($dir, 0775, true);
+        }
+
+        $ext         = $fileInfo['extension'];
+        $storedName  = date('YmdHis') . '_' . bin2hex(random_bytes(8)) . '.' . $ext;
+        $relPath     = 'storage/uploads/intake/' . $submissionId . '/' . $storedName;
+        $absPath     = base_path($relPath);
+
+        if (!move_uploaded_file((string) $fileInfo['tmp_name'], $absPath)) {
+            throw new RuntimeException('Could not save uploaded file.');
+        }
+
+        $mime = mime_content_type($absPath) ?: 'application/octet-stream';
+
+        return [
+            'original_file_name' => (string) $fileInfo['name'],
+            'stored_file_name'   => $storedName,
+            'file_path'          => $relPath,
+            'file_extension'     => $ext,
+            'mime_type'          => $mime,
+            'file_size'          => (int) filesize($absPath),
+            'absolute_path'      => $absPath,
+        ];
+    }
+
+    private function cleanupIntakeFiles(array $absolutePaths): void
+    {
+        foreach ($absolutePaths as $path) {
+            @unlink($path);
+        }
+    }
+
+    private function normalizeMultiFileInput(array $rawFiles): array
+    {
+        $normalized = [];
+
+        foreach (array_keys($rawFiles['name'] ?? []) as $idx) {
+            $normalized[$idx] = [
+                'name'     => $rawFiles['name'][$idx] ?? '',
+                'type'     => $rawFiles['type'][$idx] ?? '',
+                'tmp_name' => $rawFiles['tmp_name'][$idx] ?? '',
+                'error'    => $rawFiles['error'][$idx] ?? UPLOAD_ERR_NO_FILE,
+                'size'     => $rawFiles['size'][$idx] ?? 0,
+            ];
+        }
+
+        return $normalized;
+    }
+
+    private function decryptSubmission(array $row): array
+    {
+        foreach (['personal_email', 'phone', 'alternate_phone', 'date_of_birth', 'id_number', 'passport_number'] as $field) {
+            if (isset($row[$field])) {
+                $row[$field] = decrypt_field($row[$field]);
+            }
+        }
+
+        return $row;
+    }
+
+    private function trimmed(Request $request): array
+    {
+        $result = [];
+
+        foreach ([
+            'first_name', 'middle_name', 'last_name', 'personal_email', 'phone', 'alternate_phone',
+            'date_of_birth', 'gender', 'marital_status', 'nationality', 'second_nationality',
+            'company_id',
+            'address_line_1', 'address_line_2', 'city', 'state', 'country', 'postal_code',
+            'id_number', 'passport_number',
+        ] as $field) {
+            $result[$field] = trim((string) ($request->input($field) ?? ''));
+        }
+
+        return $result;
+    }
+}

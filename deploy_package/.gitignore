@@ -1,0 +1,25 @@
+# Environment file (contains secrets)
+.env
+
+# Composer binary
+composer.phar
+
+# Vendor dependencies (install via composer install)
+vendor/
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Zip archives
+*.zip
+
+# User-generated uploads and content
+public-hr/assets/uploads/
+public-careers/assets/uploads/
+

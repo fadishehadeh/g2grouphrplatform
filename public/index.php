@@ -11,6 +11,8 @@ require BASE_PATH . '/app/Support/helpers.php';
     $scheme = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
     $host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
     $dir    = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? ''), '/\\');
+    // Encode each path segment so spaces become %20 (keeps slashes intact)
+    $dir    = implode('/', array_map('rawurlencode', explode('/', $dir)));
     $url    = $scheme . '://' . $host . $dir;
     $_ENV['APP_URL']    = $url;
     $_SERVER['APP_URL'] = $url;
