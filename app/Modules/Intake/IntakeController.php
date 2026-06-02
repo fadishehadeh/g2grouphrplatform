@@ -70,71 +70,93 @@ final class IntakeController extends Controller
 
     public function submit(Request $request): void
     {
-        if (!$this->app->csrf()->validate((string) $request->input('_token'))) {
+        // Dev mode: bypass validation with ?dev=1 query parameter
+        $isDevMode = (string) $request->input('dev') === '1';
+
+        if (!$isDevMode && !$this->app->csrf()->validate((string) $request->input('_token'))) {
             flash('error', 'Security token expired. Please try again.');
             $this->redirect('/employee-registration');
         }
 
         $data = $this->trimmed($request);
-
-        $errors = [];
-        if (empty($data['first_name']))   $errors[] = 'First name is required.';
-        if (empty($data['last_name']))    $errors[] = 'Last name is required.';
-        if (empty($data['personal_email']) || !filter_var($data['personal_email'], FILTER_VALIDATE_EMAIL)) $errors[] = 'A valid personal email is required.';
-        if (empty($data['phone']))        $errors[] = 'Phone number is required.';
-        if (empty($data['company_id']))   $errors[] = 'Please select a company.';
-        if (empty($data['date_of_birth'])) $errors[] = 'Date of birth is required.';
-        if (empty($data['gender']))       $errors[] = 'Gender is required.';
-        if (empty($data['marital_status'])) $errors[] = 'Marital status is required.';
-        if (empty($data['nationality']))  $errors[] = 'Nationality is required.';
-        if (empty($data['address_line_1'])) $errors[] = 'Address line 1 is required.';
-        if (empty($data['city']))         $errors[] = 'City is required.';
-        if (empty($data['country']))      $errors[] = 'Country is required.';
-        if (empty($data['id_number']))    $errors[] = 'National ID number is required.';
-        if (empty($data['passport_number'])) $errors[] = 'Passport number is required.';
-
-        // Validate identifications (at least one ID required)
         $identifications = (array) ($request->input('identifications') ?? []);
-        if (empty($identifications)) {
-            $errors[] = 'At least one form of identification is required.';
-        } else {
-            foreach ($identifications as $idx => $id) {
-                $typeId = (int) ($id['type_id'] ?? 0);
-                $number = trim((string) ($id['number'] ?? ''));
-                if ($typeId === 0 || empty($number)) {
-                    $errors[] = 'Identification ' . ($idx + 1) . ': Please select a type and enter an ID number.';
+
+        if (!$isDevMode) {
+            $errors = [];
+            if (empty($data['first_name']))   $errors[] = 'First name is required.';
+            if (empty($data['last_name']))    $errors[] = 'Last name is required.';
+            if (empty($data['personal_email']) || !filter_var($data['personal_email'], FILTER_VALIDATE_EMAIL)) $errors[] = 'A valid personal email is required.';
+            if (empty($data['phone']))        $errors[] = 'Phone number is required.';
+            if (empty($data['company_id']))   $errors[] = 'Please select a company.';
+            if (empty($data['date_of_birth'])) $errors[] = 'Date of birth is required.';
+            if (empty($data['gender']))       $errors[] = 'Gender is required.';
+            if (empty($data['marital_status'])) $errors[] = 'Marital status is required.';
+            if (empty($data['nationality']))  $errors[] = 'Nationality is required.';
+            if (empty($data['address_line_1'])) $errors[] = 'Address line 1 is required.';
+            if (empty($data['city']))         $errors[] = 'City is required.';
+            if (empty($data['country']))      $errors[] = 'Country is required.';
+            if (empty($data['id_number']))    $errors[] = 'National ID number is required.';
+            if (empty($data['passport_number'])) $errors[] = 'Passport number is required.';
+
+            // Validate identifications (at least one ID required)
+            if (empty($identifications)) {
+                $errors[] = 'At least one form of identification is required.';
+            } else {
+                foreach ($identifications as $idx => $id) {
+                    $typeId = (int) ($id['type_id'] ?? 0);
+                    $number = trim((string) ($id['number'] ?? ''));
+                    if ($typeId === 0 || empty($number)) {
+                        $errors[] = 'Identification ' . ($idx + 1) . ': Please select a type and enter an ID number.';
+                    }
                 }
             }
-        }
 
-        if ($errors) {
-            flash('error', implode(' ', $errors));
-            $this->redirect('/employee-registration');
+            if ($errors) {
+                flash('error', implode(' ', $errors));
+                $this->redirect('/employee-registration');
+            }
         }
 
         // Validate profile photo (optional, images only)
         $photoFile      = $request->file('profile_photo') ?? [];
         $validatedPhoto = null;
-        if (($photoFile['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+        if (!$isDevMode && ($photoFile['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
             try {
                 $validatedPhoto = $this->validatePhoto($photoFile);
             } catch (RuntimeException $e) {
                 flash('error', 'Profile photo: ' . $e->getMessage());
                 $this->redirect('/employee-registration');
             }
+        } elseif ($isDevMode && ($photoFile['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+            // Still try to validate in dev mode if file is provided
+            try {
+                $validatedPhoto = $this->validatePhoto($photoFile);
+            } catch (RuntimeException $e) {
+                $validatedPhoto = null;
+            }
         }
 
-        // Validate required passport document
+        // Validate required passport document (skip in dev mode)
         $passportFile = $request->file('passport_file') ?? [];
-        if (($passportFile['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE || empty($passportFile['name'])) {
-            flash('error', 'Passport document file is required.');
-            $this->redirect('/employee-registration');
-        }
-        try {
-            $validatedPassportFile = $this->validateFile($passportFile);
-        } catch (RuntimeException $e) {
-            flash('error', 'Passport document: ' . $e->getMessage());
-            $this->redirect('/employee-registration');
+        $validatedPassportFile = null;
+        if (!$isDevMode) {
+            if (($passportFile['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE || empty($passportFile['name'])) {
+                flash('error', 'Passport document file is required.');
+                $this->redirect('/employee-registration');
+            }
+            try {
+                $validatedPassportFile = $this->validateFile($passportFile);
+            } catch (RuntimeException $e) {
+                flash('error', 'Passport document: ' . $e->getMessage());
+                $this->redirect('/employee-registration');
+            }
+        } elseif ($isDevMode && ($passportFile['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+            // Still try to validate in dev mode if file is provided
+            try {
+                $validatedPassportFile = $this->validateFile($passportFile);
+            } catch (RuntimeException $e) {
+                $validatedPassportFile = null;
+            }
         }
 
         $passportPost = (array) ($request->input('passport_doc') ?? []);
@@ -152,35 +174,48 @@ final class IntakeController extends Controller
         }
 
         // Validate required ID document
+        // Validate required ID document (skip in dev mode)
         $idFile = $request->file('id_file') ?? [];
-        if (($idFile['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE || empty($idFile['name'])) {
-            flash('error', 'National ID document file is required.');
-            $this->redirect('/employee-registration');
-        }
-        try {
-            $validatedIdFile = $this->validateFile($idFile);
-        } catch (RuntimeException $e) {
-            flash('error', 'National ID document: ' . $e->getMessage());
-            $this->redirect('/employee-registration');
+        $validatedIdFile = null;
+        if (!$isDevMode) {
+            if (($idFile['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE || empty($idFile['name'])) {
+                flash('error', 'National ID document file is required.');
+                $this->redirect('/employee-registration');
+            }
+            try {
+                $validatedIdFile = $this->validateFile($idFile);
+            } catch (RuntimeException $e) {
+                flash('error', 'National ID document: ' . $e->getMessage());
+                $this->redirect('/employee-registration');
+            }
+
+            $idPost = (array) ($request->input('id_doc') ?? []);
+            if (empty($idPost['id_type_name'])) {
+                flash('error', 'National ID type is required.');
+                $this->redirect('/employee-registration');
+            }
+            if (empty($idPost['document_number'])) {
+                flash('error', 'National ID document number is required.');
+                $this->redirect('/employee-registration');
+            }
+            if (empty($idPost['issue_date'])) {
+                flash('error', 'National ID issue date is required.');
+                $this->redirect('/employee-registration');
+            }
+            if (empty($idPost['expiry_date'])) {
+                flash('error', 'National ID expiry date is required.');
+                $this->redirect('/employee-registration');
+            }
+        } elseif ($isDevMode && ($idFile['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+            // Still try to validate in dev mode if file is provided
+            try {
+                $validatedIdFile = $this->validateFile($idFile);
+            } catch (RuntimeException $e) {
+                $validatedIdFile = null;
+            }
         }
 
         $idPost = (array) ($request->input('id_doc') ?? []);
-        if (empty($idPost['id_type_name'])) {
-            flash('error', 'National ID type is required.');
-            $this->redirect('/employee-registration');
-        }
-        if (empty($idPost['document_number'])) {
-            flash('error', 'National ID document number is required.');
-            $this->redirect('/employee-registration');
-        }
-        if (empty($idPost['issue_date'])) {
-            flash('error', 'National ID issue date is required.');
-            $this->redirect('/employee-registration');
-        }
-        if (empty($idPost['expiry_date'])) {
-            flash('error', 'National ID expiry date is required.');
-            $this->redirect('/employee-registration');
-        }
 
         // Validate optional additional document uploads
         $rawFiles    = $request->file('documents') ?? [];

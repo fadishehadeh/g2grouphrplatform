@@ -291,6 +291,16 @@ $idDocTypes       = array_values(array_filter($identityDocTypes, fn($t) =>
                     });
                 });
             </script>
+
+            <!-- Joining Date (Optional) -->
+            <hr class="my-4">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Expected Joining Date</label>
+                    <input type="date" name="joining_date" id="joining_date" class="form-control">
+                    <small class="text-muted">Optional - expected date of joining the organization</small>
+                </div>
+            </div>
         </div>
 
         <!-- ═══ Step 3: Emergency Contacts ══════════════════════════════════ -->
