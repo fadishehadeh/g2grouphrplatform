@@ -19,7 +19,54 @@ Desktop.ini
 # Zip archives
 *.zip
 
+# Generated backups
+backups/
+full_backup_*.zip
+upload_package_*.zip
+HR_System_*.zip
+
+# Generated deployment bundles and scratch folders
+deploy_packagetmp/
+final_upload_files/
+final_upload_files_fixed/
+fix_final/
+fix_final_real/
+fix_v2/
+hotfix_final/
+logout_button_fix/
+logout_fix_v3/
+logout_inline/
+zip_btn_fix_*/
+zip_final_*/
+zip_source/
+zip_src_*/
+zips/
+build/
+css_fix/
+live_update/
+intake-deploy-temp/
+appzip_1719128387/
+$stagingDir/
+New folder/
+public-peoplova/
+
+# Local diagnostics and scratch files
+temp_key.txt
+debug-*.php
+check-*.php
+verify-*.php
+force-logout.php
+test-form-debug.html
+test-form-submit.php
+public/debug-form-submit.php
+public/test-intake-form.php
+public-hr/debug-*.php
+public-hr/check-*.php
+scripts/clear-employees.php
+
+# Local upload/runtime content
+storage/uploads/
+
 # User-generated uploads and content
 public-hr/assets/uploads/
 public-careers/assets/uploads/
-
