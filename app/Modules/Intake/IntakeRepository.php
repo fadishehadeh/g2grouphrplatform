@@ -12,6 +12,7 @@ use RuntimeException;
 final class IntakeRepository
 {
     private Database $database;
+    private ?bool $submissionIdentificationsAvailable = null;
 
     public function __construct(Database $database)
     {
@@ -419,7 +420,7 @@ final class IntakeRepository
 
     public function saveIdentifications(int $submissionId, array $identifications): void
     {
-        if (empty($identifications)) {
+        if (empty($identifications) || !$this->supportsSubmissionIdentifications()) {
             return;
         }
 
@@ -455,6 +456,10 @@ final class IntakeRepository
 
     public function getIdentifications(int $submissionId): array
     {
+        if (!$this->supportsSubmissionIdentifications()) {
+            return [];
+        }
+
         return $this->database->fetchAll(
             'SELECT
                 isi.id,
@@ -476,6 +481,10 @@ final class IntakeRepository
 
     public function migrateIdentificationsToEmployee(int $submissionId, int $employeeId): void
     {
+        if (!$this->supportsSubmissionIdentifications()) {
+            return;
+        }
+
         $identifications = $this->getIdentifications($submissionId);
 
         if (empty($identifications)) {
@@ -506,5 +515,29 @@ final class IntakeRepository
                 );
             }
         });
+    }
+
+    private function supportsSubmissionIdentifications(): bool
+    {
+        if ($this->submissionIdentificationsAvailable !== null) {
+            return $this->submissionIdentificationsAvailable;
+        }
+
+        $tableName = $this->database->fetchValue('SELECT DATABASE()');
+        if (!is_string($tableName) || $tableName === '') {
+            return $this->submissionIdentificationsAvailable = false;
+        }
+
+        $exists = $this->database->fetchValue(
+            'SELECT COUNT(*)
+             FROM information_schema.tables
+             WHERE table_schema = :schema AND table_name = :table_name',
+            [
+                'schema'     => $tableName,
+                'table_name' => 'intake_submission_identifications',
+            ]
+        );
+
+        return $this->submissionIdentificationsAvailable = ((int) $exists) > 0;
     }
 }

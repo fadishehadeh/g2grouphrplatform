@@ -6,6 +6,7 @@ namespace App\Modules\Dashboard;
 
 use App\Core\Controller;
 use App\Core\Request;
+use App\Modules\Resilience\BackupRepository;
 use Throwable;
 
 final class DashboardController extends Controller
@@ -24,6 +25,7 @@ final class DashboardController extends Controller
         };
 
         $announcements = $this->recentAnnouncements();
+        $backupOverview = $this->latestBackupOverview($user ?? []);
 
         $this->render($view, [
             'title' => 'Dashboard',
@@ -31,6 +33,7 @@ final class DashboardController extends Controller
             'user' => $user,
             'stats' => $stats,
             'announcements' => $announcements,
+            'backupOverview' => $backupOverview,
         ]);
     }
 
@@ -110,6 +113,20 @@ final class DashboardController extends Controller
             );
         } catch (Throwable $throwable) {
             return [];
+        }
+    }
+
+    private function latestBackupOverview(array $user): ?array
+    {
+        if (($user['role_code'] ?? '') !== 'super_admin') {
+            return null;
+        }
+
+        try {
+            $repository = new BackupRepository($this->app->database());
+            return $repository->latestRun();
+        } catch (Throwable) {
+            return null;
         }
     }
 }

@@ -15,14 +15,20 @@ final class EmployeeRepository
         $this->database = $database;
     }
 
-    public function listEmployees(string $search = '', int $page = 1, int $perPage = 25): array
+    public function listEmployees(string $search = '', array $filters = [], int $page = 1, int $perPage = 25): array
     {
         $sql = "SELECT e.id, e.employee_code, CONCAT_WS(' ', e.first_name, e.middle_name, e.last_name) AS full_name,
-                       e.work_email, d.name AS department_name, jt.name AS job_title_name, e.employee_status, e.joining_date,
+                       e.user_id, e.work_email, e.employment_type, e.contract_type, e.employee_status, e.joining_date,
+                       c.name AS company_name, b.name AS branch_name, d.name AS department_name, t.name AS team_name,
+                       jt.name AS job_title_name, ds.name AS designation_name,
                        CONCAT_WS(' ', m.first_name, m.middle_name, m.last_name) AS manager_name
                 FROM employees e
+                LEFT JOIN companies c ON c.id = e.company_id
+                LEFT JOIN branches b ON b.id = e.branch_id
                 LEFT JOIN departments d ON d.id = e.department_id
+                LEFT JOIN teams t ON t.id = e.team_id
                 LEFT JOIN job_titles jt ON jt.id = e.job_title_id
+                LEFT JOIN designations ds ON ds.id = e.designation_id
                 LEFT JOIN employees m ON m.id = e.manager_employee_id
                 WHERE e.archived_at IS NULL";
         $params = $this->searchParams($search);
@@ -30,6 +36,10 @@ final class EmployeeRepository
         if ($search !== '') {
             $sql .= $this->searchWhereClause();
         }
+
+        [$filterSql, $filterParams] = $this->directoryFilterClause($filters);
+        $sql .= $filterSql;
+        $params = array_merge($params, $filterParams);
 
         $page    = max(1, $page);
         $perPage = max(10, min(100, $perPage));
@@ -40,18 +50,28 @@ final class EmployeeRepository
         return $this->database->fetchAll($sql, $params);
     }
 
-    public function countEmployees(string $search = ''): int
+    public function countEmployees(string $search = '', array $filters = []): int
     {
         $sql = 'SELECT COUNT(*) FROM employees e
+                LEFT JOIN companies c ON c.id = e.company_id
+                LEFT JOIN branches b ON b.id = e.branch_id
                 LEFT JOIN departments d ON d.id = e.department_id
+                LEFT JOIN teams t ON t.id = e.team_id
                 LEFT JOIN job_titles jt ON jt.id = e.job_title_id
+                LEFT JOIN designations ds ON ds.id = e.designation_id
+                LEFT JOIN employees m ON m.id = e.manager_employee_id
                 WHERE e.archived_at IS NULL';
+        $params = $this->searchParams($search);
 
         if ($search !== '') {
             $sql .= $this->searchWhereClause();
         }
 
-        return (int) ($this->database->fetchValue($sql, $this->searchParams($search)) ?? 0);
+        [$filterSql, $filterParams] = $this->directoryFilterClause($filters);
+        $sql .= $filterSql;
+        $params = array_merge($params, $filterParams);
+
+        return (int) ($this->database->fetchValue($sql, $params) ?? 0);
     }
 
     public function activeEmployeesForSelect(): array
@@ -69,8 +89,19 @@ final class EmployeeRepository
     private function searchWhereClause(): string
     {
         return " AND (
-            e.employee_code LIKE :search_code OR e.first_name LIKE :search_first_name OR e.last_name LIKE :search_last_name
-            OR e.work_email LIKE :search_email OR d.name LIKE :search_department OR jt.name LIKE :search_job_title
+            e.employee_code LIKE :search_code
+            OR e.first_name LIKE :search_name
+            OR e.middle_name LIKE :search_name
+            OR e.last_name LIKE :search_name
+            OR CONCAT_WS(' ', e.first_name, e.middle_name, e.last_name) LIKE :search_name
+            OR e.work_email LIKE :search_email
+            OR c.name LIKE :search_company
+            OR b.name LIKE :search_branch
+            OR d.name LIKE :search_department
+            OR t.name LIKE :search_team
+            OR jt.name LIKE :search_job_title
+            OR ds.name LIKE :search_designation
+            OR CONCAT_WS(' ', m.first_name, m.middle_name, m.last_name) LIKE :search_manager
         )";
     }
 
@@ -83,13 +114,180 @@ final class EmployeeRepository
         $v = '%' . $search . '%';
 
         return [
-            'search_code'       => $v,
-            'search_first_name' => $v,
-            'search_last_name'  => $v,
-            'search_email'      => $v,
-            'search_department' => $v,
-            'search_job_title'  => $v,
+            'search_code'        => $v,
+            'search_name'        => $v,
+            'search_email'       => $v,
+            'search_company'     => $v,
+            'search_branch'      => $v,
+            'search_department'  => $v,
+            'search_team'        => $v,
+            'search_job_title'   => $v,
+            'search_designation' => $v,
+            'search_manager'     => $v,
         ];
+    }
+
+    public function directoryFilterOptions(): array
+    {
+        return [
+            'companies' => $this->optionList('SELECT id, name FROM companies WHERE status = :status ORDER BY name ASC', ['status' => 'active']),
+            'branches' => $this->optionList('SELECT id, name FROM branches WHERE status = :status ORDER BY name ASC', ['status' => 'active']),
+            'departments' => $this->optionList('SELECT id, name FROM departments WHERE status = :status ORDER BY name ASC', ['status' => 'active']),
+            'teams' => $this->optionList('SELECT id, name FROM teams WHERE status = :status ORDER BY name ASC', ['status' => 'active']),
+            'job_titles' => $this->optionList('SELECT id, name FROM job_titles WHERE status = :status ORDER BY name ASC', ['status' => 'active']),
+            'designations' => $this->optionList('SELECT id, name FROM designations WHERE status = :status ORDER BY name ASC', ['status' => 'active']),
+            'managers' => $this->managerOptions(),
+            'contract_types' => $this->distinctEmployeeValues('contract_type'),
+        ];
+    }
+
+    private function directoryFilterClause(array $filters): array
+    {
+        $sql = '';
+        $params = [];
+
+        $status = trim((string) ($filters['status'] ?? ''));
+        if ($status !== '' && $status !== 'all') {
+            $sql .= ' AND e.employee_status = :filter_status';
+            $params['filter_status'] = $status;
+        }
+
+        $jobTitleId = (int) ($filters['job_title_id'] ?? 0);
+        if ($jobTitleId > 0) {
+            $sql .= ' AND e.job_title_id = :filter_job_title_id';
+            $params['filter_job_title_id'] = $jobTitleId;
+        }
+
+        $companyId = (int) ($filters['company_id'] ?? 0);
+        if ($companyId > 0) {
+            $sql .= ' AND e.company_id = :filter_company_id';
+            $params['filter_company_id'] = $companyId;
+        }
+
+        $branchId = (int) ($filters['branch_id'] ?? 0);
+        if ($branchId > 0) {
+            $sql .= ' AND e.branch_id = :filter_branch_id';
+            $params['filter_branch_id'] = $branchId;
+        }
+
+        $departmentId = (int) ($filters['department_id'] ?? 0);
+        if ($departmentId > 0) {
+            $sql .= ' AND e.department_id = :filter_department_id';
+            $params['filter_department_id'] = $departmentId;
+        }
+
+        $teamId = (int) ($filters['team_id'] ?? 0);
+        if ($teamId > 0) {
+            $sql .= ' AND e.team_id = :filter_team_id';
+            $params['filter_team_id'] = $teamId;
+        }
+
+        $designationId = (int) ($filters['designation_id'] ?? 0);
+        if ($designationId > 0) {
+            $sql .= ' AND e.designation_id = :filter_designation_id';
+            $params['filter_designation_id'] = $designationId;
+        }
+
+        $managerEmployeeId = (int) ($filters['manager_employee_id'] ?? 0);
+        if ($managerEmployeeId > 0) {
+            $sql .= ' AND e.manager_employee_id = :filter_manager_employee_id';
+            $params['filter_manager_employee_id'] = $managerEmployeeId;
+        }
+
+        $employmentType = trim((string) ($filters['employment_type'] ?? ''));
+        if ($employmentType !== '' && $employmentType !== 'all') {
+            $sql .= ' AND e.employment_type = :filter_employment_type';
+            $params['filter_employment_type'] = $employmentType;
+        }
+
+        $contractType = trim((string) ($filters['contract_type'] ?? ''));
+        if ($contractType !== '' && $contractType !== 'all') {
+            if ($contractType === '__blank__') {
+                $sql .= ' AND (e.contract_type IS NULL OR e.contract_type = \'\')';
+            } else {
+                $sql .= ' AND e.contract_type = :filter_contract_type';
+                $params['filter_contract_type'] = $contractType;
+            }
+        }
+
+        $hasUserAccount = trim((string) ($filters['has_user_account'] ?? ''));
+        if ($hasUserAccount === 'yes') {
+            $sql .= ' AND e.user_id IS NOT NULL';
+        } elseif ($hasUserAccount === 'no') {
+            $sql .= ' AND e.user_id IS NULL';
+        }
+
+        $employeeCode = trim((string) ($filters['employee_code'] ?? ''));
+        if ($employeeCode !== '') {
+            $sql .= ' AND e.employee_code LIKE :filter_employee_code';
+            $params['filter_employee_code'] = '%' . $employeeCode . '%';
+        }
+
+        $joiningDate = trim((string) ($filters['joining_date'] ?? ''));
+        if ($joiningDate !== '') {
+            $sql .= ' AND e.joining_date = :filter_joining_date';
+            $params['filter_joining_date'] = $joiningDate;
+        }
+
+        $joiningDateFrom = trim((string) ($filters['joining_date_from'] ?? ''));
+        if ($joiningDateFrom !== '') {
+            $sql .= ' AND e.joining_date >= :filter_joining_date_from';
+            $params['filter_joining_date_from'] = $joiningDateFrom;
+        }
+
+        $joiningDateTo = trim((string) ($filters['joining_date_to'] ?? ''));
+        if ($joiningDateTo !== '') {
+            $sql .= ' AND e.joining_date <= :filter_joining_date_to';
+            $params['filter_joining_date_to'] = $joiningDateTo;
+        }
+
+        return [$sql, $params];
+    }
+
+    public function missingItemsReport(string $search = '', array $filters = [], bool $onlyMissing = true, int $page = 1, int $perPage = 25): array
+    {
+        $employees = $this->filteredDirectoryEmployees($search, $filters);
+        $requiredDocumentTypes = $this->activeDocumentTypeRequirements();
+        $documentsByEmployee = $this->currentDocumentsByEmployeeIds(array_column($employees, 'id'));
+
+        $rows = [];
+        foreach ($employees as $employee) {
+            $missingItems = $this->buildMissingItemsSummary(
+                $employee,
+                $documentsByEmployee[(int) $employee['id']] ?? [],
+                $requiredDocumentTypes
+            );
+
+            if ($onlyMissing && $missingItems['total_missing_count'] === 0) {
+                continue;
+            }
+
+            $rows[] = $employee + ['missing_items' => $missingItems];
+        }
+
+        $page = max(1, $page);
+        $perPage = max(10, min(100, $perPage));
+        $total = count($rows);
+        $offset = ($page - 1) * $perPage;
+
+        return [
+            'rows' => array_slice($rows, $offset, $perPage),
+            'total' => $total,
+        ];
+    }
+
+    public function profileMissingItems(int $employeeId): array
+    {
+        $employee = $this->findEmployee($employeeId);
+        if ($employee === null) {
+            throw new \RuntimeException('Employee not found.');
+        }
+
+        return $this->buildMissingItemsSummary(
+            $employee,
+            $this->findEmployeeDocuments($employeeId),
+            $this->activeDocumentTypeRequirements()
+        );
     }
 
     public function findEmployee(int $id): ?array
@@ -430,6 +628,32 @@ final class EmployeeRepository
         return $options;
     }
 
+    private function distinctEmployeeValues(string $field): array
+    {
+        if (!in_array($field, ['contract_type'], true)) {
+            return [];
+        }
+
+        $options = [];
+        foreach (
+            $this->database->fetchAll(
+                "SELECT DISTINCT {$field} AS value
+                 FROM employees
+                 WHERE archived_at IS NULL
+                   AND {$field} IS NOT NULL
+                   AND TRIM({$field}) <> ''
+                 ORDER BY {$field} ASC"
+            ) as $row
+        ) {
+            $value = trim((string) ($row['value'] ?? ''));
+            if ($value !== '') {
+                $options[$value] = $value;
+            }
+        }
+
+        return $options;
+    }
+
     private function managerOptions(?int $excludeEmployeeId = null): array
     {
         $sql = "SELECT id, CONCAT_WS(' ', first_name, middle_name, last_name) AS name
@@ -445,6 +669,165 @@ final class EmployeeRepository
         $sql .= ' ORDER BY first_name ASC, last_name ASC';
 
         return $this->optionList($sql, $params);
+    }
+
+    private function filteredDirectoryEmployees(string $search = '', array $filters = []): array
+    {
+        $sql = "SELECT e.id, e.employee_code, CONCAT_WS(' ', e.first_name, e.middle_name, e.last_name) AS full_name,
+                       e.user_id, e.work_email, e.personal_email, e.phone, e.date_of_birth, e.gender, e.marital_status,
+                       e.nationality, e.id_number, e.passport_number, e.employment_type, e.contract_type,
+                       e.employee_status, e.joining_date, e.company_id, e.branch_id, e.department_id, e.team_id,
+                       e.job_title_id, e.designation_id, e.manager_employee_id,
+                       c.name AS company_name, b.name AS branch_name, d.name AS department_name, t.name AS team_name,
+                       jt.name AS job_title_name, ds.name AS designation_name,
+                       CONCAT_WS(' ', m.first_name, m.middle_name, m.last_name) AS manager_name
+                FROM employees e
+                LEFT JOIN companies c ON c.id = e.company_id
+                LEFT JOIN branches b ON b.id = e.branch_id
+                LEFT JOIN departments d ON d.id = e.department_id
+                LEFT JOIN teams t ON t.id = e.team_id
+                LEFT JOIN job_titles jt ON jt.id = e.job_title_id
+                LEFT JOIN designations ds ON ds.id = e.designation_id
+                LEFT JOIN employees m ON m.id = e.manager_employee_id
+                WHERE e.archived_at IS NULL";
+        $params = $this->searchParams($search);
+
+        if ($search !== '') {
+            $sql .= $this->searchWhereClause();
+        }
+
+        [$filterSql, $filterParams] = $this->directoryFilterClause($filters);
+        $sql .= $filterSql . ' ORDER BY e.created_at DESC';
+        $params = array_merge($params, $filterParams);
+
+        return $this->database->fetchAll($sql, $params);
+    }
+
+    private function activeDocumentTypeRequirements(): array
+    {
+        return $this->database->fetchAll(
+            'SELECT dt.id, dt.name, dt.requires_expiry, dc.name AS category_name
+             FROM document_types dt
+             INNER JOIN document_categories dc ON dc.id = dt.category_id
+             WHERE dt.is_active = 1
+             ORDER BY dc.name ASC, dt.sort_order ASC, dt.name ASC'
+        );
+    }
+
+    private function currentDocumentsByEmployeeIds(array $employeeIds): array
+    {
+        $employeeIds = array_values(array_unique(array_map('intval', $employeeIds)));
+        if ($employeeIds === []) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($employeeIds), '?'));
+        $rows = $this->database->fetchAll(
+            "SELECT ed.employee_id, ed.document_type_id, ed.title, ed.expiry_date,
+                    dc.name AS category_name
+             FROM employee_documents ed
+             LEFT JOIN document_categories dc ON dc.id = ed.category_id
+             WHERE ed.is_current = 1
+               AND ed.employee_id IN ($placeholders)",
+            $employeeIds
+        );
+
+        $grouped = [];
+        foreach ($rows as $row) {
+            $grouped[(int) $row['employee_id']][] = $row;
+        }
+
+        return $grouped;
+    }
+
+    private function buildMissingItemsSummary(array $employee, array $documents, array $requiredDocumentTypes): array
+    {
+        $missingFields = [];
+        $fieldLabels = [
+            'employee_code' => 'Employee code',
+            'first_name' => 'First name',
+            'last_name' => 'Last name',
+            'work_email' => 'Work email',
+            'company_id' => 'Company',
+            'branch_id' => 'Branch',
+            'department_id' => 'Department',
+            'team_id' => 'Team',
+            'job_title_id' => 'Job title',
+            'designation_id' => 'Designation',
+            'manager_employee_id' => 'Line manager',
+            'employment_type' => 'Employment type',
+            'contract_type' => 'Contract type',
+            'employee_status' => 'Employee status',
+            'joining_date' => 'Joining date',
+            'phone' => 'Phone',
+            'personal_email' => 'Personal email',
+            'date_of_birth' => 'Date of birth',
+            'gender' => 'Gender',
+            'marital_status' => 'Marital status',
+            'nationality' => 'Nationality',
+        ];
+
+        foreach ($fieldLabels as $field => $label) {
+            $value = $employee[$field] ?? null;
+            if ($value === null || trim((string) $value) === '') {
+                $missingFields[] = $label;
+            }
+        }
+
+        if (trim((string) ($employee['id_number'] ?? '')) === '' && trim((string) ($employee['passport_number'] ?? '')) === '') {
+            $missingFields[] = 'ID / passport number';
+        }
+
+        $documentTypeIds = [];
+        $documentTitleMap = [];
+        foreach ($documents as $document) {
+            $documentTypeId = (int) ($document['document_type_id'] ?? 0);
+            if ($documentTypeId > 0) {
+                $documentTypeIds[$documentTypeId] = true;
+            }
+
+            $normalizedTitle = $this->normalizeDocumentName((string) ($document['title'] ?? ''));
+            if ($normalizedTitle !== '') {
+                $documentTitleMap[$normalizedTitle] = true;
+            }
+        }
+
+        $missingDocuments = [];
+        foreach ($requiredDocumentTypes as $type) {
+            $typeId = (int) ($type['id'] ?? 0);
+            $typeName = trim((string) ($type['name'] ?? ''));
+            if ($typeId <= 0 || $typeName === '') {
+                continue;
+            }
+
+            if (isset($documentTypeIds[$typeId])) {
+                continue;
+            }
+
+            if (isset($documentTitleMap[$this->normalizeDocumentName($typeName)])) {
+                continue;
+            }
+
+            $missingDocuments[] = $typeName;
+        }
+
+        return [
+            'missing_fields' => $missingFields,
+            'missing_documents' => $missingDocuments,
+            'missing_fields_count' => count($missingFields),
+            'missing_documents_count' => count($missingDocuments),
+            'total_missing_count' => count($missingFields) + count($missingDocuments),
+        ];
+    }
+
+    private function normalizeDocumentName(string $value): string
+    {
+        $value = strtolower(trim($value));
+        if ($value === '') {
+            return '';
+        }
+
+        return preg_replace('/[^a-z0-9]+/', '', $value) ?? '';
     }
 
     private function coreEmployee(int $id, ?Database $database = null): ?array
@@ -597,8 +980,34 @@ final class EmployeeRepository
         };
 
         $employees = [];
-        foreach ($this->database->fetchAll("SELECT id, employee_code FROM employees WHERE archived_at IS NULL") as $row) {
-            $employees[strtoupper((string) $row['employee_code'])] = (int) $row['id'];
+        $employeeEmails = [];
+        $employeeNamesByCompany = [];
+        foreach (
+            $this->database->fetchAll(
+                "SELECT e.id, e.employee_code, e.work_email, e.company_id, e.first_name, e.last_name,
+                        c.name AS company_name
+                 FROM employees e
+                 INNER JOIN companies c ON c.id = e.company_id
+                 WHERE e.archived_at IS NULL"
+            ) as $row
+        ) {
+            $employeeId = (int) $row['id'];
+            $employeeCode = strtoupper((string) ($row['employee_code'] ?? ''));
+            $workEmail = strtolower(trim((string) ($row['work_email'] ?? '')));
+            $nameKey = strtolower(trim((string) ($row['first_name'] ?? ''))) . '|' .
+                strtolower(trim((string) ($row['last_name'] ?? ''))) . '|' .
+                (int) ($row['company_id'] ?? 0);
+
+            if ($employeeCode !== '') {
+                $employees[$employeeCode] = $employeeId;
+            }
+
+            if ($workEmail !== '') {
+                $employeeEmails[$workEmail] = $employeeId;
+            }
+
+            $employeeNamesByCompany[$nameKey] ??= [];
+            $employeeNamesByCompany[$nameKey][] = $employeeId;
         }
 
         return [
@@ -609,7 +1018,141 @@ final class EmployeeRepository
             'job_titles' => $build("SELECT id, name FROM job_titles WHERE status = 'active' ORDER BY name"),
             'designations' => $build("SELECT id, name FROM designations WHERE status = 'active' ORDER BY name"),
             'employees' => $employees,
+            'employee_emails' => $employeeEmails,
+            'employee_names_by_company' => $employeeNamesByCompany,
         ];
+    }
+
+    public function importEmployeeSummaries(array $employeeIds): array
+    {
+        $employeeIds = array_values(array_unique(array_map('intval', $employeeIds)));
+        if ($employeeIds === []) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($employeeIds), '?'));
+        $rows = $this->database->fetchAll(
+            "SELECT e.id, e.employee_code, e.work_email, e.company_id,
+                    e.first_name, e.middle_name, e.last_name,
+                    c.name AS company_name
+             FROM employees e
+             INNER JOIN companies c ON c.id = e.company_id
+             WHERE e.id IN ($placeholders)
+             ORDER BY e.first_name ASC, e.last_name ASC",
+            $employeeIds
+        );
+
+        $summaries = [];
+        foreach ($rows as $row) {
+            $summaries[(int) $row['id']] = [
+                'id' => (int) $row['id'],
+                'employee_code' => (string) ($row['employee_code'] ?? ''),
+                'work_email' => (string) ($row['work_email'] ?? ''),
+                'company_id' => (int) ($row['company_id'] ?? 0),
+                'company_name' => (string) ($row['company_name'] ?? ''),
+                'full_name' => trim((string) implode(' ', array_filter([
+                    $row['first_name'] ?? '',
+                    $row['middle_name'] ?? '',
+                    $row['last_name'] ?? '',
+                ]))),
+            ];
+        }
+
+        return $summaries;
+    }
+
+    public function findOrCreateImportJobTitle(string $name): int
+    {
+        $name = trim($name);
+        if ($name === '') {
+            throw new \InvalidArgumentException('Job title name is required.');
+        }
+
+        $existing = $this->database->fetchValue(
+            'SELECT id FROM job_titles WHERE LOWER(name) = :name LIMIT 1',
+            ['name' => strtolower($name)]
+        );
+        if ($existing !== null && $existing !== false) {
+            return (int) $existing;
+        }
+
+        $code = $this->nextUniqueStructureCode('job_titles', 'JT', $name);
+        $this->database->execute(
+            'INSERT INTO job_titles (name, code, level_rank, description, status)
+             VALUES (:name, :code, :level_rank, :description, :status)',
+            [
+                'name' => $name,
+                'code' => $code,
+                'level_rank' => 1,
+                'description' => 'Auto-created during employee import.',
+                'status' => 'active',
+            ]
+        );
+
+        return (int) $this->database->lastInsertId();
+    }
+
+    public function findOrCreateImportDesignation(string $name): int
+    {
+        $name = trim($name);
+        if ($name === '') {
+            throw new \InvalidArgumentException('Designation name is required.');
+        }
+
+        $existing = $this->database->fetchValue(
+            'SELECT id FROM designations WHERE LOWER(name) = :name LIMIT 1',
+            ['name' => strtolower($name)]
+        );
+        if ($existing !== null && $existing !== false) {
+            return (int) $existing;
+        }
+
+        $code = $this->nextUniqueStructureCode('designations', 'DS', $name);
+        $this->database->execute(
+            'INSERT INTO designations (name, code, description, status)
+             VALUES (:name, :code, :description, :status)',
+            [
+                'name' => $name,
+                'code' => $code,
+                'description' => 'Auto-created during employee import.',
+                'status' => 'active',
+            ]
+        );
+
+        return (int) $this->database->lastInsertId();
+    }
+
+    public function findOrCreateImportDepartment(int $companyId, string $name): int
+    {
+        $name = trim($name);
+        if ($companyId <= 0 || $name === '') {
+            throw new \InvalidArgumentException('Department company and name are required.');
+        }
+
+        $existing = $this->database->fetchValue(
+            'SELECT id FROM departments WHERE company_id = :company_id AND LOWER(name) = :name LIMIT 1',
+            ['company_id' => $companyId, 'name' => strtolower($name)]
+        );
+        if ($existing !== null && $existing !== false) {
+            return (int) $existing;
+        }
+
+        $code = $this->nextUniqueDepartmentCode($companyId, $name);
+        $this->database->execute(
+            'INSERT INTO departments (company_id, branch_id, parent_department_id, name, code, description, status)
+             VALUES (:company_id, :branch_id, :parent_department_id, :name, :code, :description, :status)',
+            [
+                'company_id' => $companyId,
+                'branch_id' => null,
+                'parent_department_id' => null,
+                'name' => $name,
+                'code' => $code,
+                'description' => 'Auto-created during employee import.',
+                'status' => 'active',
+            ]
+        );
+
+        return (int) $this->database->lastInsertId();
     }
 
     private function persistableData(array $data, ?int $actorId): array
@@ -626,7 +1169,7 @@ final class EmployeeRepository
             'first_name' => (string) $data['first_name'],
             'middle_name' => $this->nullableString($data['middle_name'] ?? null),
             'last_name' => (string) $data['last_name'],
-            'work_email' => strtolower((string) $data['work_email']),
+            'work_email' => ($this->nullableString(isset($data['work_email']) ? strtolower((string) $data['work_email']) : null)),
             'personal_email' => encrypt_field($this->nullableString(isset($data['personal_email']) ? strtolower((string) $data['personal_email']) : null)),
             'phone' => encrypt_field($this->nullableString($data['phone'] ?? null)),
             'alternate_phone' => encrypt_field($this->nullableString($data['alternate_phone'] ?? null)),
@@ -658,6 +1201,71 @@ final class EmployeeRepository
         $value = is_string($value) ? trim($value) : $value;
 
         return $value === null || $value === '' ? null : (string) $value;
+    }
+
+    private function nextUniqueStructureCode(string $table, string $prefix, string $name): string
+    {
+        $base = strtoupper(preg_replace('/[^A-Z0-9]+/', '_', $this->transliterateStructureName($name)));
+        $base = trim($base, '_');
+        if ($base === '') {
+            $base = $prefix;
+        }
+
+        $candidate = substr($prefix . '_' . $base, 0, 50);
+        $suffix = 1;
+
+        while ($this->structureCodeExists($table, $candidate)) {
+            $candidate = substr($prefix . '_' . $base . '_' . $suffix, 0, 50);
+            $suffix++;
+        }
+
+        return $candidate;
+    }
+
+    private function nextUniqueDepartmentCode(int $companyId, string $name): string
+    {
+        $base = strtoupper(preg_replace('/[^A-Z0-9]+/', '_', $this->transliterateStructureName($name)));
+        $base = trim($base, '_');
+        if ($base === '') {
+            $base = 'DEPT';
+        }
+
+        $candidate = substr('DEPT_' . $base, 0, 50);
+        $suffix = 1;
+
+        while ($this->departmentCodeExists($companyId, $candidate)) {
+            $candidate = substr('DEPT_' . $base . '_' . $suffix, 0, 50);
+            $suffix++;
+        }
+
+        return $candidate;
+    }
+
+    private function structureCodeExists(string $table, string $code): bool
+    {
+        $id = $this->database->fetchValue(
+            "SELECT id FROM {$table} WHERE code = :code LIMIT 1",
+            ['code' => $code]
+        );
+
+        return $id !== null && $id !== false;
+    }
+
+    private function departmentCodeExists(int $companyId, string $code): bool
+    {
+        $id = $this->database->fetchValue(
+            'SELECT id FROM departments WHERE company_id = :company_id AND code = :code LIMIT 1',
+            ['company_id' => $companyId, 'code' => $code]
+        );
+
+        return $id !== null && $id !== false;
+    }
+
+    private function transliterateStructureName(string $name): string
+    {
+        $converted = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $name);
+
+        return $converted !== false ? $converted : $name;
     }
 
     public function updatePhotoPath(int $employeeId, string $path): void
@@ -739,6 +1347,18 @@ final class EmployeeRepository
              LEFT JOIN departments d ON d.id = e.department_id
              WHERE e.archived_at IS NULL
              ORDER BY e.manager_employee_id ASC, e.first_name ASC"
+        );
+    }
+
+    public function findEmployeeDocuments(int $employeeId): array
+    {
+        return $this->database->fetchAll(
+            'SELECT ed.id, ed.document_type_id, ed.title, ed.title AS document_name, ed.expiry_date, dc.name AS category_name
+             FROM employee_documents ed
+             LEFT JOIN document_categories dc ON dc.id = ed.category_id
+             WHERE ed.employee_id = :employee_id AND ed.is_current = 1
+             ORDER BY ed.created_at DESC',
+            ['employee_id' => $employeeId]
         );
     }
 }

@@ -31,3 +31,7 @@
 
     </div>
 </div>
+<script>
+localStorage.removeItem('intakeFormData');
+localStorage.removeItem('intakeCurrentStep');
+</script>

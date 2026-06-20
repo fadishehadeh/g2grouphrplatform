@@ -14,6 +14,10 @@ return [
         'tagline' => env('APP_BRAND_TAGLINE', 'People operations platform'),
         'logo_asset' => env('APP_LOGO_ASSET', 'images/g2group.svg'),
     ],
+    'marketing' => [
+        'product_name' => env('MARKETING_PRODUCT_NAME', 'Peoplova'),
+        'demo_email' => trim((string) env('MARKETING_DEMO_EMAIL', env('LEAVE_ADMIN_EMAIL', env('MAIL_FROM_ADDRESS', '')))),
+    ],
     'mail' => [
         'enabled' => filter_var(env('MAIL_ENABLED', 'false'), FILTER_VALIDATE_BOOLEAN),
         'transport' => env('MAIL_TRANSPORT', 'smtp'),       // smtp | mail
@@ -29,6 +33,11 @@ return [
     'leave' => [
         'admin_email' => trim((string) env('LEAVE_ADMIN_EMAIL', '')),
     ],
+    'backups' => [
+        'storage_dir' => env('BACKUP_STORAGE_DIR', 'storage/backups'),
+        'retention_days' => (int) env('BACKUP_RETENTION_DAYS', '30'),
+        'link_ttl_days' => (int) env('BACKUP_LINK_TTL_DAYS', '7'),
+    ],
     'recaptcha' => [
         'enabled'   => filter_var(env('RECAPTCHA_ENABLED', 'false'), FILTER_VALIDATE_BOOLEAN),
         'site_key'  => env('RECAPTCHA_SITE_KEY', ''),
@@ -38,13 +47,14 @@ return [
     'security' => [
         'login_lockout_attempts' => (int) env('LOGIN_LOCKOUT_ATTEMPTS', '5'),
         'login_lockout_minutes'  => (int) env('LOGIN_LOCKOUT_MINUTES', '15'),
-        'session_idle_timeout' => (int) env('SESSION_IDLE_TIMEOUT', '7200'),
+        'session_idle_timeout' => (int) env('SESSION_IDLE_TIMEOUT', '3600'),
+        'session_cookie_lifetime' => (int) env('SESSION_COOKIE_LIFETIME', '3600'),
         'password_reset_expiry_minutes' => (int) env('PASSWORD_RESET_EXPIRY_MINUTES', '60'),
         'referrer_policy' => env('REFERRER_POLICY', 'strict-origin-when-cross-origin'),
         'permissions_policy' => env('PERMISSIONS_POLICY', 'camera=(), microphone=(), geolocation=()'),
         'content_security_policy' => env(
             'CONTENT_SECURITY_POLICY',
-            "default-src 'self'; connect-src 'self' https://cdn.jsdelivr.net; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; font-src 'self' data: https://cdn.jsdelivr.net; object-src 'none'; base-uri 'self'; frame-ancestors 'self'; form-action 'self'"
+            "default-src 'self'; connect-src 'self' https://cdn.jsdelivr.net https://static.cloudflareinsights.com; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://static.cloudflareinsights.com; font-src 'self' data: https://cdn.jsdelivr.net; object-src 'none'; base-uri 'self'; frame-ancestors 'self'; form-action 'self'"
         ),
     ],
 ];

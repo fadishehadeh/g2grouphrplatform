@@ -12,6 +12,8 @@ $idDocTypes       = array_values(array_filter($identityDocTypes, fn($t) =>
     stripos($t['name'], 'passport') === false &&
     (stripos($t['name'], 'qid') !== false || preg_match('/\bid\b/i', $t['name']))
 ));
+$oldInput         = app()->session()->getFlash('old_input', []);
+$oldStep          = (int) (app()->session()->getFlash('intake_form_step', 1) ?? 1);
 ?>
 <div class="container py-2" style="max-width:860px">
 
@@ -550,7 +552,12 @@ $idDocTypes       = array_values(array_filter($identityDocTypes, fn($t) =>
 
 <script>
 (function () {
+    localStorage.removeItem('intakeFormData');
+    localStorage.removeItem('intakeCurrentStep');
+
     const TOTAL_STEPS = 5;
+    const SERVER_OLD_INPUT = <?= json_encode($oldInput, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+    const SERVER_OLD_STEP = <?= (int) max(1, min(5, $oldStep)); ?>;
     let current = 1;
 
     function showStep(n) {
@@ -762,6 +769,136 @@ $idDocTypes       = array_values(array_filter($identityDocTypes, fn($t) =>
         document.getElementById('reviewContent').innerHTML = html;
     }
 
+    function normalizedRows(value) {
+        if (Array.isArray(value)) return value;
+        if (!value || typeof value !== 'object') return [];
+        return Object.keys(value)
+            .sort(function(a, b) { return Number(a) - Number(b); })
+            .map(function(key) { return value[key]; });
+    }
+
+    function setFieldValue(name, value) {
+        var elements = document.querySelectorAll('[name="' + name + '"]');
+        if (!elements.length) return;
+        elements.forEach(function(el) {
+            if (el.type === 'file') return;
+            if (el.type === 'checkbox' || el.type === 'radio') {
+                if (Array.isArray(value)) {
+                    el.checked = value.includes(el.value || 'on');
+                } else {
+                    el.checked = value === true || value === 1 || value === '1' || value === (el.value || 'on');
+                }
+                return;
+            }
+            el.value = value ?? '';
+        });
+    }
+
+    function syncIdentificationButtons() {
+        var rows = document.querySelectorAll('.identification-row');
+        rows.forEach(function(row, idx) {
+            var btn = row.querySelector('.remove-id-btn');
+            if (btn) {
+                btn.disabled = rows.length === 1 && idx === 0;
+            }
+        });
+    }
+
+    function ensureContactRows(count) {
+        var button = document.getElementById('btnAddContact');
+        while (document.querySelectorAll('#contactRows .contact-row').length < count) {
+            button.click();
+        }
+    }
+
+    function ensureDocumentRows(count) {
+        var button = document.getElementById('btnAddDoc');
+        while (document.querySelectorAll('#docRows .doc-row').length < count) {
+            button.click();
+        }
+    }
+
+    function ensureIdentificationRows(count) {
+        while (document.querySelectorAll('.identification-row').length < count) {
+            addIdentificationRow();
+        }
+        syncIdentificationButtons();
+    }
+
+    function restoreStructuredRows(source) {
+        if (!source || typeof source !== 'object') return;
+
+        var ids = normalizedRows(source.identifications).filter(function(item) {
+            if (!item || typeof item !== 'object') return false;
+            return Boolean(item.type_id || item.number || item.issue_date || item.expiry_date || item.is_primary);
+        });
+        if (ids.length) {
+            var idContainer = document.getElementById('identifications-container');
+            if (idContainer) {
+                idContainer.innerHTML = '';
+                if (typeof idCount !== 'undefined') idCount = 0;
+            }
+            ensureIdentificationRows(ids.length);
+            ids.forEach(function(item, idx) {
+                if (!item || typeof item !== 'object') return;
+                setFieldValue('identifications[' + idx + '][type_id]', item.type_id || '');
+                setFieldValue('identifications[' + idx + '][number]', item.number || '');
+                setFieldValue('identifications[' + idx + '][issue_date]', item.issue_date || '');
+                setFieldValue('identifications[' + idx + '][expiry_date]', item.expiry_date || '');
+                setFieldValue('identifications[' + idx + '][is_primary]', item.is_primary ? '1' : '');
+            });
+        }
+
+        var contacts = normalizedRows(source.emergency_contacts);
+        if (contacts.length) {
+            ensureContactRows(contacts.length);
+            contacts.forEach(function(item, idx) {
+                if (!item || typeof item !== 'object') return;
+                setFieldValue('emergency_contacts[' + idx + '][full_name]', item.full_name || '');
+                setFieldValue('emergency_contacts[' + idx + '][relationship]', item.relationship || '');
+                setFieldValue('emergency_contacts[' + idx + '][phone]', item.phone || '');
+                setFieldValue('emergency_contacts[' + idx + '][alternate_phone]', item.alternate_phone || '');
+                setFieldValue('emergency_contacts[' + idx + '][email]', item.email || '');
+                setFieldValue('emergency_contacts[' + idx + '][is_primary]', item.is_primary ? '1' : '');
+            });
+        }
+
+        var docs = normalizedRows(source.documents);
+        if (docs.length) {
+            ensureDocumentRows(docs.length);
+            docs.forEach(function(item, idx) {
+                if (!item || typeof item !== 'object') return;
+                setFieldValue('documents[' + idx + '][document_type_id]', item.document_type_id || '');
+                setFieldValue('documents[' + idx + '][title]', item.title || '');
+                setFieldValue('documents[' + idx + '][document_number]', item.document_number || '');
+                setFieldValue('documents[' + idx + '][issue_date]', item.issue_date || '');
+                setFieldValue('documents[' + idx + '][expiry_date]', item.expiry_date || '');
+            });
+        }
+    }
+
+    function restoreFormState() {
+        restoreStructuredRows(SERVER_OLD_INPUT);
+
+        var hasServerOldInput = SERVER_OLD_INPUT && Object.keys(SERVER_OLD_INPUT).length > 0;
+        if (hasServerOldInput) {
+            Object.keys(SERVER_OLD_INPUT).forEach(function(key) {
+                var value = SERVER_OLD_INPUT[key];
+                if (value !== null && typeof value !== 'object') {
+                    setFieldValue(key, value);
+                }
+            });
+        }
+    }
+
+    function getInitialStep() {
+        if (SERVER_OLD_STEP > 1) {
+            return SERVER_OLD_STEP;
+        }
+
+        return 1;
+    }
+
     // Button events
     document.getElementById('btnNext').addEventListener('click', function () {
         if (!validateStep(current)) return;
@@ -829,7 +966,8 @@ $idDocTypes       = array_values(array_filter($identityDocTypes, fn($t) =>
         if (e.target.classList.contains('doc-title')) e.target.dataset.autofilled = '0';
     });
 
-    showStep(1);
+    restoreFormState();
+    showStep(getInitialStep());
 
     // File selected feedback
     function attachFilePreview(inputEl) {

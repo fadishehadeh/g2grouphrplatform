@@ -1,0 +1,220 @@
+.employees-preview-main {
+    gap: 1.2rem;
+}
+
+.employees-hero,
+.employees-filter-panel,
+.employees-table-panel {
+    border: 1px solid var(--dashboard-preview-stroke);
+    background: var(--dashboard-preview-surface-strong);
+    box-shadow: var(--dashboard-preview-shadow);
+    backdrop-filter: blur(16px);
+}
+
+.employees-hero {
+    margin-top: 1.2rem;
+    display: grid;
+    grid-template-columns: minmax(0, 1.3fr) minmax(320px, 0.9fr);
+    gap: 1rem;
+    padding: 1.35rem;
+    border-radius: var(--dashboard-preview-radius-xl);
+}
+
+.employees-hero h3 {
+    margin: 0 0 0.85rem;
+    font-size: 2rem;
+    line-height: 1.04;
+    font-family: "Space Grotesk", Arial, sans-serif;
+    letter-spacing: -0.04em;
+}
+
+.employees-hero p {
+    margin: 0;
+    color: var(--dashboard-preview-muted);
+    line-height: 1.72;
+}
+
+.employees-hero-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.85rem;
+    align-content: start;
+}
+
+.preview-action-chip,
+.preview-row-button,
+.preview-row-icon,
+.preview-outline-button,
+.preview-muted-button,
+.employees-page-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.55rem;
+    border-radius: 16px;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.preview-action-chip {
+    min-height: 56px;
+    padding: 0.95rem 1rem;
+    color: #241e30;
+    background: #f8f9fc;
+    box-shadow: inset 0 0 0 1px var(--dashboard-preview-stroke);
+}
+
+.preview-action-chip-primary {
+    color: #fff;
+    background: var(--dashboard-preview-brand);
+    box-shadow: 0 18px 32px rgba(255, 61, 51, 0.18);
+}
+
+.employees-metric-grid {
+    margin-top: 1.2rem;
+}
+
+.employees-filter-panel {
+    margin-top: 1.2rem;
+    padding: 1.2rem;
+    border-radius: var(--dashboard-preview-radius-xl);
+}
+
+.employees-filter-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 1rem;
+    align-items: end;
+    margin-top: 0.9rem;
+}
+
+.employees-filter-search span,
+.employees-advanced-filters label span {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: var(--dashboard-preview-muted);
+    font-size: 0.92rem;
+    font-weight: 700;
+}
+
+.preview-outline-button,
+.preview-muted-button,
+.employees-page-chip {
+    min-height: 52px;
+    padding: 0 1.1rem;
+    border: 0;
+    background: #f7f8fb;
+    box-shadow: inset 0 0 0 1px var(--dashboard-preview-stroke-strong);
+    color: #342e40;
+}
+
+.employees-advanced-filters {
+    margin-top: 1rem;
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 0.9rem;
+}
+
+.employees-filter-actions {
+    margin-top: 1rem;
+    display: flex;
+    gap: 0.8rem;
+    justify-content: flex-end;
+}
+
+.employees-table-panel {
+    margin-top: 1.2rem;
+}
+
+.employees-preview-table td {
+    vertical-align: middle;
+}
+
+.employee-name-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+}
+
+.employee-avatar {
+    width: 42px;
+    height: 42px;
+    display: inline-grid;
+    place-items: center;
+    border-radius: 14px;
+    background: rgba(255, 61, 51, 0.1);
+    color: var(--dashboard-preview-brand);
+    font-size: 0.82rem;
+    font-weight: 800;
+}
+
+.table-actions {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.preview-row-button {
+    min-height: 38px;
+    padding: 0 0.95rem;
+    color: #fff;
+    background: var(--dashboard-preview-brand);
+}
+
+.preview-row-icon {
+    width: 38px;
+    height: 38px;
+    margin-left: 0.4rem;
+    color: #2f293b;
+    background: #f7f8fb;
+    box-shadow: inset 0 0 0 1px var(--dashboard-preview-stroke-strong);
+}
+
+.employees-pagination {
+    margin-top: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    color: var(--dashboard-preview-muted);
+}
+
+.employees-pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.employees-page-chip {
+    min-width: 52px;
+}
+
+.employees-page-chip.is-active {
+    color: #fff;
+    background: var(--dashboard-preview-brand);
+    box-shadow: none;
+}
+
+@media (max-width: 1240px) {
+    .employees-hero,
+    .employees-advanced-filters {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 980px) {
+    .employees-filter-grid,
+    .employees-pagination {
+        grid-template-columns: 1fr;
+        display: grid;
+    }
+
+    .employees-pagination-controls {
+        flex-wrap: wrap;
+    }
+}
+
+@media (max-width: 640px) {
+    .employees-hero-actions {
+        grid-template-columns: 1fr;
+    }
+}

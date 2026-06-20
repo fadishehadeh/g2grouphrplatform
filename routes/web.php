@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use App\Core\Response;
+use App\Modules\Marketing\LandingController;
 use App\Middleware\AccountStatusMiddleware;
 use App\Middleware\AuthMiddleware;
 use App\Modules\Dashboard\DashboardController;
@@ -10,9 +10,8 @@ use App\Modules\Profile\ProfileController;
 
 $router = $app->router();
 
-$router->get('/', static function (): void {
-    Response::redirect(auth()->check() ? '/dashboard' : '/login');
-});
+$router->get('/', [LandingController::class, 'index']);
+$router->post('/demo-request', [LandingController::class, 'submitDemoRequest']);
 
 $router->get('/dashboard', [DashboardController::class, 'index'], [
     AuthMiddleware::class,

@@ -110,6 +110,50 @@ $employeeInitials = trim($employeeInitials) !== '' ? $employeeInitials : 'E';
     </div>
 
     <div class="col-xl-4 employee-side-column">
+        <?php $missingItems = $missingItems ?? ['missing_fields' => [], 'missing_documents' => [], 'missing_fields_count' => 0, 'missing_documents_count' => 0, 'total_missing_count' => 0]; ?>
+        <div class="card content-card profile-side-card mb-4">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="profile-side-title mb-0"><i class="bi bi-clipboard2-pulse"></i> Missing Items</h5>
+                    <span class="badge <?= (int) ($missingItems['total_missing_count'] ?? 0) > 0 ? 'text-bg-warning' : 'text-bg-success'; ?>">
+                        <?= e((string) ($missingItems['total_missing_count'] ?? 0)); ?>
+                    </span>
+                </div>
+                <?php if ((int) ($missingItems['total_missing_count'] ?? 0) === 0): ?>
+                    <div class="empty-state profile-empty-state p-3 mb-3"><i class="bi bi-check2-circle"></i><span>No missing fields or document types detected.</span></div>
+                <?php else: ?>
+                    <?php if (!empty($missingItems['missing_fields'])): ?>
+                        <div class="mb-3">
+                            <div class="small text-muted text-uppercase mb-2">Missing Fields</div>
+                            <div class="d-flex flex-wrap gap-2">
+                                <?php foreach ($missingItems['missing_fields'] as $item): ?>
+                                    <span class="badge text-bg-light border"><?= e((string) $item); ?></span>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+                    <?php if (!empty($missingItems['missing_documents'])): ?>
+                        <div class="mb-3">
+                            <div class="small text-muted text-uppercase mb-2">Missing Documents</div>
+                            <div class="d-flex flex-wrap gap-2">
+                                <?php foreach (array_slice($missingItems['missing_documents'], 0, 8) as $item): ?>
+                                    <span class="badge text-bg-light border"><?= e((string) $item); ?></span>
+                                <?php endforeach; ?>
+                                <?php if (count($missingItems['missing_documents']) > 8): ?>
+                                    <span class="badge text-bg-secondary">+<?= e((string) (count($missingItems['missing_documents']) - 8)); ?> more</span>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+                <?php endif; ?>
+                <?php if (can('employee.view_all')): ?>
+                    <a href="<?= e(url('/employees/missing-items?q=' . urlencode((string) ($employee['employee_code'] ?? $employeeName)))); ?>" class="btn btn-outline-secondary btn-sm w-100">
+                        <i class="bi bi-search"></i> Open Missing Items Audit
+                    </a>
+                <?php endif; ?>
+            </div>
+        </div>
+
         <div class="card content-card profile-side-card mb-4">
             <div class="card-body p-4">
                 <h5 class="profile-side-title"><i class="bi bi-person-heart"></i> Emergency Contacts</h5>
@@ -198,6 +242,44 @@ $employeeInitials = trim($employeeInitials) !== '' ? $employeeInitials : 'E';
                 <?php endif; ?>
             </div>
         </div>
+
+        <div class="card content-card profile-side-card">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="profile-side-title mb-0"><i class="bi bi-file-earmark-text"></i> Documents</h5>
+                    <?php if (!empty($documents)): ?>
+                        <span class="badge text-bg-info"><?= e((string) count($documents)); ?></span>
+                    <?php else: ?>
+                        <span class="badge text-bg-secondary">None</span>
+                    <?php endif; ?>
+                </div>
+
+                <?php if (!empty($documents)): ?>
+                    <div class="d-grid gap-2 small mb-3">
+                        <?php foreach ($documents as $doc): ?>
+                            <div class="profile-document-item">
+                                <div class="d-flex align-items-center gap-2 mb-1">
+                                    <i class="bi bi-file-earmark"></i>
+                                    <strong class="flex-grow-1"><?= e((string) ($doc['document_name'] ?? 'Untitled')); ?></strong>
+                                    <?php if (!empty($doc['category_name'])): ?>
+                                        <span class="badge text-bg-light text-dark text-nowrap"><?= e((string) $doc['category_name']); ?></span>
+                                    <?php endif; ?>
+                                </div>
+                                <?php if (!empty($doc['expiry_date'])): ?>
+                                    <div class="text-muted small ps-4">Expires: <?= e((string) $doc['expiry_date']); ?></div>
+                                <?php endif; ?>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php else: ?>
+                    <div class="empty-state profile-empty-state p-3 mb-3"><i class="bi bi-file-earmark-x"></i><span>No documents added yet.</span></div>
+                <?php endif; ?>
+
+                <?php if (can('documents.manage_all') || ((can('documents.view_self') || can('documents.upload_self')) && (int) (auth()->user()['employee_id'] ?? 0) === (int) ($employee['id'] ?? 0))): ?>
+                    <a href="<?= e(url('/employees/' . (int) ($employee['id'] ?? 0) . '/documents/upload')); ?>" class="btn btn-primary btn-sm w-100"><i class="bi bi-plus-circle"></i> Add Document</a>
+                <?php endif; ?>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -212,10 +294,24 @@ $employeeInitials = trim($employeeInitials) !== '' ? $employeeInitials : 'E';
             <div class="modal-body">
                 <p>You are about to <strong>permanently delete</strong> <strong><?= e($employeeName); ?></strong> (<?= e((string)($employee['employee_code'] ?? '')); ?>).</p>
                 <p class="text-danger mb-0"><strong>This action cannot be undone.</strong> All associated records (documents, leave history, onboarding, etc.) will also be deleted.</p>
+                <div class="mt-3">
+                    <label for="confirm_employee_name" class="form-label">Type the employee name exactly to confirm</label>
+                    <input
+                        type="text"
+                        name="confirm_employee_name"
+                        id="confirm_employee_name"
+                        class="form-control"
+                        form="deleteEmployeeForm"
+                        placeholder="<?= e($employeeName); ?>"
+                        autocomplete="off"
+                        required
+                    >
+                    <div class="form-text">Expected: <strong><?= e($employeeName); ?></strong></div>
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <form method="post" action="<?= e(url('/employees/' . (int)$employee['id'] . '/delete')); ?>" class="d-inline">
+                <form method="post" action="<?= e(url('/employees/' . (int)$employee['id'] . '/delete')); ?>" class="d-inline" id="deleteEmployeeForm">
                     <?= csrf_field(); ?>
                     <button type="submit" class="btn btn-danger"><i class="bi bi-trash me-1"></i>Delete Permanently</button>
                 </form>

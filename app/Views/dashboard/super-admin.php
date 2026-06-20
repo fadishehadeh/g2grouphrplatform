@@ -4,6 +4,9 @@ $headcount = (int) ($stats['headcount'] ?? 0);
 $pendingApprovals = (int) ($stats['pendingApprovals'] ?? 0);
 $onboardingOpen = (int) ($stats['onboardingOpen'] ?? 0);
 $documentsExpiring = (int) ($stats['documentsExpiring'] ?? 0);
+$latestBackupStatus = (string) ($backupOverview['status'] ?? 'unknown');
+$latestBackupId = (int) ($backupOverview['id'] ?? 0);
+$latestBackupCompleted = (string) ($backupOverview['completed_at'] ?? $backupOverview['started_at'] ?? 'No backup history yet');
 
 $attentionItems = [
     [
@@ -30,6 +33,14 @@ $attentionItems = [
         'tone' => $documentsExpiring > 0 ? 'danger' : 'calm',
         'note' => $documentsExpiring > 0 ? 'Compliance-related records need attention soon.' : 'No near-term document risk detected.',
     ],
+    [
+        'label' => 'Latest resilience backup',
+        'value' => $latestBackupId > 0 ? '#' . $latestBackupId : '—',
+        'href' => url('/admin/resilience'),
+        'icon' => 'bi-database-check',
+        'tone' => $latestBackupStatus === 'success' ? 'calm' : ($latestBackupStatus === 'partial' ? 'warning' : 'danger'),
+        'note' => $latestBackupId > 0 ? 'Most recent backup status: ' . ucfirst($latestBackupStatus) . ' at ' . $latestBackupCompleted : 'Open the resilience console to configure daily backup monitoring.',
+    ],
 ];
 ?>
 
@@ -45,6 +56,7 @@ $attentionItems = [
                     <a href="<?= e(url('/admin/roles')); ?>" class="btn btn-outline-secondary"><i class="bi bi-shield-check"></i> Roles</a>
                     <a href="<?= e(url('/reports')); ?>" class="btn btn-outline-secondary"><i class="bi bi-bar-chart"></i> Reports</a>
                     <a href="<?= e(url('/settings')); ?>" class="btn btn-outline-secondary"><i class="bi bi-gear"></i> Settings</a>
+                    <a href="<?= e(url('/admin/resilience')); ?>" class="btn btn-outline-secondary"><i class="bi bi-database-check"></i> Resilience</a>
                 </div>
             </div>
             <div class="col-xl-4">

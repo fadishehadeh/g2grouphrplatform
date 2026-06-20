@@ -21,7 +21,7 @@ require base_path('app/Views/partials/page-header.php');
         <div class="card content-card h-100">
             <div class="card-body p-4">
                 <h5 class="mb-1">Manager Approval Queue</h5>
-                <p class="text-muted mb-4">Requests waiting for line-manager review.</p>
+                <p class="text-muted mb-4">Requests waiting for the employee's direct manager.</p>
                 <?php if (($managerQueue ?? []) === []): ?>
                     <div class="empty-state">No pending manager approvals right now.</div>
                 <?php else: ?>
@@ -60,7 +60,7 @@ require base_path('app/Views/partials/page-header.php');
                 <div class="d-flex justify-content-between align-items-center gap-3 mb-4">
                     <div>
                         <h5 class="mb-1">HR Approval Queue</h5>
-                        <p class="text-muted mb-0">Requests escalated to HR for final review.</p>
+                        <p class="text-muted mb-0">Requests routed to HR because no valid manager approver is assigned.</p>
                     </div>
                 </div>
                 <?php if (($hrQueue ?? []) === []): ?>

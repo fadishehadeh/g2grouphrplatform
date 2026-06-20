@@ -37,10 +37,16 @@
                         <h5 class="mb-1">Configured Leave Types</h5>
                         <p class="text-muted mb-0">Core leave policy definitions available to employees.</p>
                     </div>
-                    <form method="get" action="<?= e(url('/admin/leave/types')); ?>" class="d-flex gap-2">
-                        <input type="text" name="q" class="form-control" placeholder="Search leave types..." value="<?= e((string) ($search ?? '')); ?>">
-                        <button type="submit" class="btn btn-outline-secondary">Search</button>
-                    </form>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <form method="post" action="<?= e(url('/admin/leave/types/seed-defaults')); ?>">
+                            <?= csrf_field(); ?>
+                            <button type="submit" class="btn btn-outline-dark">Seed Default Types</button>
+                        </form>
+                        <form method="get" action="<?= e(url('/admin/leave/types')); ?>" class="d-flex gap-2">
+                            <input type="text" name="q" class="form-control" placeholder="Search leave types..." value="<?= e((string) ($search ?? '')); ?>">
+                            <button type="submit" class="btn btn-outline-secondary">Search</button>
+                        </form>
+                    </div>
                 </div>
                 <?php if (($leaveTypes ?? []) === []): ?>
                     <div class="empty-state">No leave types found for the current search.</div>

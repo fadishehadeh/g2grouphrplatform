@@ -1,0 +1,751 @@
+:root {
+    --marketing-ink: #172033;
+    --marketing-copy: #526072;
+    --marketing-soft: #f6f1e8;
+    --marketing-line: #e6dfd4;
+    --marketing-panel: rgba(255, 255, 255, 0.86);
+    --marketing-cream: #fbf8f2;
+    --marketing-orange: #f5673b;
+    --marketing-orange-dark: #d94d24;
+    --marketing-gold: #d6a14c;
+}
+
+.marketing-body {
+    font-family: "Manrope", "Segoe UI", sans-serif;
+    background:
+        radial-gradient(circle at 0% 0%, rgba(245, 103, 59, 0.16), transparent 24rem),
+        radial-gradient(circle at 100% 12%, rgba(214, 161, 76, 0.14), transparent 24rem),
+        linear-gradient(180deg, #fffdf9 0%, #f8f2e9 100%);
+    color: var(--marketing-ink);
+}
+
+.marketing-body > .alert {
+    position: sticky;
+    top: 4.8rem;
+    z-index: 1035;
+    max-width: min(1100px, calc(100% - 2rem));
+    margin: 1rem auto 0;
+}
+
+.marketing-header {
+    position: sticky;
+    top: 0;
+    z-index: 1030;
+    background: rgba(255, 253, 249, 0.86);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid rgba(23, 32, 51, 0.07);
+}
+
+.marketing-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 0;
+}
+
+.marketing-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.9rem;
+    color: var(--marketing-ink);
+    text-decoration: none;
+}
+
+.marketing-brand:hover {
+    color: var(--marketing-ink);
+}
+
+.marketing-brand-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.95rem;
+    height: 2.95rem;
+    border-radius: 1rem;
+    background: linear-gradient(135deg, #f57a48, #e2492f);
+    color: #fff;
+    font-weight: 800;
+    letter-spacing: -0.05em;
+    box-shadow: 0 1.1rem 2.2rem rgba(245, 103, 59, 0.22);
+}
+
+.marketing-brand strong,
+.marketing-brand small {
+    display: block;
+}
+
+.marketing-brand strong {
+    font-size: 0.98rem;
+    letter-spacing: -0.02em;
+}
+
+.marketing-brand small {
+    color: #7c8798;
+    font-size: 0.77rem;
+}
+
+.marketing-nav-actions {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.marketing-nav-actions .btn-outline-light {
+    color: #5d6878;
+    border-color: rgba(23, 32, 51, 0.11);
+    background: rgba(255, 255, 255, 0.7);
+}
+
+.marketing-nav-actions .btn-outline-light:hover {
+    color: var(--marketing-ink);
+    border-color: rgba(23, 32, 51, 0.18);
+    background: #fff;
+}
+
+.marketing-hero {
+    padding: 4.6rem 0 3.6rem;
+}
+
+.marketing-kicker,
+.marketing-section-heading span,
+.marketing-story-card span,
+.marketing-preview-copy span,
+.marketing-cta-copy span,
+.marketing-proof-strip small,
+.marketing-showcase-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.42rem 0.8rem;
+    border-radius: 999px;
+    background: rgba(245, 103, 59, 0.08);
+    color: var(--marketing-orange-dark);
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+}
+
+.marketing-title {
+    margin: 1rem 0 1.1rem;
+    font-size: clamp(2.55rem, 5.2vw, 4.55rem);
+    line-height: 0.95;
+    letter-spacing: -0.065em;
+    color: var(--marketing-ink);
+    max-width: 11.5ch;
+    font-weight: 780;
+}
+
+.marketing-copy {
+    max-width: 35rem;
+    font-size: 1rem;
+    line-height: 1.72;
+    color: var(--marketing-copy);
+}
+
+.marketing-hero-actions {
+    display: flex;
+    gap: 0.95rem;
+    flex-wrap: wrap;
+    margin: 1.55rem 0 1.75rem;
+}
+
+.marketing-hero-actions .btn-outline-light {
+    color: var(--marketing-ink);
+    border-color: rgba(23, 32, 51, 0.12);
+    background: rgba(255, 255, 255, 0.72);
+}
+
+.marketing-hero-actions .btn-outline-light:hover {
+    background: #fff;
+}
+
+.marketing-proof-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.8rem;
+}
+
+.marketing-proof-card,
+.marketing-showcase,
+.marketing-module-card,
+.marketing-story-card,
+.marketing-preview-card,
+.marketing-form-card {
+    border: 1px solid rgba(23, 32, 51, 0.08);
+    box-shadow: 0 1.1rem 2.8rem rgba(23, 32, 51, 0.08);
+}
+
+.marketing-proof-card {
+    padding: 0.95rem 1rem;
+    border-radius: 1rem;
+    background: rgba(255, 255, 255, 0.65);
+    backdrop-filter: blur(8px);
+}
+
+.marketing-proof-card strong,
+.marketing-proof-card span {
+    display: block;
+}
+
+.marketing-proof-card strong {
+    color: var(--marketing-ink);
+    font-size: 0.88rem;
+    margin-bottom: 0.25rem;
+}
+
+.marketing-proof-card span {
+    color: #647185;
+    font-size: 0.8rem;
+    line-height: 1.5;
+}
+
+.marketing-showcase-shell {
+    position: relative;
+    padding: 1rem 0 0 1rem;
+}
+
+.marketing-showcase-orbit {
+    position: absolute;
+    border-radius: 999px;
+    pointer-events: none;
+}
+
+.marketing-showcase-orbit-one {
+    inset: -2rem auto auto -1rem;
+    width: 10rem;
+    height: 10rem;
+    background: radial-gradient(circle, rgba(245, 103, 59, 0.18), rgba(245, 103, 59, 0));
+}
+
+.marketing-showcase-orbit-two {
+    inset: auto 1rem -1rem auto;
+    width: 12rem;
+    height: 12rem;
+    background: radial-gradient(circle, rgba(214, 161, 76, 0.16), rgba(214, 161, 76, 0));
+}
+
+.marketing-showcase {
+    position: relative;
+    overflow: hidden;
+    border-radius: 1.5rem;
+    background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(249, 244, 236, 0.96));
+    padding: 1rem;
+}
+
+.marketing-showcase-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.marketing-showcase-badge {
+    font-size: 0.8rem;
+    color: #6e7a8c;
+    font-weight: 700;
+}
+
+.marketing-showcase-frame {
+    display: grid;
+    grid-template-columns: 13.5rem 1fr;
+    min-height: 27rem;
+    border: 1px solid var(--marketing-line);
+    border-radius: 1.15rem;
+    overflow: hidden;
+    background: #fff;
+}
+
+.marketing-ui-sidebar {
+    padding: 1rem;
+    background: linear-gradient(180deg, #152034, #1f2d46);
+    color: #fff;
+}
+
+.marketing-ui-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    margin-bottom: 1.6rem;
+}
+
+.marketing-ui-brand span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0.75rem;
+    background: linear-gradient(135deg, #f57a48, #df492f);
+    font-weight: 800;
+}
+
+.marketing-ui-brand strong {
+    font-size: 0.95rem;
+}
+
+.marketing-ui-nav {
+    display: grid;
+    gap: 0.55rem;
+}
+
+.marketing-ui-nav span {
+    padding: 0.8rem 0.9rem;
+    border-radius: 0.9rem;
+    font-size: 0.88rem;
+    color: rgba(255,255,255,0.72);
+    background: rgba(255,255,255,0.03);
+}
+
+.marketing-ui-nav span.active {
+    background: rgba(255,255,255,0.12);
+    color: #fff;
+}
+
+.marketing-ui-canvas {
+    padding: 1rem;
+    background:
+        linear-gradient(180deg, #fcfaf6 0%, #fff 100%);
+}
+
+.marketing-ui-summary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.85rem;
+    margin-bottom: 1rem;
+}
+
+.marketing-ui-summary article,
+.marketing-ui-panel {
+    padding: 0.85rem;
+    border: 1px solid var(--marketing-line);
+    border-radius: 0.95rem;
+    background: rgba(255,255,255,0.84);
+}
+
+.marketing-ui-summary small,
+.marketing-ui-panel-head span {
+    display: block;
+    color: #7b8797;
+    font-size: 0.75rem;
+    font-weight: 700;
+    margin-bottom: 0.4rem;
+}
+
+.marketing-ui-summary strong {
+    font-size: 1.8rem;
+    line-height: 1;
+    letter-spacing: -0.04em;
+}
+
+.marketing-ui-grid {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr;
+    gap: 0.85rem;
+}
+
+.marketing-ui-panel-large {
+    grid-row: span 2;
+}
+
+.marketing-ui-panel-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.6rem;
+    align-items: flex-start;
+    margin-bottom: 0.9rem;
+}
+
+.marketing-ui-panel-head strong {
+    font-size: 0.98rem;
+}
+
+.marketing-ui-bars {
+    display: grid;
+    gap: 0.85rem;
+}
+
+.marketing-ui-bars div span {
+    display: block;
+    margin-bottom: 0.45rem;
+    font-size: 0.86rem;
+    color: #627084;
+    font-weight: 700;
+}
+
+.marketing-ui-bars div i {
+    display: block;
+    height: 0.78rem;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #f5673b, #d9a850);
+}
+
+.marketing-ui-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 0.75rem;
+}
+
+.marketing-ui-list li {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    font-size: 0.84rem;
+    color: #556476;
+}
+
+.marketing-ui-list strong,
+.marketing-ui-tags span {
+    color: var(--marketing-ink);
+    font-weight: 800;
+}
+
+.marketing-ui-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+}
+
+.marketing-ui-tags span {
+    padding: 0.55rem 0.7rem;
+    border-radius: 999px;
+    background: #f7efe4;
+    font-size: 0.8rem;
+}
+
+.marketing-section {
+    padding: 4.1rem 0;
+}
+
+.marketing-proof-band {
+    padding-top: 0;
+}
+
+.marketing-proof-strip {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.marketing-proof-strip > div {
+    padding: 1.3rem 1.35rem;
+    border: 1px solid var(--marketing-line);
+    border-radius: 1.2rem;
+    background: rgba(255,255,255,0.6);
+}
+
+.marketing-proof-strip strong {
+    display: block;
+    margin-top: 0.75rem;
+    color: var(--marketing-ink);
+    line-height: 1.6;
+}
+
+.marketing-section-heading {
+    max-width: 43rem;
+    margin-bottom: 1.7rem;
+}
+
+.marketing-section-heading h2,
+.marketing-story-card h2,
+.marketing-preview-copy h2,
+.marketing-cta-copy h2 {
+    margin: 0.85rem 0 0.75rem;
+    font-size: clamp(1.75rem, 3.2vw, 2.65rem);
+    line-height: 1;
+    letter-spacing: -0.05em;
+    color: var(--marketing-ink);
+}
+
+.marketing-section-heading p,
+.marketing-story-card p,
+.marketing-preview-copy p,
+.marketing-cta-copy p {
+    color: var(--marketing-copy);
+    font-size: 0.95rem;
+    line-height: 1.68;
+}
+
+.marketing-module-card,
+.marketing-story-card,
+.marketing-preview-card,
+.marketing-form-card {
+    height: 100%;
+    padding: 1.25rem;
+    border-radius: 1.1rem;
+    background: rgba(255, 255, 255, 0.8);
+}
+
+.marketing-module-card h3 {
+    margin-bottom: 0.55rem;
+    font-size: 1.06rem;
+    letter-spacing: -0.03em;
+}
+
+.marketing-module-card p {
+    margin: 0;
+    color: var(--marketing-copy);
+    line-height: 1.62;
+    font-size: 0.9rem;
+}
+
+.marketing-module-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.7rem;
+    height: 2.7rem;
+    margin-bottom: 0.85rem;
+    border-radius: 0.85rem;
+    color: var(--marketing-orange);
+    background: #ffeadf;
+    font-size: 0.95rem;
+}
+
+.marketing-section-alt {
+    background: linear-gradient(180deg, rgba(255,255,255,0), rgba(255,255,255,0.45) 18%, rgba(255,255,255,0));
+}
+
+.marketing-story-card-accent {
+    background: linear-gradient(180deg, #1a2436, #26324a);
+    color: #fff;
+}
+
+.marketing-story-card-accent span {
+    background: rgba(255,255,255,0.08);
+    color: #ffd8cf;
+}
+
+.marketing-story-card-accent h2,
+.marketing-story-card-accent p,
+.marketing-story-card-accent li {
+    color: #fff;
+}
+
+.marketing-story-card-accent p,
+.marketing-story-card-accent li {
+    opacity: 0.84;
+}
+
+.marketing-checklist {
+    display: grid;
+    gap: 0.8rem;
+    margin: 1.1rem 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.marketing-checklist li {
+    position: relative;
+    padding-left: 1.65rem;
+    line-height: 1.58;
+    font-size: 0.92rem;
+    color: #364253;
+}
+
+.marketing-story-card-accent .marketing-checklist li {
+    color: rgba(255,255,255,0.86);
+}
+
+.marketing-checklist li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0.45rem;
+    width: 0.8rem;
+    height: 0.8rem;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #f57a48, #df492f);
+    box-shadow: 0 0 0 0.25rem rgba(245, 103, 59, 0.13);
+}
+
+.marketing-preview-band {
+    padding-top: 1rem;
+}
+
+.marketing-preview-grid {
+    display: grid;
+    grid-template-columns: 1.1fr 1.2fr;
+    gap: 1.2rem;
+    align-items: start;
+}
+
+.marketing-preview-cards {
+    display: grid;
+    gap: 1rem;
+}
+
+.marketing-preview-card small {
+    display: block;
+    margin-bottom: 0.6rem;
+    color: #8b6a32;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.marketing-preview-card strong {
+    display: block;
+    font-size: 0.98rem;
+    line-height: 1.45;
+    color: var(--marketing-ink);
+}
+
+.marketing-cta {
+    padding-top: 1rem;
+    padding-bottom: 4.3rem;
+}
+
+.marketing-cta-panel {
+    display: grid;
+    grid-template-columns: 1.05fr 0.95fr;
+    gap: 1.3rem;
+    padding: 1.15rem;
+    border-radius: 1.35rem;
+    background: linear-gradient(135deg, rgba(255,255,255,0.88), rgba(248, 241, 231, 0.92));
+    border: 1px solid rgba(23, 32, 51, 0.08);
+    box-shadow: 0 1.3rem 3rem rgba(23, 32, 51, 0.08);
+}
+
+.marketing-cta-copy {
+    padding: 0.9rem 0.8rem 0.9rem 0.7rem;
+}
+
+.marketing-cta-notes {
+    display: grid;
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+.marketing-cta-notes div {
+    padding: 0.85rem 0.95rem;
+    border: 1px solid var(--marketing-line);
+    border-radius: 0.9rem;
+    background: rgba(255,255,255,0.72);
+}
+
+.marketing-cta-notes strong,
+.marketing-cta-notes span {
+    display: block;
+}
+
+.marketing-cta-notes strong {
+    margin-bottom: 0.35rem;
+}
+
+.marketing-cta-notes span {
+    color: var(--marketing-copy);
+    line-height: 1.68;
+}
+
+.marketing-form-card {
+    background: #fff;
+}
+
+.marketing-form {
+    display: grid;
+    gap: 1rem;
+}
+
+.marketing-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.marketing-form-full {
+    grid-column: 1 / -1;
+}
+
+.marketing-form .form-label {
+    font-size: 0.8rem;
+    font-weight: 800;
+    color: #334155;
+}
+
+.marketing-form textarea.form-control {
+    min-height: 7.5rem;
+    resize: vertical;
+}
+
+.marketing-form-alt {
+    margin: 0;
+    color: var(--marketing-copy);
+    font-size: 0.9rem;
+    text-align: center;
+}
+
+@media (max-width: 1199.98px) {
+    .marketing-showcase-frame {
+        grid-template-columns: 11rem 1fr;
+    }
+}
+
+@media (max-width: 991.98px) {
+    .marketing-hero {
+        padding-top: 3.8rem;
+    }
+
+    .marketing-proof-grid,
+    .marketing-proof-strip,
+    .marketing-preview-grid,
+    .marketing-cta-panel {
+        grid-template-columns: 1fr;
+    }
+
+    .marketing-showcase-frame {
+        grid-template-columns: 1fr;
+    }
+
+    .marketing-ui-sidebar {
+        padding-bottom: 0;
+    }
+
+    .marketing-ui-nav {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .marketing-ui-grid,
+    .marketing-ui-summary {
+        grid-template-columns: 1fr;
+    }
+
+    .marketing-cta-copy {
+        padding: 0.8rem;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .marketing-nav {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .marketing-title {
+        max-width: 100%;
+        font-size: clamp(2.2rem, 11vw, 3.2rem);
+    }
+
+    .marketing-hero-actions,
+    .marketing-nav-actions {
+        width: 100%;
+    }
+
+    .marketing-hero-actions .btn,
+    .marketing-nav-actions .btn {
+        width: 100%;
+    }
+
+    .marketing-section {
+        padding: 3.35rem 0;
+    }
+
+    .marketing-form-grid,
+    .marketing-ui-nav {
+        grid-template-columns: 1fr;
+    }
+}

@@ -74,12 +74,20 @@ final class IntakeController extends Controller
         $isDevMode = (string) $request->input('dev') === '1';
 
         if (!$isDevMode && !$this->app->csrf()->validate((string) $request->input('_token'))) {
-            flash('error', 'Security token expired. Please try again.');
-            $this->redirect('/employee-registration');
+            $this->failSubmit($request, 'Security token expired. Please try again.', 1);
         }
 
         $data = $this->trimmed($request);
-        $identifications = (array) ($request->input('identifications') ?? []);
+        $passportPost = (array) ($request->input('passport_doc') ?? []);
+        $idPost       = (array) ($request->input('id_doc') ?? []);
+        $identifications = $this->normalizeIdentifications((array) ($request->input('identifications') ?? []));
+
+        if ($data['passport_number'] === '' && !empty($passportPost['document_number'])) {
+            $data['passport_number'] = trim((string) $passportPost['document_number']);
+        }
+        if ($data['id_number'] === '' && !empty($idPost['document_number'])) {
+            $data['id_number'] = trim((string) $idPost['document_number']);
+        }
 
         if (!$isDevMode) {
             $errors = [];
@@ -95,8 +103,6 @@ final class IntakeController extends Controller
             if (empty($data['address_line_1'])) $errors[] = 'Address line 1 is required.';
             if (empty($data['city']))         $errors[] = 'City is required.';
             if (empty($data['country']))      $errors[] = 'Country is required.';
-            if (empty($data['id_number']))    $errors[] = 'National ID number is required.';
-            if (empty($data['passport_number'])) $errors[] = 'Passport number is required.';
 
             // Validate identifications (at least one ID required)
             if (empty($identifications)) {
@@ -112,8 +118,7 @@ final class IntakeController extends Controller
             }
 
             if ($errors) {
-                flash('error', implode(' ', $errors));
-                $this->redirect('/employee-registration');
+                $this->failSubmit($request, implode(' ', $errors), 1);
             }
         }
 
@@ -124,8 +129,7 @@ final class IntakeController extends Controller
             try {
                 $validatedPhoto = $this->validatePhoto($photoFile);
             } catch (RuntimeException $e) {
-                flash('error', 'Profile photo: ' . $e->getMessage());
-                $this->redirect('/employee-registration');
+                $this->failSubmit($request, 'Profile photo: ' . $e->getMessage(), 1);
             }
         } elseif ($isDevMode && ($photoFile['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
             // Still try to validate in dev mode if file is provided
@@ -141,14 +145,12 @@ final class IntakeController extends Controller
         $validatedPassportFile = null;
         if (!$isDevMode) {
             if (($passportFile['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE || empty($passportFile['name'])) {
-                flash('error', 'Passport document file is required.');
-                $this->redirect('/employee-registration');
+                $this->failSubmit($request, 'Passport document file is required.', 4);
             }
             try {
                 $validatedPassportFile = $this->validateFile($passportFile);
             } catch (RuntimeException $e) {
-                flash('error', 'Passport document: ' . $e->getMessage());
-                $this->redirect('/employee-registration');
+                $this->failSubmit($request, 'Passport document: ' . $e->getMessage(), 4);
             }
         } elseif ($isDevMode && ($passportFile['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
             // Still try to validate in dev mode if file is provided
@@ -159,18 +161,14 @@ final class IntakeController extends Controller
             }
         }
 
-        $passportPost = (array) ($request->input('passport_doc') ?? []);
         if (empty($passportPost['document_number'])) {
-            flash('error', 'Passport document number is required.');
-            $this->redirect('/employee-registration');
+            $this->failSubmit($request, 'Passport document number is required.', 4);
         }
         if (empty($passportPost['issue_date'])) {
-            flash('error', 'Passport issue date is required.');
-            $this->redirect('/employee-registration');
+            $this->failSubmit($request, 'Passport issue date is required.', 4);
         }
         if (empty($passportPost['expiry_date'])) {
-            flash('error', 'Passport expiry date is required.');
-            $this->redirect('/employee-registration');
+            $this->failSubmit($request, 'Passport expiry date is required.', 4);
         }
 
         // Validate required ID document
@@ -179,32 +177,25 @@ final class IntakeController extends Controller
         $validatedIdFile = null;
         if (!$isDevMode) {
             if (($idFile['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE || empty($idFile['name'])) {
-                flash('error', 'National ID document file is required.');
-                $this->redirect('/employee-registration');
+                $this->failSubmit($request, 'National ID document file is required.', 4);
             }
             try {
                 $validatedIdFile = $this->validateFile($idFile);
             } catch (RuntimeException $e) {
-                flash('error', 'National ID document: ' . $e->getMessage());
-                $this->redirect('/employee-registration');
+                $this->failSubmit($request, 'National ID document: ' . $e->getMessage(), 4);
             }
 
-            $idPost = (array) ($request->input('id_doc') ?? []);
             if (empty($idPost['id_type_name'])) {
-                flash('error', 'National ID type is required.');
-                $this->redirect('/employee-registration');
+                $this->failSubmit($request, 'National ID type is required.', 4);
             }
             if (empty($idPost['document_number'])) {
-                flash('error', 'National ID document number is required.');
-                $this->redirect('/employee-registration');
+                $this->failSubmit($request, 'National ID document number is required.', 4);
             }
             if (empty($idPost['issue_date'])) {
-                flash('error', 'National ID issue date is required.');
-                $this->redirect('/employee-registration');
+                $this->failSubmit($request, 'National ID issue date is required.', 4);
             }
             if (empty($idPost['expiry_date'])) {
-                flash('error', 'National ID expiry date is required.');
-                $this->redirect('/employee-registration');
+                $this->failSubmit($request, 'National ID expiry date is required.', 4);
             }
         } elseif ($isDevMode && ($idFile['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
             // Still try to validate in dev mode if file is provided
@@ -230,8 +221,7 @@ final class IntakeController extends Controller
             try {
                 $validatedFiles[$idx] = $this->validateFile($file);
             } catch (RuntimeException $e) {
-                flash('error', 'Document ' . ($idx + 1) . ': ' . $e->getMessage());
-                $this->redirect('/employee-registration');
+                $this->failSubmit($request, 'Document ' . ($idx + 1) . ': ' . $e->getMessage(), 4);
             }
         }
 
@@ -256,8 +246,7 @@ final class IntakeController extends Controller
                 (string) ($_SERVER['HTTP_USER_AGENT'] ?? '')
             );
         } catch (Throwable $e) {
-            flash('error', 'Submission failed: ' . $e->getMessage());
-            $this->redirect('/employee-registration');
+            $this->failSubmit($request, 'Submission failed: ' . $e->getMessage(), 5);
         }
 
         // Save identifications to intake submission
@@ -265,8 +254,7 @@ final class IntakeController extends Controller
             $this->repository->saveIdentifications($submissionId, $identifications);
         } catch (Throwable $e) {
             $this->app->database()->execute('DELETE FROM employee_intake_submissions WHERE id = :id', ['id' => $submissionId]);
-            flash('error', 'Failed to save identifications: ' . $e->getMessage());
-            $this->redirect('/employee-registration');
+            $this->failSubmit($request, 'Failed to save identifications: ' . $e->getMessage(), 2);
         }
 
         // Move files and collect doc metadata for DB insert
@@ -292,6 +280,23 @@ final class IntakeController extends Controller
             ) ?? 0) ?: null;
         };
 
+        $resolveIdentityCategoryId = function () use ($resolveCategoryId, $passportPost): ?int {
+            $passportTypeId = ($passportPost['document_type_id'] ?? '') !== '' ? (int) $passportPost['document_type_id'] : null;
+            $categoryId = $resolveCategoryId($passportTypeId);
+            if ($categoryId !== null) {
+                return $categoryId;
+            }
+
+            return (int) ($this->app->database()->fetchValue(
+                "SELECT id
+                 FROM document_categories
+                 WHERE is_active = 1
+                   AND (code = 'IDENTITY' OR name LIKE '%Identity%')
+                 ORDER BY id ASC
+                 LIMIT 1"
+            ) ?? 0) ?: null;
+        };
+
         // Store required Passport document
         try {
             $passportMeta = $this->storeIntakeFile($validatedPassportFile, $submissionId);
@@ -308,22 +313,16 @@ final class IntakeController extends Controller
         } catch (Throwable $e) {
             $this->cleanupIntakeFiles($storedPaths);
             $this->app->database()->execute('DELETE FROM employee_intake_submissions WHERE id = :id', ['id' => $submissionId]);
-            flash('error', 'Passport document upload failed: ' . $e->getMessage());
-            $this->redirect('/employee-registration');
+            $this->failSubmit($request, 'Passport document upload failed: ' . $e->getMessage(), 4);
         }
 
         // Store required National ID document
         try {
             $idMeta = $this->storeIntakeFile($validatedIdFile, $submissionId);
             $storedPaths[] = $idMeta['absolute_path'];
-            // Get document type ID for identity documents
-            $idDocTypeId = (int) ($this->app->database()->fetchValue(
-                'SELECT id FROM document_types WHERE code = :code LIMIT 1',
-                ['code' => 'IDENTITY']
-            ) ?? 0) ?: null;
             $docsMeta[] = array_merge($idMeta, [
-                'document_type_id' => $idDocTypeId,
-                'category_id'      => $resolveCategoryId($idDocTypeId),
+                'document_type_id' => null,
+                'category_id'      => $resolveIdentityCategoryId(),
                 'title'            => trim((string) ($idPost['id_type_name'] ?? 'National ID')),
                 'document_number'  => trim((string) ($idPost['document_number'] ?? '')),
                 'issue_date'       => trim((string) ($idPost['issue_date'] ?? '')) ?: null,
@@ -332,8 +331,7 @@ final class IntakeController extends Controller
         } catch (Throwable $e) {
             $this->cleanupIntakeFiles($storedPaths);
             $this->app->database()->execute('DELETE FROM employee_intake_submissions WHERE id = :id', ['id' => $submissionId]);
-            flash('error', 'National ID document upload failed: ' . $e->getMessage());
-            $this->redirect('/employee-registration');
+            $this->failSubmit($request, 'National ID document upload failed: ' . $e->getMessage(), 4);
         }
 
         foreach ($validatedFiles as $idx => $fileInfo) {
@@ -366,8 +364,7 @@ final class IntakeController extends Controller
                     'DELETE FROM employee_intake_submissions WHERE id = :id',
                     ['id' => $submissionId]
                 );
-                flash('error', 'File upload failed. Please try again.');
-                $this->redirect('/employee-registration');
+                $this->failSubmit($request, 'File upload failed. Please try again.', 4);
             }
         }
 
@@ -407,8 +404,7 @@ final class IntakeController extends Controller
                     'DELETE FROM employee_intake_submissions WHERE id = :id',
                     ['id' => $submissionId]
                 );
-                flash('error', 'Submission failed while saving documents. Please try again.');
-                $this->redirect('/employee-registration');
+                $this->failSubmit($request, 'Submission failed while saving documents. Please try again.', 5);
             }
         }
 
@@ -645,6 +641,56 @@ final class IntakeController extends Controller
         foreach ($absolutePaths as $path) {
             @unlink($path);
         }
+    }
+
+    private function failSubmit(Request $request, string $message, int $step = 1): never
+    {
+        $this->app->session()->flash('error', $message);
+        $this->app->session()->flash('old_input', $this->sanitizeOldInput($request->all()));
+        $this->app->session()->flash('intake_form_step', max(1, min(5, $step)));
+        $this->redirect('/employee-registration');
+    }
+
+    private function sanitizeOldInput(array $input): array
+    {
+        unset($input['_token']);
+
+        if (isset($input['identifications']) && is_array($input['identifications'])) {
+            $input['identifications'] = $this->normalizeIdentifications($input['identifications']);
+        }
+
+        return $input;
+    }
+
+    private function normalizeIdentifications(array $identifications): array
+    {
+        $normalized = [];
+
+        foreach ($identifications as $id) {
+            if (!is_array($id)) {
+                continue;
+            }
+
+            $typeId = (int) ($id['type_id'] ?? 0);
+            $number = trim((string) ($id['number'] ?? ''));
+            $issueDate = trim((string) ($id['issue_date'] ?? ''));
+            $expiryDate = trim((string) ($id['expiry_date'] ?? ''));
+            $isPrimary = isset($id['is_primary']) && (string) $id['is_primary'] === '1';
+
+            if ($typeId === 0 && $number === '' && $issueDate === '' && $expiryDate === '' && !$isPrimary) {
+                continue;
+            }
+
+            $normalized[] = [
+                'type_id'    => $typeId,
+                'number'     => $number,
+                'issue_date' => $issueDate,
+                'expiry_date'=> $expiryDate,
+                'is_primary' => $isPrimary ? '1' : '0',
+            ];
+        }
+
+        return $normalized;
     }
 
     private function normalizeMultiFileInput(array $rawFiles): array

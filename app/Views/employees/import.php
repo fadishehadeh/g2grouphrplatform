@@ -4,7 +4,7 @@
         <div class="d-flex justify-content-between align-items-center mb-4">
             <div>
                 <h5 class="mb-1">Import Employees</h5>
-                <p class="text-muted mb-0">Bulk-create employees by uploading an Excel spreadsheet.</p>
+                <p class="text-muted mb-0">Upload an Excel spreadsheet to create employees or review possible matches before updating existing records.</p>
             </div>
             <a href="<?= e(url('/employees')); ?>" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Back</a>
         </div>
@@ -43,10 +43,15 @@
                         <ol class="small mb-3">
                             <li class="mb-2"><strong>Download the template</strong> — click the button below to get a pre-formatted Excel file with all the correct column headers and a sample row.</li>
                             <li class="mb-2"><strong>Fill in your data</strong> — add one employee per row. Keep the header row exactly as-is. See the <em>Guide</em> sheet in the template for field descriptions.</li>
-                            <li class="mb-2"><strong>Required fields:</strong> <code>employee_code</code>, <code>first_name</code>, <code>last_name</code>, <code>work_email</code>, <code>company</code>, <code>employment_type</code></li>
-                            <li class="mb-2"><strong>Lookup fields</strong> (department, job_title, company, etc.) must match existing names exactly (case-insensitive).</li>
+                            <li class="mb-2"><strong>Required fields:</strong> <code>first_name</code>, <code>last_name</code>, <code>company</code>, <code>employment_type</code></li>
+                            <li class="mb-2"><strong>Employee code</strong> is optional. If left blank, the system auto-generates the next available <code>EMP-</code> code.</li>
+                            <li class="mb-2"><strong>Work email</strong> is optional. If left blank, the employee is imported without one.</li>
+                            <li class="mb-2"><strong>Blank cells</strong> stay empty for new employees and do not erase existing values when you choose update during review.</li>
+                            <li class="mb-2"><strong>Company</strong> must match an existing company name exactly (case-insensitive).</li>
+                            <li class="mb-2"><strong>Missing department, job title, and designation</strong> values will be auto-created when provided in the sheet.</li>
+                            <li class="mb-2"><strong>Branch and team</strong> are optional. If they do not match an existing value, they are skipped and left empty.</li>
                             <li class="mb-2"><strong>Dates</strong> should be in <code>YYYY-MM-DD</code> format.</li>
-                            <li class="mb-2"><strong>Upload</strong> the completed file using the form on the left.</li>
+                            <li class="mb-2"><strong>Review</strong> matched rows before updating an existing employee. You can update, skip, or create a new employee from the review screen.</li>
                         </ol>
                         <a href="<?= e(url('/employees/import-template')); ?>" class="btn btn-success w-100"><i class="bi bi-download"></i> Download Import Template</a>
                     </div>

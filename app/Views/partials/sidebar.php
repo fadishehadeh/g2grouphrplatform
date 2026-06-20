@@ -62,7 +62,7 @@ $nextId = static function () use (&$collapseId): string {
 
         <?php
             $accessId = $nextId();
-            $accessOpen = $groupOpen(['/admin/users', '/admin/roles', '/admin/companies', '/admin/structure']);
+            $accessOpen = $groupOpen(['/admin/users', '/admin/roles', '/admin/companies', '/admin/structure', '/admin/resilience']);
         ?>
         <div class="sidebar-group">
             <a class="sidebar-group-toggle<?= $accessOpen === 'show' ? '' : ' collapsed'; ?>" href="#<?= e($accessId); ?>" data-bs-toggle="collapse" aria-expanded="<?= $accessOpen === 'show' ? 'true' : 'false'; ?>">
@@ -74,6 +74,9 @@ $nextId = static function () use (&$collapseId): string {
                 <a href="<?= e(url('/admin/roles')); ?>"     class="sidebar-sublink"><i class="bi bi-shield-check"></i> Roles &amp; Permissions</a>
                 <a href="<?= e(url('/admin/companies')); ?>" class="sidebar-sublink"><i class="bi bi-building"></i> Companies</a>
                 <a href="<?= e(url('/admin/structure')); ?>" class="sidebar-sublink"><i class="bi bi-diagram-3"></i> Structure</a>
+                <?php if (has_role('super_admin')): ?>
+                <a href="<?= e(url('/admin/resilience')); ?>" class="sidebar-sublink"><i class="bi bi-database-check"></i> Resilience</a>
+                <?php endif; ?>
             </div>
         </div>
 
@@ -198,7 +201,15 @@ $nextId = static function () use (&$collapseId): string {
         <?php endif; ?>
 
     </nav>
-    <div class="sidebar-user small text-white-50">
-        Signed in as <?= e(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? '')); ?>
+    <div class="sidebar-footer">
+        <div class="sidebar-user small text-white-50 mb-3">
+            Signed in as <?= e(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? '')); ?>
+        </div>
+        <form method="post" action="<?= e(url('/logout')); ?>" class="w-100">
+            <?= csrf_field(); ?>
+            <button type="submit" class="btn btn-sm w-100" style="color: #fff !important; border: 2px solid #fff !important; background: transparent !important; font-weight: 700;">
+                <i class="bi bi-box-arrow-right" style="color: #fff !important; margin-right: 0.5rem;"></i> Logout
+            </button>
+        </form>
     </div>
 </aside>

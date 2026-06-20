@@ -54,9 +54,19 @@ $router->post('/employees/import', [EmployeeController::class, 'import'], [
     [PermissionMiddleware::class, ['employee.create']],
 ]);
 
+$router->post('/employees/import/confirm', [EmployeeController::class, 'confirmImport'], [
+    ...$employeeBaseMiddleware,
+    [PermissionMiddleware::class, ['employee.create']],
+]);
+
 $router->get('/employees/import-template', [EmployeeController::class, 'downloadTemplate'], [
     ...$employeeBaseMiddleware,
     [PermissionMiddleware::class, ['employee.create']],
+]);
+
+$router->get('/employees/missing-items', [EmployeeController::class, 'missingItems'], [
+    ...$employeeBaseMiddleware,
+    [PermissionMiddleware::class, ['employee.view_all']],
 ]);
 
 $router->get('/employees/{id}', [EmployeeController::class, 'show'], [

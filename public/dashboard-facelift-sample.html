@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#FF3D33">
+    <title>HR System Dashboard Facelift Sample</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="assets/css/dashboard-facelift-sample.css" rel="stylesheet">
+</head>
+<body>
+    <div class="sample-shell">
+        <aside class="sample-sidebar">
+            <div class="sample-brand">
+                <img src="assets/images/g2group-white.svg" alt="G2 Group">
+                <div>
+                    <h1>HR Management System</h1>
+                    <p>People operations platform</p>
+                </div>
+            </div>
+
+            <nav class="sample-nav" aria-label="Main navigation">
+                <a class="sample-nav-link is-active" href="#">
+                    <i class="bi bi-grid"></i>
+                    <span>Dashboard</span>
+                </a>
+
+                <div class="sample-nav-group">
+                    <button type="button" class="sample-nav-toggle">
+                        <span><i class="bi bi-people"></i> People</span>
+                        <i class="bi bi-chevron-down"></i>
+                    </button>
+                    <div class="sample-subnav">
+                        <a href="#">Employees</a>
+                        <a href="#">Org Chart</a>
+                        <a href="#">Onboarding</a>
+                        <a href="#">Offboarding</a>
+                    </div>
+                </div>
+
+                <div class="sample-nav-group">
+                    <button type="button" class="sample-nav-toggle">
+                        <span><i class="bi bi-shield-lock"></i> Access &amp; Org</span>
+                        <i class="bi bi-chevron-down"></i>
+                    </button>
+                    <div class="sample-subnav">
+                        <a href="#">User Access</a>
+                        <a href="#">Roles &amp; Permissions</a>
+                        <a href="#">Companies</a>
+                        <a href="#">Structure</a>
+                    </div>
+                </div>
+
+                <div class="sample-nav-group">
+                    <button type="button" class="sample-nav-toggle">
+                        <span><i class="bi bi-calendar-check"></i> Leave</span>
+                        <i class="bi bi-chevron-down"></i>
+                    </button>
+                    <div class="sample-subnav">
+                        <a href="#">Leave Management</a>
+                    </div>
+                </div>
+
+                <a class="sample-nav-link" href="#">
+                    <i class="bi bi-folder2-open"></i>
+                    <span>Documents</span>
+                </a>
+                <a class="sample-nav-link" href="#">
+                    <i class="bi bi-briefcase"></i>
+                    <span>Recruitment</span>
+                </a>
+                <a class="sample-nav-link" href="#">
+                    <i class="bi bi-chat-dots"></i>
+                    <span>Communications</span>
+                </a>
+                <a class="sample-nav-link" href="#">
+                    <i class="bi bi-bar-chart"></i>
+                    <span>Reports</span>
+                </a>
+                <a class="sample-nav-link" href="#">
+                    <i class="bi bi-gear"></i>
+                    <span>Settings</span>
+                </a>
+            </nav>
+
+            <div class="sample-sidebar-footer">
+                <div class="sample-sidebar-user">
+                    <strong>Signed in as</strong>
+                    <span>Fadi Chehade</span>
+                </div>
+                <a href="#" class="sample-logout">Logout</a>
+            </div>
+        </aside>
+
+        <main class="sample-main">
+            <header class="sample-topbar">
+                <div class="sample-topbar-title">
+                    <h2>Dashboard</h2>
+                    <p>Welcome, Fadi.</p>
+                </div>
+                <div class="sample-topbar-actions">
+                    <button type="button" class="sample-icon-button" aria-label="Notifications">
+                        <i class="bi bi-bell"></i>
+                        <span class="sample-badge">4</span>
+                    </button>
+                    <button type="button" class="sample-role-button">HR Administrator</button>
+                </div>
+            </header>
+
+            <section class="sample-banner">
+                <div class="sample-banner-copy">
+                    <span class="sample-kicker">Platform Control Center</span>
+                    <h3>See the system at a glance and move directly into control actions.</h3>
+                    <p>The facelift keeps the same product structure, but improves the dashboard rhythm, visual hierarchy, and clarity of operational blocks.</p>
+                    <div class="sample-banner-actions">
+                        <a href="#" class="sample-btn sample-btn-primary">User Access</a>
+                        <a href="#" class="sample-btn sample-btn-secondary">Roles</a>
+                        <a href="#" class="sample-btn sample-btn-secondary">Reports</a>
+                        <a href="#" class="sample-btn sample-btn-secondary">Settings</a>
+                    </div>
+                </div>
+                <div class="sample-banner-panel">
+                    <span class="sample-panel-label">Platform Snapshot</span>
+                    <strong>171</strong>
+                    <p>Employee records currently represented across the system.</p>
+                </div>
+            </section>
+
+            <section class="sample-stats">
+                <a href="#" class="sample-stat-card">
+                    <span>Headcount</span>
+                    <strong>171</strong>
+                    <small>Company-wide employee records</small>
+                </a>
+                <a href="#" class="sample-stat-card">
+                    <span>Pending Approvals</span>
+                    <strong>14</strong>
+                    <small>Requests waiting across approval queues</small>
+                </a>
+                <a href="#" class="sample-stat-card">
+                    <span>Open Onboarding</span>
+                    <strong>9</strong>
+                    <small>Employee onboarding still in progress</small>
+                </a>
+                <a href="#" class="sample-stat-card">
+                    <span>Expiring Documents</span>
+                    <strong>6</strong>
+                    <small>Compliance-sensitive records approaching expiry</small>
+                </a>
+            </section>
+
+            <section class="sample-grid">
+                <article class="sample-panel sample-panel-large">
+                    <div class="sample-panel-head">
+                        <div>
+                            <h4>Needs Attention</h4>
+                            <p>Cross-system items that matter most right now.</p>
+                        </div>
+                    </div>
+
+                    <div class="sample-list">
+                        <a href="#" class="sample-list-item">
+                            <span class="sample-list-icon tone-warning"><i class="bi bi-hourglass-split"></i></span>
+                            <div>
+                                <strong>Pending leave approvals</strong>
+                                <p>Approval activity needs review across the platform.</p>
+                            </div>
+                            <span class="sample-list-value">14</span>
+                        </a>
+                        <a href="#" class="sample-list-item">
+                            <span class="sample-list-icon tone-brand"><i class="bi bi-person-plus"></i></span>
+                            <div>
+                                <strong>Open onboarding records</strong>
+                                <p>Monitor cross-company onboarding progress.</p>
+                            </div>
+                            <span class="sample-list-value">9</span>
+                        </a>
+                        <a href="#" class="sample-list-item">
+                            <span class="sample-list-icon tone-danger"><i class="bi bi-file-earmark-medical"></i></span>
+                            <div>
+                                <strong>Expiring employee documents</strong>
+                                <p>Compliance-related records need attention soon.</p>
+                            </div>
+                            <span class="sample-list-value">6</span>
+                        </a>
+                    </div>
+                </article>
+
+                <article class="sample-panel">
+                    <div class="sample-panel-head">
+                        <div>
+                            <h4>Quick Actions</h4>
+                            <p>Platform and governance shortcuts remain immediately accessible.</p>
+                        </div>
+                    </div>
+
+                    <div class="sample-actions">
+                        <a href="#" class="sample-action-tile">
+                            <i class="bi bi-person-gear"></i>
+                            <strong>User Access</strong>
+                            <span>Open user administration and access controls.</span>
+                        </a>
+                        <a href="#" class="sample-action-tile">
+                            <i class="bi bi-shield-check"></i>
+                            <strong>Roles &amp; Permissions</strong>
+                            <span>Review and maintain permission structure.</span>
+                        </a>
+                        <a href="#" class="sample-action-tile">
+                            <i class="bi bi-diagram-3"></i>
+                            <strong>Org Structure</strong>
+                            <span>Manage structure, companies, and reporting setup.</span>
+                        </a>
+                        <a href="#" class="sample-action-tile">
+                            <i class="bi bi-gear"></i>
+                            <strong>Platform Settings</strong>
+                            <span>Review operational settings and configuration.</span>
+                        </a>
+                    </div>
+                </article>
+            </section>
+
+            <section class="sample-announcements">
+                <div class="sample-panel-head">
+                    <div>
+                        <h4>Latest Announcements</h4>
+                        <p>Secondary content remains visible without competing with control actions.</p>
+                    </div>
+                    <a href="#" class="sample-btn sample-btn-secondary">View All</a>
+                </div>
+
+                <div class="sample-announce-list">
+                    <a href="#" class="sample-announce-item">
+                        <div>
+                            <strong>Annual leave recalculation for 2026 is now active.</strong>
+                            <small>By System Admin · Jun 20, 2026</small>
+                        </div>
+                        <span class="sample-priority">High</span>
+                    </a>
+                    <a href="#" class="sample-announce-item">
+                        <div>
+                            <strong>Employee import review queue now handles optional employee codes.</strong>
+                            <small>By HR Team · Jun 18, 2026</small>
+                        </div>
+                        <span class="sample-priority neutral">Normal</span>
+                    </a>
+                </div>
+            </section>
+        </main>
+    </div>
+</body>
+</html>

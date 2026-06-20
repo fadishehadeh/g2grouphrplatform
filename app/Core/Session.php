@@ -122,8 +122,10 @@ final class Session
 
     private function cookieOptions(bool $secure): array
     {
+        $lifetime = max(0, (int) config('app.security.session_cookie_lifetime', 3600));
+
         return [
-            'lifetime' => 0,
+            'lifetime' => $lifetime,
             'path' => '/',
             'domain' => '',
             'secure' => $secure,

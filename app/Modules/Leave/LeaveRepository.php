@@ -1,5 +1,5 @@
 <?php
-
+// v2.1 - Fixed parameter binding HY093 errors (2026-06-02)
 declare(strict_types=1);
 
 namespace App\Modules\Leave;
@@ -9,6 +9,11 @@ use App\Modules\Notifications\NotificationRepository;
 
 final class LeaveRepository
 {
+    private const ANNUAL_LEAVE_CODE = 'annual_leave';
+    private const ANNUAL_FULL_ENTITLEMENT = 22.0;
+    private const ANNUAL_MONTHLY_ACCRUAL = 1.8333;
+    private const ANNUAL_CARRY_FORWARD_CAP = 5.0;
+
     private Database $database;
     private NotificationRepository $notifications;
 
@@ -20,15 +25,17 @@ final class LeaveRepository
 
     public function balances(int $employeeId, int $year): array
     {
-        return $this->database->fetchAll(
+        $rows = $this->database->fetchAll(
             'SELECT lt.name AS leave_type_name, lt.code AS leave_type_code,
-                    lb.opening_balance, lb.accrued, lb.used_amount, lb.adjusted_amount, lb.closing_balance, lb.balance_year
+                    lb.opening_balance, lb.accrued, lb.used_amount, lb.adjusted_amount, lb.carry_forward_amount, lb.closing_balance, lb.balance_year
              FROM leave_balances lb
              INNER JOIN leave_types lt ON lt.id = lb.leave_type_id
              WHERE lb.employee_id = :employee_id AND lb.balance_year = :balance_year
              ORDER BY lt.name ASC',
             ['employee_id' => $employeeId, 'balance_year' => $year]
         );
+
+        return array_map(fn (array $row): array => $this->hydrateBalanceRow($row), $rows);
     }
 
     public function myRequests(int $employeeId): array
@@ -41,6 +48,25 @@ final class LeaveRepository
              INNER JOIN leave_types lt ON lt.id = lr.leave_type_id
              WHERE lr.employee_id = :employee_id
              ORDER BY lr.created_at DESC',
+            ['employee_id' => $employeeId]
+        );
+    }
+
+    public function employeeLeaveHistory(int $employeeId): array
+    {
+        return $this->database->fetchAll(
+            'SELECT lr.id, lr.employee_id, lr.leave_type_id, lr.start_date, lr.end_date, lr.start_session, lr.end_session,
+                    lr.days_requested, lr.reason, lr.status, lr.submitted_at, lr.decided_at, lr.created_at, lr.updated_at,
+                    lt.name AS leave_type_name, lt.code AS leave_type_code, lt.requires_attachment, lt.requires_balance,
+                    (
+                        SELECT COUNT(*)
+                        FROM leave_request_attachments lra
+                        WHERE lra.leave_request_id = lr.id
+                    ) AS attachment_count
+             FROM leave_requests lr
+             INNER JOIN leave_types lt ON lt.id = lr.leave_type_id
+             WHERE lr.employee_id = :employee_id
+             ORDER BY lr.start_date DESC, lr.created_at DESC, lr.id DESC',
             ['employee_id' => $employeeId]
         );
     }
@@ -80,10 +106,39 @@ final class LeaveRepository
         );
     }
 
+    public function employeeLeaveProfile(int $employeeId): ?array
+    {
+        return $this->database->fetch(
+            "SELECT e.id, e.employee_code, e.work_email, e.personal_email, e.employee_status, e.joining_date,
+                    CONCAT_WS(' ', e.first_name, e.middle_name, e.last_name) AS employee_name,
+                    c.name AS company_name, b.name AS branch_name, d.name AS department_name,
+                    t.name AS team_name, jt.name AS job_title_name,
+                    CONCAT_WS(' ', m.first_name, m.middle_name, m.last_name) AS manager_name
+             FROM employees e
+             INNER JOIN companies c ON c.id = e.company_id
+             LEFT JOIN branches b ON b.id = e.branch_id
+             LEFT JOIN departments d ON d.id = e.department_id
+             LEFT JOIN teams t ON t.id = e.team_id
+             LEFT JOIN job_titles jt ON jt.id = e.job_title_id
+             LEFT JOIN employees m ON m.id = e.manager_employee_id
+             WHERE e.id = :id
+             LIMIT 1",
+            ['id' => $employeeId]
+        );
+    }
+
     public function currentBalance(int $employeeId, int $leaveTypeId, int $year): float
     {
-        return (float) ($this->database->fetchValue(
-            'SELECT COALESCE(closing_balance, 0) FROM leave_balances
+        $leaveType = $this->findLeaveType($leaveTypeId);
+        if ($leaveType !== null && (string) ($leaveType['code'] ?? '') === self::ANNUAL_LEAVE_CODE) {
+            $this->ensureAnnualBalanceExists($employeeId, $year);
+        }
+
+        $balance = $this->database->fetch(
+            'SELECT lb.opening_balance, lb.accrued, lb.used_amount, lb.adjusted_amount, lb.carry_forward_amount,
+                    lb.closing_balance, lt.code AS leave_type_code
+             FROM leave_balances lb
+             INNER JOIN leave_types lt ON lt.id = lb.leave_type_id
              WHERE employee_id = :employee_id AND leave_type_id = :leave_type_id AND balance_year = :balance_year
              LIMIT 1',
             [
@@ -91,7 +146,13 @@ final class LeaveRepository
                 'leave_type_id' => $leaveTypeId,
                 'balance_year' => $year,
             ]
-        ) ?? 0);
+        );
+
+        if ($balance === null) {
+            return 0.0;
+        }
+
+        return $this->calculateEffectiveClosingBalance($balance, $year);
     }
 
     public function createLeaveRequest(array $data, int $employeeId, ?int $actorUserId): int
@@ -104,139 +165,301 @@ final class LeaveRepository
                 throw new \RuntimeException('Invalid leave request context.');
             }
 
-            $hasManager     = !empty($employee['manager_employee_id']);
-            $workflowId     = $this->activeWorkflowId(
-                (int) $employee['company_id'],
-                isset($employee['department_id']) && $employee['department_id'] !== null ? (int) $employee['department_id'] : null
-            );
-            $workflowSteps  = $workflowId !== null ? $this->workflowSteps($workflowId) : [];
-            $submittedAt    = date('Y-m-d H:i:s');
-
-            // Determine initial status from the first step (or fall back to legacy logic)
-            if ($workflowSteps !== []) {
-                $firstStep     = $workflowSteps[0];
-                $initialStatus = ($firstStep['approver_type'] === 'manager') ? 'pending_manager' : 'pending_hr';
-            } else {
-                $requiresHrApproval = ((int) ($leaveType['requires_hr_approval'] ?? 0) === 1) || !$hasManager;
-                $initialStatus      = $hasManager ? 'pending_manager' : 'pending_hr';
-            }
+            $managerEmployeeId = !empty($employee['manager_employee_id']) ? (int) $employee['manager_employee_id'] : null;
+            $managerUserId = $managerEmployeeId !== null && !empty($employee['manager_user_id'])
+                ? (int) $employee['manager_user_id']
+                : null;
+            $hasDirectManager = $managerEmployeeId !== null && $managerUserId !== null;
+            $submittedAt = date('Y-m-d H:i:s');
+            $initialStatus = $hasDirectManager ? 'pending_manager' : 'pending_hr';
 
             $database->execute(
                 'INSERT INTO leave_requests (
                     employee_id, leave_type_id, workflow_id, start_date, end_date, start_session, end_session,
-                    days_requested, reason, status, current_step_order, submitted_at
+                    days_requested, reason, status, current_step_order, submitted_at, replacement_employee_id
                  ) VALUES (
                     :employee_id, :leave_type_id, :workflow_id, :start_date, :end_date, :start_session, :end_session,
-                    :days_requested, :reason, :status, :current_step_order, :submitted_at
+                    :days_requested, :reason, :status, :current_step_order, :submitted_at, :replacement_employee_id
                  )',
                 [
-                    'employee_id'       => $employeeId,
-                    'leave_type_id'     => (int) $data['leave_type_id'],
-                    'workflow_id'       => $workflowId,
-                    'start_date'        => (string) $data['start_date'],
-                    'end_date'          => (string) $data['end_date'],
-                    'start_session'     => (string) $data['start_session'],
-                    'end_session'       => (string) $data['end_session'],
-                    'days_requested'    => (float) $data['days_requested'],
-                    'reason'            => (string) $data['reason'],
-                    'status'            => $initialStatus,
-                    'current_step_order'=> 1,
-                    'submitted_at'      => $submittedAt,
+                    'employee_id'            => $employeeId,
+                    'leave_type_id'          => (int) $data['leave_type_id'],
+                    'workflow_id'            => null,
+                    'start_date'             => (string) $data['start_date'],
+                    'end_date'               => (string) $data['end_date'],
+                    'start_session'          => (string) $data['start_session'],
+                    'end_session'            => (string) $data['end_session'],
+                    'days_requested'         => (float) $data['days_requested'],
+                    'reason'                 => (string) $data['reason'],
+                    'status'                 => $initialStatus,
+                    'current_step_order'     => 1,
+                    'submitted_at'           => $submittedAt,
+                    'replacement_employee_id'=> isset($data['replacement_employee_id']) ? (int) $data['replacement_employee_id'] : null,
                 ]
             );
 
             $requestId = (int) $database->lastInsertId();
 
-            if ($workflowSteps !== []) {
-                // Dynamic: generate approval rows from workflow step definitions
-                foreach ($workflowSteps as $step) {
-                    $approverUserId = null;
-                    $approverRoleId = null;
-
-                    switch ((string) $step['approver_type']) {
-                        case 'manager':
-                            // Resolve to the employee's actual manager user_id
-                            $approverUserId = ($hasManager && $employee['manager_user_id'] !== null)
-                                ? (int) $employee['manager_user_id']
-                                : null;
-                            break;
-                        case 'hr_only':
-                            $approverRoleId = $this->hrAdminRoleId();
-                            break;
-                        case 'specific_role':
-                            $approverRoleId = $step['role_id'] !== null ? (int) $step['role_id'] : null;
-                            break;
-                        case 'specific_user':
-                            $approverUserId = $step['user_id'] !== null ? (int) $step['user_id'] : null;
-                            break;
-                    }
-
-                    $database->execute(
-                        'INSERT INTO leave_approvals (leave_request_id, step_order, approver_user_id, approver_role_id, decision)
-                         VALUES (:leave_request_id, :step_order, :approver_user_id, :approver_role_id, :decision)',
-                        [
-                            'leave_request_id' => $requestId,
-                            'step_order'       => (int) $step['step_order'],
-                            'approver_user_id' => $approverUserId,
-                            'approver_role_id' => $approverRoleId,
-                            'decision'         => 'pending',
-                        ]
-                    );
-                }
+            if ($hasDirectManager) {
+                $database->execute(
+                    'INSERT INTO leave_approvals (leave_request_id, step_order, approver_user_id, approver_role_id, decision)
+                     VALUES (:leave_request_id, :step_order, :approver_user_id, :approver_role_id, :decision)',
+                    [
+                        'leave_request_id' => $requestId,
+                        'step_order' => 1,
+                        'approver_user_id' => $managerUserId,
+                        'approver_role_id' => null,
+                        'decision' => 'pending',
+                    ]
+                );
             } else {
-                // Legacy fallback: hardcoded manager → HR chain
-                $nextStepOrder = 1;
+                $database->execute(
+                    'INSERT INTO leave_approvals (leave_request_id, step_order, approver_user_id, approver_role_id, decision)
+                     VALUES (:leave_request_id, :step_order, :approver_user_id, :approver_role_id, :decision)',
+                    [
+                        'leave_request_id' => $requestId,
+                        'step_order' => 1,
+                        'approver_user_id' => null,
+                        'approver_role_id' => $this->hrAdminRoleId(),
+                        'decision' => 'pending',
+                    ]
+                );
+            }
 
-                if ($hasManager) {
-                    $database->execute(
-                        'INSERT INTO leave_approvals (leave_request_id, step_order, approver_user_id, approver_role_id, decision)
-                         VALUES (:leave_request_id, :step_order, :approver_user_id, :approver_role_id, :decision)',
-                        [
-                            'leave_request_id' => $requestId,
-                            'step_order'       => 1,
-                            'approver_user_id' => $employee['manager_user_id'] !== null ? (int) $employee['manager_user_id'] : null,
-                            'approver_role_id' => null,
-                            'decision'         => 'pending',
-                        ]
-                    );
-                    $nextStepOrder = 2;
-                }
-
-                if ((int) ($leaveType['requires_hr_approval'] ?? 0) === 1 || !$hasManager) {
-                    $database->execute(
-                        'INSERT INTO leave_approvals (leave_request_id, step_order, approver_user_id, approver_role_id, decision)
-                         VALUES (:leave_request_id, :step_order, :approver_user_id, :approver_role_id, :decision)',
-                        [
-                            'leave_request_id' => $requestId,
-                            'step_order'       => $nextStepOrder,
-                            'approver_user_id' => null,
-                            'approver_role_id' => $this->hrAdminRoleId(),
-                            'decision'         => 'pending',
-                        ]
-                    );
-                }
+            if (!empty($data['attachment_meta']) && is_array($data['attachment_meta'])) {
+                $this->storeLeaveAttachment($database, $requestId, $data['attachment_meta'], $actorUserId);
             }
 
             // --- Notifications ---
             $this->notifyLeaveRequestStakeholders($employee, $requestId, (float) $data['days_requested'], (string) $data['start_date'], (string) $data['end_date']);
 
+            // Notify replacement employee if assigned
+            if (isset($data['replacement_employee_id']) && (int) $data['replacement_employee_id'] !== 0) {
+                $this->notifyReplacementEmployee(
+                    $requestId,
+                    (int) $data['replacement_employee_id'],
+                    $employee,
+                    (float) $data['days_requested'],
+                    (string) $data['start_date'],
+                    (string) $data['end_date']
+                );
+            }
+
             return $requestId;
+        });
+    }
+
+    public function createApprovedLeaveRequest(
+        array $data,
+        int $employeeId,
+        ?int $actorUserId,
+        ?string $approvalComments = null
+    ): int {
+        return $this->database->transaction(function (Database $database) use ($data, $employeeId, $actorUserId, $approvalComments): int {
+            $employee = $this->employeeContext($employeeId);
+            $leaveType = $this->findLeaveType((int) $data['leave_type_id']);
+
+            if ($employee === null || $leaveType === null) {
+                throw new \RuntimeException('Invalid leave request context.');
+            }
+
+            $submittedAt = date('Y-m-d H:i:s');
+
+            $database->execute(
+                'INSERT INTO leave_requests (
+                    employee_id, leave_type_id, workflow_id, start_date, end_date, start_session, end_session,
+                    days_requested, reason, status, current_step_order, submitted_at, replacement_employee_id
+                 ) VALUES (
+                    :employee_id, :leave_type_id, :workflow_id, :start_date, :end_date, :start_session, :end_session,
+                    :days_requested, :reason, :status, :current_step_order, :submitted_at, :replacement_employee_id
+                 )',
+                [
+                    'employee_id' => $employeeId,
+                    'leave_type_id' => (int) $data['leave_type_id'],
+                    'workflow_id' => null,
+                    'start_date' => (string) $data['start_date'],
+                    'end_date' => (string) $data['end_date'],
+                    'start_session' => (string) ($data['start_session'] ?? 'full'),
+                    'end_session' => (string) ($data['end_session'] ?? 'full'),
+                    'days_requested' => (float) $data['days_requested'],
+                    'reason' => (string) $data['reason'],
+                    'status' => 'approved',
+                    'current_step_order' => 1,
+                    'submitted_at' => $submittedAt,
+                    'replacement_employee_id' => isset($data['replacement_employee_id']) && (int) $data['replacement_employee_id'] > 0
+                        ? (int) $data['replacement_employee_id']
+                        : null,
+                ]
+            );
+
+            $requestId = (int) $database->lastInsertId();
+
+            $database->execute(
+                'INSERT INTO leave_approvals (leave_request_id, step_order, approver_user_id, approver_role_id, decision, comments, acted_at)
+                 VALUES (:leave_request_id, :step_order, :approver_user_id, :approver_role_id, :decision, :comments, :acted_at)',
+                [
+                    'leave_request_id' => $requestId,
+                    'step_order' => 1,
+                    'approver_user_id' => $actorUserId,
+                    'approver_role_id' => null,
+                    'decision' => 'approved',
+                    'comments' => $this->nullableString($approvalComments),
+                    'acted_at' => $submittedAt,
+                ]
+            );
+
+            if (!empty($data['attachment_meta']) && is_array($data['attachment_meta'])) {
+                $this->storeLeaveAttachment($database, $requestId, $data['attachment_meta'], $actorUserId);
+            }
+
+            $this->finalizeApproval(
+                $database,
+                [
+                    'id' => $requestId,
+                    'employee_id' => $employeeId,
+                    'leave_type_id' => (int) $data['leave_type_id'],
+                    'days_requested' => (float) $data['days_requested'],
+                    'start_date' => (string) $data['start_date'],
+                    'requires_balance' => (int) ($leaveType['requires_balance'] ?? 0),
+                ]
+            );
+
+            $this->notifyLeaveDecision($employeeId, $requestId, 'approved');
+
+            return $requestId;
+        });
+    }
+
+    public function updateApprovedLeaveRequest(
+        int $requestId,
+        array $data,
+        ?int $actorUserId,
+        ?string $approvalComments = null,
+        ?array $attachmentMeta = null
+    ): void {
+        $this->database->transaction(function (Database $database) use ($requestId, $data, $actorUserId, $approvalComments, $attachmentMeta): void {
+            $existing = $this->findApprovedRequestForAdminEdit($requestId);
+            if ($existing === null) {
+                throw new \RuntimeException('Approved leave request not found.');
+            }
+
+            $leaveType = $this->findLeaveType((int) $data['leave_type_id']);
+            if ($leaveType === null) {
+                throw new \RuntimeException('Selected leave type could not be found.');
+            }
+
+            $this->applyApprovedLeaveBalanceDelta(
+                $database,
+                (int) $existing['employee_id'],
+                (int) $existing['leave_type_id'],
+                (int) date('Y', strtotime((string) $existing['start_date'])),
+                -1 * (float) $existing['days_requested'],
+                (int) ($existing['requires_balance'] ?? 0) === 1
+            );
+
+            $database->execute(
+                'UPDATE leave_requests
+                 SET leave_type_id = :leave_type_id,
+                     start_date = :start_date,
+                     end_date = :end_date,
+                     start_session = :start_session,
+                     end_session = :end_session,
+                     days_requested = :days_requested,
+                     reason = :reason,
+                     updated_at = :updated_at
+                 WHERE id = :id',
+                [
+                    'id' => $requestId,
+                    'leave_type_id' => (int) $data['leave_type_id'],
+                    'start_date' => (string) $data['start_date'],
+                    'end_date' => (string) $data['end_date'],
+                    'start_session' => (string) ($data['start_session'] ?? 'full'),
+                    'end_session' => (string) ($data['end_session'] ?? 'full'),
+                    'days_requested' => (float) $data['days_requested'],
+                    'reason' => (string) $data['reason'],
+                    'updated_at' => date('Y-m-d H:i:s'),
+                ]
+            );
+
+            if ($attachmentMeta !== null) {
+                $this->storeLeaveAttachment($database, $requestId, $attachmentMeta, $actorUserId);
+            }
+
+            $this->applyApprovedLeaveBalanceDelta(
+                $database,
+                (int) $existing['employee_id'],
+                (int) $data['leave_type_id'],
+                (int) date('Y', strtotime((string) $data['start_date'])),
+                (float) $data['days_requested'],
+                (int) ($leaveType['requires_balance'] ?? 0) === 1
+            );
+
+            if ($approvalComments !== null && trim($approvalComments) !== '') {
+                $approvalId = $database->fetchValue(
+                    "SELECT id
+                     FROM leave_approvals
+                     WHERE leave_request_id = :leave_request_id AND decision = 'approved'
+                     ORDER BY step_order ASC, id ASC
+                     LIMIT 1",
+                    ['leave_request_id' => $requestId]
+                );
+
+                if ($approvalId !== null && $approvalId !== false) {
+                    $database->execute(
+                        'UPDATE leave_approvals
+                         SET approver_user_id = :approver_user_id,
+                             comments = :comments,
+                             acted_at = :acted_at
+                         WHERE id = :id',
+                        [
+                            'id' => (int) $approvalId,
+                            'approver_user_id' => $actorUserId,
+                            'comments' => $this->nullableString($approvalComments),
+                            'acted_at' => date('Y-m-d H:i:s'),
+                        ]
+                    );
+                }
+            }
         });
     }
 
     public function managerPendingRequests(int $managerEmployeeId): array
     {
-        return $this->database->fetchAll(
-            "SELECT lr.id, e.employee_code, CONCAT_WS(' ', e.first_name, e.middle_name, e.last_name) AS employee_name,
+        $requests = $this->database->fetchAll(
+            "SELECT lr.id, lr.current_step_order, e.employee_code, CONCAT_WS(' ', e.first_name, e.middle_name, e.last_name) AS employee_name,
                     lt.name AS leave_type_name, lr.start_date, lr.end_date, lr.days_requested, lr.reason,
                     lr.submitted_at, lr.status
              FROM leave_requests lr
              INNER JOIN employees e ON e.id = lr.employee_id
              INNER JOIN leave_types lt ON lt.id = lr.leave_type_id
-             WHERE e.manager_employee_id = :manager_employee_id AND lr.status = 'pending_manager'
-             ORDER BY COALESCE(lr.submitted_at, lr.created_at) ASC, lr.start_date ASC",
-            ['manager_employee_id' => $managerEmployeeId]
+             WHERE lr.status = 'pending_manager'
+             ORDER BY COALESCE(lr.submitted_at, lr.created_at) ASC, lr.start_date ASC"
         );
+
+        // Filter to only requests where this manager has a pending approval
+        $filtered = [];
+        foreach ($requests as $req) {
+            $approval = $this->database->fetch(
+                'SELECT step_order FROM leave_approvals
+                 WHERE leave_request_id = :leave_request_id
+                   AND approver_user_id = (SELECT user_id FROM employees WHERE id = :manager_employee_id)
+                   AND decision = :decision
+                 LIMIT 1',
+                [
+                    'leave_request_id' => (int) $req['id'],
+                    'manager_employee_id' => $managerEmployeeId,
+                    'decision' => 'pending',
+                ]
+            );
+
+            if ($approval !== null) {
+                $req['manager_level'] = 'Review';
+                $req['step_order'] = 1;
+                $filtered[] = $req;
+            }
+        }
+
+        return $filtered;
     }
 
     public function hrPendingRequests(): array
@@ -255,49 +478,37 @@ final class LeaveRepository
 
     public function approveForManager(int $requestId, int $managerEmployeeId, ?int $actorUserId, ?string $comments = null): void
     {
-        $request = $this->database->fetch(
+        $employee = $this->database->fetch(
             "SELECT lr.id, lr.employee_id, lr.leave_type_id, lr.days_requested, lr.start_date,
-                    lt.requires_balance, lt.requires_hr_approval
+                    lt.requires_balance,
+                    e.manager_employee_id,
+                    CONCAT_WS(' ', e.first_name, e.middle_name, e.last_name) AS employee_name
              FROM leave_requests lr
              INNER JOIN employees e ON e.id = lr.employee_id
              INNER JOIN leave_types lt ON lt.id = lr.leave_type_id
-             WHERE lr.id = :id AND lr.status = 'pending_manager' AND e.manager_employee_id = :manager_employee_id
+             WHERE lr.id = :id AND lr.status = 'pending_manager'
              LIMIT 1",
-            ['id' => $requestId, 'manager_employee_id' => $managerEmployeeId]
+            ['id' => $requestId]
         );
 
-        if ($request === null) {
+        if ($employee === null) {
             throw new \RuntimeException('Leave request not available for manager approval.');
         }
 
-        $this->database->transaction(function (Database $database) use ($request, $actorUserId, $comments): void {
-            $approval = $this->pendingApproval($request['id']);
+        if ($managerEmployeeId !== (int) ($employee['manager_employee_id'] ?? 0)) {
+            throw new \RuntimeException('This manager is not authorized to approve this request.');
+        }
+
+        $this->database->transaction(function (Database $database) use ($employee, $actorUserId, $comments): void {
+            $requestId = (int) $employee['id'];
+            $approval = $this->pendingApproval($requestId);
 
             if ($approval !== null) {
                 $this->markApproval($database, (int) $approval['id'], 'approved', $actorUserId, $comments);
             }
 
-            if ((int) ($request['requires_hr_approval'] ?? 0) === 1) {
-                $nextApproval = $this->pendingApproval($request['id']);
-                $database->execute(
-                    'UPDATE leave_requests SET status = :status, current_step_order = :current_step_order WHERE id = :id',
-                    [
-                        'status' => 'pending_hr',
-                        'current_step_order' => (int) ($nextApproval['step_order'] ?? 2),
-                        'id' => (int) $request['id'],
-                    ]
-                );
-
-                // Notify HR users that request is forwarded
-                $this->notifyHrPendingStakeholders((int) $request['id'], (int) $request['employee_id']);
-
-                return;
-            }
-
-            $this->finalizeApproval($database, $request);
-
-            // Notify employee of final approval
-            $this->notifyLeaveDecision((int) $request['employee_id'], (int) $request['id'], 'approved');
+            $this->finalizeApproval($database, $employee);
+            $this->notifyLeaveDecision((int) $employee['employee_id'], $requestId, 'approved');
         });
     }
 
@@ -363,52 +574,48 @@ final class LeaveRepository
         $this->rejectRequest((int) $request['id'], $actorUserId, $reason);
     }
 
-    public function balanceOverview(array $scope, int $year, string $search = '', string $status = 'all'): array
+    public function balanceOverview(array $scope, int $year, string $search = '', string $status = 'active', int $page = 1, int $perPage = 25): array
     {
-        $scopeCondition = $this->scopeCondition($scope, 'lb.employee_id', 'e.manager_employee_id');
-        $sql = 'SELECT lb.employee_id, lb.leave_type_id, lb.balance_year,
-                       lb.opening_balance, lb.accrued, lb.used_amount, lb.adjusted_amount, lb.closing_balance,
-                       e.employee_code, e.work_email, e.employee_status,
-                       CONCAT_WS(" ", e.first_name, e.middle_name, e.last_name) AS employee_name,
-                       c.name AS company_name, d.name AS department_name,
-                       lt.name AS leave_type_name, lt.code AS leave_type_code
-                FROM leave_balances lb
-                INNER JOIN employees e ON e.id = lb.employee_id
-                INNER JOIN companies c ON c.id = e.company_id
-                LEFT JOIN departments d ON d.id = e.department_id
-                INNER JOIN leave_types lt ON lt.id = lb.leave_type_id
-                WHERE lb.balance_year = :balance_year'
-            . $scopeCondition['sql'];
-        $params = array_merge(['balance_year' => $year], $scopeCondition['params']);
+        $page = max(1, $page);
+        $perPage = max(10, min(100, $perPage));
+        $offset = ($page - 1) * $perPage;
 
-        if ($status !== 'all') {
-            $sql .= ' AND e.employee_status = :employee_status';
-            $params['employee_status'] = $status;
-        }
-
-        if ($search !== '') {
-            $searchValue = '%' . $search . '%';
-            $sql .= ' AND (
-                e.employee_code LIKE :search_employee_code
-                OR CONCAT_WS(" ", e.first_name, e.middle_name, e.last_name) LIKE :search_employee_name
-                OR e.work_email LIKE :search_email
-                OR COALESCE(c.name, "") LIKE :search_company
-                OR COALESCE(d.name, "") LIKE :search_department
-                OR lt.name LIKE :search_leave_type
-                OR lt.code LIKE :search_leave_code
-            )';
-            $params['search_employee_code'] = $searchValue;
-            $params['search_employee_name'] = $searchValue;
-            $params['search_email'] = $searchValue;
-            $params['search_company'] = $searchValue;
-            $params['search_department'] = $searchValue;
-            $params['search_leave_type'] = $searchValue;
-            $params['search_leave_code'] = $searchValue;
-        }
-
-        $sql .= ' ORDER BY employee_name ASC, lt.name ASC';
+        ['sql' => $sql, 'params' => $params] = $this->balanceOverviewBaseQuery($scope, $year, $search, $status);
+        $sql .= ' GROUP BY e.id, e.employee_code, e.work_email, e.employee_status, e.joining_date, employee_name, c.name, d.name
+                  ORDER BY employee_name ASC
+                  LIMIT ' . $perPage . ' OFFSET ' . $offset;
 
         return $this->database->fetchAll($sql, $params);
+    }
+
+    public function countBalanceOverview(array $scope, int $year, string $search = '', string $status = 'active'): int
+    {
+        ['sql' => $sql, 'params' => $params] = $this->balanceOverviewBaseQuery($scope, $year, $search, $status);
+
+        return (int) $this->database->fetchValue(
+            'SELECT COUNT(*) FROM (' . $sql . ' GROUP BY e.id) balance_count',
+            $params
+        );
+    }
+
+    public function balanceOverviewSummary(array $scope, int $year, string $search = '', string $status = 'active'): array
+    {
+        ['sql' => $sql, 'params' => $params] = $this->balanceOverviewBaseQuery($scope, $year, $search, $status);
+        $summary = $this->database->fetch(
+            'SELECT COALESCE(SUM(balance_rows.total_balance), 0) AS available_total,
+                    COALESCE(SUM(balance_rows.used_amount), 0) AS used_total
+             FROM (' . $sql . '
+                GROUP BY e.id, e.employee_code, e.work_email, e.employee_status, e.joining_date, employee_name, c.name, d.name
+             ) balance_rows',
+            $params
+        );
+
+        return [
+            'employees' => 0,
+            'leave_types' => 0,
+            'available_total' => (float) ($summary['available_total'] ?? 0),
+            'used_total' => (float) ($summary['used_total'] ?? 0),
+        ];
     }
 
     public function listRequests(array $scope, string $search = '', string $status = 'all', int $leaveTypeId = 0): array
@@ -498,9 +705,23 @@ final class LeaveRepository
         );
     }
 
+    public function findApprovedRequestForAdminEdit(int $requestId): ?array
+    {
+        return $this->database->fetch(
+            'SELECT lr.id, lr.employee_id, lr.leave_type_id, lr.start_date, lr.end_date, lr.start_session, lr.end_session,
+                    lr.days_requested, lr.reason, lr.status, lr.submitted_at, lr.decided_at, lr.created_at, lr.updated_at,
+                    lt.name AS leave_type_name, lt.code AS leave_type_code, lt.requires_attachment, lt.requires_balance
+             FROM leave_requests lr
+             INNER JOIN leave_types lt ON lt.id = lr.leave_type_id
+             WHERE lr.id = :id AND lr.status = :status
+             LIMIT 1',
+            ['id' => $requestId, 'status' => 'approved']
+        );
+    }
+
     public function approvalTrail(int $requestId): array
     {
-        return $this->database->fetchAll(
+        $trail = $this->database->fetchAll(
             'SELECT la.id, la.step_order, la.decision, la.comments, la.acted_at, la.created_at,
                     CONCAT_WS(" ", u.first_name, u.last_name) AS approver_name,
                     u.username AS approver_username, r.name AS approver_role_name
@@ -511,6 +732,17 @@ final class LeaveRepository
              ORDER BY la.step_order ASC, la.id ASC',
             ['leave_request_id' => $requestId]
         );
+
+        // Add manager level labels for manager approvals
+        foreach ($trail as &$step) {
+            if ($step['approver_role_name'] === null || $step['approver_role_name'] === '') {
+                // No role = manager approval
+                $stepOrder = (int) $step['step_order'];
+                $step['manager_level'] = $stepOrder === 1 ? 'Level 1 Manager' : ($stepOrder === 2 ? 'Level 2 Manager' : null);
+            }
+        }
+
+        return $trail;
     }
 
     public function attachments(int $requestId): array
@@ -522,6 +754,74 @@ final class LeaveRepository
              ORDER BY created_at ASC, id ASC',
             ['leave_request_id' => $requestId]
         );
+    }
+
+    private function storeLeaveAttachment(Database $database, int $requestId, array $attachmentMeta, ?int $actorUserId): void
+    {
+        $database->execute(
+            'INSERT INTO leave_request_attachments (
+                leave_request_id, original_file_name, stored_file_name, file_path, mime_type, file_size, uploaded_by
+             ) VALUES (
+                :leave_request_id, :original_file_name, :stored_file_name, :file_path, :mime_type, :file_size, :uploaded_by
+             )',
+            [
+                'leave_request_id' => $requestId,
+                'original_file_name' => (string) ($attachmentMeta['original_file_name'] ?? ''),
+                'stored_file_name' => (string) ($attachmentMeta['stored_file_name'] ?? ''),
+                'file_path' => (string) ($attachmentMeta['file_path'] ?? ''),
+                'mime_type' => $this->nullableString($attachmentMeta['mime_type'] ?? null),
+                'file_size' => (int) ($attachmentMeta['file_size'] ?? 0),
+                'uploaded_by' => $actorUserId,
+            ]
+        );
+    }
+
+    private function balanceOverviewBaseQuery(array $scope, int $year, string $search, string $status): array
+    {
+        $scopeCondition = $this->scopeCondition($scope, 'e.id', 'e.manager_employee_id');
+        $sql = 'SELECT e.id AS employee_id,
+                       e.employee_code,
+                       e.work_email,
+                       e.employee_status,
+                       e.joining_date,
+                       CONCAT_WS(" ", e.first_name, e.middle_name, e.last_name) AS employee_name,
+                       c.name AS company_name,
+                       d.name AS department_name,
+                       COALESCE(SUM(lb.opening_balance + lb.accrued + lb.carry_forward_amount + lb.adjusted_amount), 0) AS total_balance,
+                       COALESCE(SUM(lb.used_amount), 0) AS used_amount,
+                       COALESCE(SUM(lb.closing_balance), 0) AS closing_balance
+                FROM employees e
+                INNER JOIN companies c ON c.id = e.company_id
+                LEFT JOIN departments d ON d.id = e.department_id
+                LEFT JOIN leave_balances lb
+                    ON lb.employee_id = e.id
+                   AND lb.balance_year = :balance_year
+                WHERE e.archived_at IS NULL'
+            . $scopeCondition['sql'];
+        $params = array_merge(['balance_year' => $year], $scopeCondition['params']);
+
+        if ($status !== 'all') {
+            $sql .= ' AND e.employee_status = :employee_status';
+            $params['employee_status'] = $status;
+        }
+
+        if ($search !== '') {
+            $searchValue = '%' . $search . '%';
+            $sql .= ' AND (
+                e.employee_code LIKE :search_employee_code
+                OR CONCAT_WS(" ", e.first_name, e.middle_name, e.last_name) LIKE :search_employee_name
+                OR e.work_email LIKE :search_email
+                OR COALESCE(c.name, "") LIKE :search_company
+                OR COALESCE(d.name, "") LIKE :search_department
+            )';
+            $params['search_employee_code'] = $searchValue;
+            $params['search_employee_name'] = $searchValue;
+            $params['search_email'] = $searchValue;
+            $params['search_company'] = $searchValue;
+            $params['search_department'] = $searchValue;
+        }
+
+        return ['sql' => $sql, 'params' => $params];
     }
 
     public function calendarRequests(
@@ -651,6 +951,115 @@ final class LeaveRepository
                 'status' => (string) ($data['status'] ?? 'active'),
             ]
         );
+    }
+
+    public function seedDefaultLeaveTypes(): array
+    {
+        $defaults = [
+            [
+                'name' => 'Annual Leave',
+                'code' => self::ANNUAL_LEAVE_CODE,
+                'description' => 'Standard annual leave entitlement.',
+                'is_paid' => 1,
+                'requires_balance' => 1,
+                'requires_attachment' => 0,
+                'requires_hr_approval' => 0,
+                'allow_half_day' => 1,
+                'default_days' => self::ANNUAL_FULL_ENTITLEMENT,
+                'carry_forward_allowed' => 1,
+                'carry_forward_limit' => self::ANNUAL_CARRY_FORWARD_CAP,
+                'notice_days_required' => 0,
+                'max_days_per_request' => null,
+                'status' => 'active',
+            ],
+            [
+                'name' => 'Sick Leave',
+                'code' => 'sick_leave',
+                'description' => 'Short-term illness and recovery leave.',
+                'is_paid' => 1,
+                'requires_balance' => 1,
+                'requires_attachment' => 1,
+                'requires_hr_approval' => 0,
+                'allow_half_day' => 0,
+                'default_days' => 10,
+                'carry_forward_allowed' => 0,
+                'carry_forward_limit' => 0,
+                'notice_days_required' => 0,
+                'max_days_per_request' => null,
+                'status' => 'active',
+            ],
+            [
+                'name' => 'Emergency Leave',
+                'code' => 'emergency_leave',
+                'description' => 'Urgent personal emergency leave.',
+                'is_paid' => 1,
+                'requires_balance' => 1,
+                'requires_attachment' => 0,
+                'requires_hr_approval' => 0,
+                'allow_half_day' => 1,
+                'default_days' => 3,
+                'carry_forward_allowed' => 0,
+                'carry_forward_limit' => 0,
+                'notice_days_required' => 0,
+                'max_days_per_request' => null,
+                'status' => 'active',
+            ],
+            [
+                'name' => 'Unpaid Leave',
+                'code' => 'unpaid_leave',
+                'description' => 'Approved unpaid leave time.',
+                'is_paid' => 0,
+                'requires_balance' => 1,
+                'requires_attachment' => 0,
+                'requires_hr_approval' => 0,
+                'allow_half_day' => 1,
+                'default_days' => 30,
+                'carry_forward_allowed' => 0,
+                'carry_forward_limit' => 0,
+                'notice_days_required' => 0,
+                'max_days_per_request' => null,
+                'status' => 'active',
+            ],
+            [
+                'name' => 'Maternity Leave',
+                'code' => 'maternity_leave',
+                'description' => 'Maternity leave entitlement.',
+                'is_paid' => 1,
+                'requires_balance' => 1,
+                'requires_attachment' => 0,
+                'requires_hr_approval' => 0,
+                'allow_half_day' => 0,
+                'default_days' => 60,
+                'carry_forward_allowed' => 0,
+                'carry_forward_limit' => 0,
+                'notice_days_required' => 0,
+                'max_days_per_request' => null,
+                'status' => 'active',
+            ],
+        ];
+
+        $created = 0;
+        $skipped = 0;
+
+        foreach ($defaults as $definition) {
+            $existingId = $this->database->fetchValue(
+                'SELECT id FROM leave_types WHERE LOWER(code) = :code OR LOWER(name) = :name LIMIT 1',
+                [
+                    'code' => strtolower((string) $definition['code']),
+                    'name' => strtolower((string) $definition['name']),
+                ]
+            );
+
+            if ($existingId !== null && $existingId !== false) {
+                $skipped++;
+                continue;
+            }
+
+            $this->createLeaveType($definition);
+            $created++;
+        }
+
+        return ['created' => $created, 'skipped' => $skipped];
     }
 
     public function companyOptions(): array
@@ -1024,37 +1433,70 @@ final class LeaveRepository
     public function activeEmployeesForBalance(): array
     {
         return $this->database->fetchAll(
-            "SELECT id, CONCAT_WS(' ', first_name, middle_name, last_name) AS employee_name, employee_code
+            "SELECT id, joining_date, CONCAT_WS(' ', first_name, middle_name, last_name) AS employee_name, employee_code
              FROM employees
              WHERE employee_status = 'active' AND archived_at IS NULL
              ORDER BY first_name ASC, last_name ASC"
         );
     }
 
-    public function upsertBalance(int $employeeId, int $leaveTypeId, int $year, float $openingBalance, float $adjustment = 0): void
+    public function saveBalance(
+        int $employeeId,
+        int $leaveTypeId,
+        int $year,
+        float $openingBalance,
+        float $accrued,
+        float $usedAmount,
+        float $adjustedAmount
+    ): void
     {
+        if ($openingBalance < 0 || $accrued < 0 || $usedAmount < 0) {
+            throw new \InvalidArgumentException('Opening, accrued, and used values cannot be negative.');
+        }
+
         $existing = $this->database->fetch(
-            'SELECT id, opening_balance, accrued, used_amount, adjusted_amount FROM leave_balances
+            'SELECT lb.id, lb.carry_forward_amount, lt.code AS leave_type_code
+             FROM leave_balances lb
+             INNER JOIN leave_types lt ON lt.id = lb.leave_type_id
              WHERE employee_id = :eid AND leave_type_id = :ltid AND balance_year = :year LIMIT 1',
             ['eid' => $employeeId, 'ltid' => $leaveTypeId, 'year' => $year]
         );
 
+        $carryForwardAmount = (float) ($existing['carry_forward_amount'] ?? 0);
+        $leaveTypeCode = (string) ($existing['leave_type_code'] ?? '');
         if ($existing === null) {
-            $closing = $openingBalance + $adjustment;
+            $leaveType = $this->findLeaveType($leaveTypeId);
+            $leaveTypeCode = (string) ($leaveType['code'] ?? '');
+        }
+
+        $closing = $this->computeClosingBalance(
+            $openingBalance,
+            $accrued,
+            $usedAmount,
+            $adjustedAmount,
+            $carryForwardAmount,
+            $year,
+            $leaveTypeCode
+        );
+
+        if ($existing === null) {
             $this->database->execute(
-                'INSERT INTO leave_balances (employee_id, leave_type_id, balance_year, opening_balance, accrued, used_amount, adjusted_amount, closing_balance)
-                 VALUES (:eid, :ltid, :year, :opening, 0, 0, :adjusted, :closing)',
+                'INSERT INTO leave_balances (employee_id, leave_type_id, balance_year, opening_balance, accrued, used_amount, adjusted_amount, carry_forward_amount, closing_balance)
+                 VALUES (:eid, :ltid, :year, :opening, :accrued, :used, :adjusted, :carry_forward, :closing)',
                 ['eid' => $employeeId, 'ltid' => $leaveTypeId, 'year' => $year,
-                 'opening' => $openingBalance, 'adjusted' => $adjustment, 'closing' => $closing]
+                 'opening' => $openingBalance, 'accrued' => $accrued, 'used' => $usedAmount,
+                 'adjusted' => $adjustedAmount, 'carry_forward' => $carryForwardAmount, 'closing' => $closing]
             );
         } else {
-            $newOpening = $openingBalance;
-            $newAdjusted = (float) $existing['adjusted_amount'] + $adjustment;
-            $closing = $newOpening + (float) $existing['accrued'] - (float) $existing['used_amount'] + $newAdjusted;
             $this->database->execute(
-                'UPDATE leave_balances SET opening_balance = :opening, adjusted_amount = :adjusted, closing_balance = :closing
+                'UPDATE leave_balances
+                 SET opening_balance = :opening,
+                     accrued = :accrued,
+                     used_amount = :used,
+                     adjusted_amount = :adjusted,
+                     closing_balance = :closing
                  WHERE employee_id = :eid AND leave_type_id = :ltid AND balance_year = :year',
-                ['opening' => $newOpening, 'adjusted' => $newAdjusted, 'closing' => $closing,
+                ['opening' => $openingBalance, 'accrued' => $accrued, 'used' => $usedAmount, 'adjusted' => $adjustedAmount, 'closing' => $closing,
                  'eid' => $employeeId, 'ltid' => $leaveTypeId, 'year' => $year]
             );
         }
@@ -1064,30 +1506,598 @@ final class LeaveRepository
     {
         $employees = $this->activeEmployeesForBalance();
         $leaveTypes = $this->database->fetchAll(
-            "SELECT id, default_days FROM leave_types WHERE status = 'active'"
+            "SELECT id, default_days, code FROM leave_types WHERE status = 'active' AND code <> 'annual_leave'"
         );
         $count = 0;
 
         foreach ($employees as $employee) {
             foreach ($leaveTypes as $lt) {
-                $exists = $this->database->fetchValue(
-                    'SELECT id FROM leave_balances WHERE employee_id = :eid AND leave_type_id = :ltid AND balance_year = :year LIMIT 1',
+                $days = (float) ($lt['default_days'] ?? 0);
+                $existing = $this->database->fetch(
+                    'SELECT id, opening_balance FROM leave_balances WHERE employee_id = :eid AND leave_type_id = :ltid AND balance_year = :year LIMIT 1',
                     ['eid' => $employee['id'], 'ltid' => $lt['id'], 'year' => $year]
                 );
 
-                if ($exists === null || $exists === false) {
-                    $days = (float) ($lt['default_days'] ?? 0);
+                if ($existing === null) {
+                    // Create new balance record
                     $this->database->execute(
-                        'INSERT INTO leave_balances (employee_id, leave_type_id, balance_year, opening_balance, accrued, used_amount, adjusted_amount, closing_balance)
-                         VALUES (:eid, :ltid, :year, :days, 0, 0, 0, :days)',
-                        ['eid' => $employee['id'], 'ltid' => $lt['id'], 'year' => $year, 'days' => $days]
+                        'INSERT INTO leave_balances (employee_id, leave_type_id, balance_year, opening_balance, accrued, used_amount, adjusted_amount, carry_forward_amount, closing_balance)
+                         VALUES (:eid, :ltid, :year, :opening, :zero1, :zero2, :zero3, :carry_forward, :closing)',
+                        ['eid' => $employee['id'], 'ltid' => $lt['id'], 'year' => $year, 'opening' => $days, 'zero1' => 0, 'zero2' => 0, 'zero3' => 0, 'carry_forward' => 0, 'closing' => $days]
                     );
                     $count++;
+                } else {
+                    // Update existing balance if opening_balance differs (leave type default_days might have changed)
+                    $currentOpening = (float) $existing['opening_balance'];
+                    if ($currentOpening !== $days) {
+                        $difference = $days - $currentOpening;
+                        $this->database->execute(
+                            'UPDATE leave_balances
+                             SET opening_balance = :days,
+                                 closing_balance = closing_balance + :difference
+                             WHERE employee_id = :eid AND leave_type_id = :ltid AND balance_year = :year',
+                            ['eid' => $employee['id'], 'ltid' => $lt['id'], 'year' => $year, 'days' => $days, 'difference' => $difference]
+                        );
+                        $count++;
+                    }
                 }
             }
         }
 
         return $count;
+    }
+
+    public function recalculateAnnualLeaveBalances(int $year, ?int $actorUserId = null): array
+    {
+        $annualLeaveType = $this->annualLeaveType();
+        if ($annualLeaveType === null) {
+            throw new \RuntimeException('Annual leave type with code "annual_leave" was not found.');
+        }
+
+        $employees = $this->activeEmployeesForBalance();
+        $created = 0;
+        $updated = 0;
+        $carryForwardLimit = (float) ($annualLeaveType['carry_forward_limit'] ?? self::ANNUAL_CARRY_FORWARD_CAP);
+        if ($carryForwardLimit <= 0) {
+            $carryForwardLimit = self::ANNUAL_CARRY_FORWARD_CAP;
+        }
+
+        foreach ($employees as $employee) {
+            $result = $this->upsertAnnualBalanceForEmployee(
+                $employee,
+                $year,
+                $annualLeaveType,
+                min(self::ANNUAL_CARRY_FORWARD_CAP, $carryForwardLimit)
+            );
+            if ($result === 'created') {
+                $created++;
+            } else {
+                $updated++;
+            }
+        }
+
+        return [
+            'created' => $created,
+            'updated' => $updated,
+        ];
+    }
+
+    public function importAnnualUsedDays(int $year, array $rows, ?int $actorUserId = null): array
+    {
+        $annualLeaveType = $this->annualLeaveType();
+        if ($annualLeaveType === null) {
+            throw new \RuntimeException('Annual leave type with code "annual_leave" was not found.');
+        }
+
+        $updated = 0;
+        $errors = [];
+
+        foreach ($rows as $row) {
+            $rowNumber = (int) ($row['row_number'] ?? 0);
+            $employeeCode = strtoupper(trim((string) ($row['employee_code'] ?? '')));
+            $employeeName = trim((string) ($row['employee_name'] ?? ''));
+            $usedDays = (float) ($row['used_days'] ?? 0);
+
+            try {
+                $employee = null;
+
+                if ($employeeCode !== '') {
+                    $employee = $this->database->fetch(
+                        'SELECT id, employee_code, joining_date
+                         FROM employees
+                         WHERE UPPER(employee_code) = :employee_code
+                         LIMIT 1',
+                        ['employee_code' => $employeeCode]
+                    );
+                }
+
+                if ($employee === null && $employeeName !== '') {
+                    $matches = $this->database->fetchAll(
+                        'SELECT id, employee_code, joining_date
+                         FROM employees
+                         WHERE archived_at IS NULL
+                           AND TRIM(CONCAT_WS(" ", first_name, middle_name, last_name)) = :employee_name
+                         ORDER BY id ASC',
+                        ['employee_name' => $employeeName]
+                    );
+
+                    if (count($matches) > 1) {
+                        throw new \RuntimeException("Employee name \"{$employeeName}\" matched multiple employees. Please import by employee_code for this row.");
+                    }
+
+                    $employee = $matches[0] ?? null;
+                }
+
+                if ($employee === null) {
+                    if ($employeeCode !== '') {
+                        throw new \RuntimeException("Employee code \"{$employeeCode}\" was not found.");
+                    }
+
+                    throw new \RuntimeException("Employee name \"{$employeeName}\" was not found.");
+                }
+
+                $employeeRecord = $this->employeeForAnnualBalance((int) $employee['id']);
+                if ($employeeRecord === null) {
+                    throw new \RuntimeException('Employee was not found or is archived.');
+                }
+
+                $carryForwardLimit = (float) ($annualLeaveType['carry_forward_limit'] ?? self::ANNUAL_CARRY_FORWARD_CAP);
+                if ($carryForwardLimit <= 0) {
+                    $carryForwardLimit = self::ANNUAL_CARRY_FORWARD_CAP;
+                }
+
+                $this->upsertAnnualBalanceForEmployee(
+                    $employeeRecord,
+                    $year,
+                    $annualLeaveType,
+                    min(self::ANNUAL_CARRY_FORWARD_CAP, $carryForwardLimit)
+                );
+
+                $existing = $this->database->fetch(
+                    'SELECT opening_balance, accrued, adjusted_amount, carry_forward_amount
+                     FROM leave_balances
+                     WHERE employee_id = :employee_id AND leave_type_id = :leave_type_id AND balance_year = :balance_year
+                     LIMIT 1',
+                    [
+                        'employee_id' => (int) $employee['id'],
+                        'leave_type_id' => (int) $annualLeaveType['id'],
+                        'balance_year' => $year,
+                    ]
+                );
+
+                if ($existing === null) {
+                    throw new \RuntimeException('Annual leave balance could not be prepared for this employee.');
+                }
+
+                $closingBalance = $this->computeClosingBalance(
+                    (float) $existing['opening_balance'],
+                    (float) $existing['accrued'],
+                    $usedDays,
+                    (float) $existing['adjusted_amount'],
+                    (float) $existing['carry_forward_amount'],
+                    $year,
+                    self::ANNUAL_LEAVE_CODE
+                );
+
+                $this->database->execute(
+                    'UPDATE leave_balances
+                     SET used_amount = :used_amount,
+                         closing_balance = :closing_balance
+                     WHERE employee_id = :employee_id AND leave_type_id = :leave_type_id AND balance_year = :balance_year',
+                    [
+                        'used_amount' => $usedDays,
+                        'closing_balance' => $closingBalance,
+                        'employee_id' => (int) $employee['id'],
+                        'leave_type_id' => (int) $annualLeaveType['id'],
+                        'balance_year' => $year,
+                    ]
+                );
+                $updated++;
+            } catch (\Throwable $throwable) {
+                $errors[] = "Row {$rowNumber}: " . $throwable->getMessage();
+            }
+        }
+
+        return [
+            'updated' => $updated,
+            'errors' => $errors,
+        ];
+    }
+
+    public function importAnnualUsedDaysByEmployeeId(int $year, array $rows, ?int $actorUserId = null): array
+    {
+        $annualLeaveType = $this->annualLeaveType();
+        if ($annualLeaveType === null) {
+            throw new \RuntimeException('Annual leave type with code "annual_leave" was not found.');
+        }
+
+        $updated = 0;
+        $errors = [];
+
+        foreach ($rows as $row) {
+            $rowNumber = (int) ($row['row_number'] ?? 0);
+            $employeeId = (int) ($row['employee_id'] ?? 0);
+            $usedDays = (float) ($row['used_days'] ?? 0);
+
+            try {
+                if ($employeeId <= 0) {
+                    throw new \RuntimeException('No employee was selected for this row.');
+                }
+
+                $employee = $this->employeeForAnnualBalance($employeeId);
+                if ($employee === null) {
+                    throw new \RuntimeException('Employee was not found or is archived.');
+                }
+
+                $carryForwardLimit = (float) ($annualLeaveType['carry_forward_limit'] ?? self::ANNUAL_CARRY_FORWARD_CAP);
+                if ($carryForwardLimit <= 0) {
+                    $carryForwardLimit = self::ANNUAL_CARRY_FORWARD_CAP;
+                }
+
+                $this->upsertAnnualBalanceForEmployee(
+                    $employee,
+                    $year,
+                    $annualLeaveType,
+                    min(self::ANNUAL_CARRY_FORWARD_CAP, $carryForwardLimit)
+                );
+
+                $existing = $this->database->fetch(
+                    'SELECT opening_balance, accrued, adjusted_amount, carry_forward_amount
+                     FROM leave_balances
+                     WHERE employee_id = :employee_id AND leave_type_id = :leave_type_id AND balance_year = :balance_year
+                     LIMIT 1',
+                    [
+                        'employee_id' => $employeeId,
+                        'leave_type_id' => (int) $annualLeaveType['id'],
+                        'balance_year' => $year,
+                    ]
+                );
+
+                if ($existing === null) {
+                    throw new \RuntimeException('Annual leave balance could not be prepared for this employee.');
+                }
+
+                $closingBalance = $this->computeClosingBalance(
+                    (float) $existing['opening_balance'],
+                    (float) $existing['accrued'],
+                    $usedDays,
+                    (float) $existing['adjusted_amount'],
+                    (float) $existing['carry_forward_amount'],
+                    $year,
+                    self::ANNUAL_LEAVE_CODE
+                );
+
+                $this->database->execute(
+                    'UPDATE leave_balances
+                     SET used_amount = :used_amount,
+                         closing_balance = :closing_balance
+                     WHERE employee_id = :employee_id AND leave_type_id = :leave_type_id AND balance_year = :balance_year',
+                    [
+                        'used_amount' => $usedDays,
+                        'closing_balance' => $closingBalance,
+                        'employee_id' => $employeeId,
+                        'leave_type_id' => (int) $annualLeaveType['id'],
+                        'balance_year' => $year,
+                    ]
+                );
+                $updated++;
+            } catch (\Throwable $throwable) {
+                $errors[] = "Row {$rowNumber}: " . $throwable->getMessage();
+            }
+        }
+
+        return [
+            'updated' => $updated,
+            'errors' => $errors,
+        ];
+    }
+
+    public function leaveImportEmployeeSummariesByName(string $employeeName): array
+    {
+        $employeeName = trim($employeeName);
+        if ($employeeName === '') {
+            return [];
+        }
+
+        return $this->database->fetchAll(
+            'SELECT id, employee_code,
+                    TRIM(CONCAT_WS(" ", first_name, middle_name, last_name)) AS employee_name,
+                    joining_date
+             FROM employees
+             WHERE archived_at IS NULL
+               AND TRIM(CONCAT_WS(" ", first_name, middle_name, last_name)) = :employee_name
+             ORDER BY employee_code ASC, id ASC',
+            ['employee_name' => $employeeName]
+        );
+    }
+
+    private function annualLeaveType(): ?array
+    {
+        return $this->database->fetch(
+            'SELECT id, code, carry_forward_allowed, carry_forward_limit
+             FROM leave_types
+             WHERE code = :code
+             LIMIT 1',
+            ['code' => self::ANNUAL_LEAVE_CODE]
+        );
+    }
+
+    private function annualEntitlementForEmployee(array $employee, int $year): array
+    {
+        $joiningDateRaw = trim((string) ($employee['joining_date'] ?? ''));
+        $yearStart = new \DateTimeImmutable(sprintf('%04d-01-01', $year));
+        $yearEnd = new \DateTimeImmutable(sprintf('%04d-12-31', $year));
+
+        if ($joiningDateRaw === '') {
+            return [
+                'opening_balance' => round(self::ANNUAL_FULL_ENTITLEMENT, 2),
+                'accrued' => 0.0,
+            ];
+        }
+
+        $joiningDate = \DateTimeImmutable::createFromFormat('Y-m-d', $joiningDateRaw);
+        if (!$joiningDate instanceof \DateTimeImmutable || $joiningDate < $yearStart) {
+            return [
+                'opening_balance' => round(self::ANNUAL_FULL_ENTITLEMENT, 2),
+                'accrued' => 0.0,
+            ];
+        }
+
+        if ($joiningDate > $yearEnd) {
+            return [
+                'opening_balance' => 0.0,
+                'accrued' => 0.0,
+            ];
+        }
+
+        $eligibleStart = $joiningDate->modify('first day of next month');
+        $eligibleMonths = 0;
+
+        if ((int) $eligibleStart->format('Y') === $year) {
+            $startMonth = (int) $eligibleStart->format('n');
+            $eligibleMonths = max(0, 12 - $startMonth + 1);
+        }
+
+        $accrued = min(self::ANNUAL_FULL_ENTITLEMENT, $eligibleMonths * self::ANNUAL_MONTHLY_ACCRUAL);
+
+        return [
+            'opening_balance' => 0.0,
+            'accrued' => round($accrued, 2),
+        ];
+    }
+
+    private function annualCarryForwardForEmployee(int $employeeId, int $leaveTypeId, int $year, float $limit): float
+    {
+        if ($year <= 0) {
+            return 0.0;
+        }
+
+        $previous = $this->database->fetch(
+            'SELECT closing_balance
+             FROM leave_balances
+             WHERE employee_id = :employee_id AND leave_type_id = :leave_type_id AND balance_year = :balance_year
+             LIMIT 1',
+            [
+                'employee_id' => $employeeId,
+                'leave_type_id' => $leaveTypeId,
+                'balance_year' => $year - 1,
+            ]
+        );
+
+        if ($previous === null) {
+            return 0.0;
+        }
+
+        return round(min($limit, max(0.0, (float) ($previous['closing_balance'] ?? 0))), 2);
+    }
+
+    private function ensureAnnualBalanceExists(int $employeeId, int $year, ?int $actorUserId = null): void
+    {
+        $annualLeaveType = $this->annualLeaveType();
+        if ($annualLeaveType === null) {
+            throw new \RuntimeException('Annual leave type with code "annual_leave" was not found.');
+        }
+
+        $existing = $this->database->fetchValue(
+            'SELECT id
+             FROM leave_balances
+             WHERE employee_id = :employee_id AND leave_type_id = :leave_type_id AND balance_year = :balance_year
+             LIMIT 1',
+            [
+                'employee_id' => $employeeId,
+                'leave_type_id' => (int) $annualLeaveType['id'],
+                'balance_year' => $year,
+            ]
+        );
+
+        if ($existing !== null) {
+            return;
+        }
+
+        $employee = $this->employeeForAnnualBalance($employeeId);
+
+        if ($employee === null || ($employee['archived_at'] ?? null) !== null) {
+            throw new \RuntimeException('Employee was not found or is archived.');
+        }
+
+        $carryForwardLimit = (float) ($annualLeaveType['carry_forward_limit'] ?? self::ANNUAL_CARRY_FORWARD_CAP);
+        if ($carryForwardLimit <= 0) {
+            $carryForwardLimit = self::ANNUAL_CARRY_FORWARD_CAP;
+        }
+
+        $this->upsertAnnualBalanceForEmployee(
+            $employee,
+            $year,
+            $annualLeaveType,
+            min(self::ANNUAL_CARRY_FORWARD_CAP, $carryForwardLimit)
+        );
+    }
+
+    private function employeeForAnnualBalance(int $employeeId): ?array
+    {
+        return $this->database->fetch(
+            'SELECT id, joining_date, employee_status, archived_at,
+                    CONCAT_WS(" ", first_name, middle_name, last_name) AS employee_name,
+                    employee_code
+             FROM employees
+             WHERE id = :employee_id
+             LIMIT 1',
+            ['employee_id' => $employeeId]
+        );
+    }
+
+    private function upsertAnnualBalanceForEmployee(array $employee, int $year, array $annualLeaveType, float $carryForwardLimit): string
+    {
+        $employeeId = (int) ($employee['id'] ?? 0);
+        if ($employeeId <= 0) {
+            throw new \RuntimeException('Invalid employee context for annual leave balance.');
+        }
+
+        $entitlement = $this->annualEntitlementForEmployee($employee, $year);
+        $carryForwardAmount = $this->annualCarryForwardForEmployee(
+            $employeeId,
+            (int) $annualLeaveType['id'],
+            $year,
+            $carryForwardLimit
+        );
+
+        $existing = $this->database->fetch(
+            'SELECT id, used_amount, adjusted_amount
+             FROM leave_balances
+             WHERE employee_id = :employee_id AND leave_type_id = :leave_type_id AND balance_year = :balance_year
+             LIMIT 1',
+            [
+                'employee_id' => $employeeId,
+                'leave_type_id' => (int) $annualLeaveType['id'],
+                'balance_year' => $year,
+            ]
+        );
+
+        $usedAmount = (float) ($existing['used_amount'] ?? 0);
+        $adjustedAmount = (float) ($existing['adjusted_amount'] ?? 0);
+        $closingBalance = $this->computeClosingBalance(
+            $entitlement['opening_balance'],
+            $entitlement['accrued'],
+            $usedAmount,
+            $adjustedAmount,
+            $carryForwardAmount,
+            $year,
+            self::ANNUAL_LEAVE_CODE
+        );
+
+        if ($existing === null) {
+            $this->database->execute(
+                'INSERT INTO leave_balances (
+                    employee_id, leave_type_id, balance_year, opening_balance, accrued, used_amount,
+                    adjusted_amount, carry_forward_amount, closing_balance
+                 ) VALUES (
+                    :employee_id, :leave_type_id, :balance_year, :opening_balance, :accrued, :used_amount,
+                    :adjusted_amount, :carry_forward_amount, :closing_balance
+                 )',
+                [
+                    'employee_id' => $employeeId,
+                    'leave_type_id' => (int) $annualLeaveType['id'],
+                    'balance_year' => $year,
+                    'opening_balance' => $entitlement['opening_balance'],
+                    'accrued' => $entitlement['accrued'],
+                    'used_amount' => $usedAmount,
+                    'adjusted_amount' => $adjustedAmount,
+                    'carry_forward_amount' => $carryForwardAmount,
+                    'closing_balance' => $closingBalance,
+                ]
+            );
+
+            return 'created';
+        }
+
+        $this->database->execute(
+            'UPDATE leave_balances
+             SET opening_balance = :opening_balance,
+                 accrued = :accrued,
+                 carry_forward_amount = :carry_forward_amount,
+                 closing_balance = :closing_balance
+             WHERE id = :id',
+            [
+                'id' => (int) $existing['id'],
+                'opening_balance' => $entitlement['opening_balance'],
+                'accrued' => $entitlement['accrued'],
+                'carry_forward_amount' => $carryForwardAmount,
+                'closing_balance' => $closingBalance,
+            ]
+        );
+
+        return 'updated';
+    }
+
+    private function hydrateBalanceRow(array $row): array
+    {
+        $carryForwardAmount = round((float) ($row['carry_forward_amount'] ?? 0), 2);
+        $leaveTypeCode = (string) ($row['leave_type_code'] ?? '');
+        $year = (int) ($row['balance_year'] ?? date('Y'));
+        $usedAmount = round((float) ($row['used_amount'] ?? 0), 2);
+        $carryForwardConsumed = $leaveTypeCode === self::ANNUAL_LEAVE_CODE
+            ? min($carryForwardAmount, $usedAmount)
+            : 0.0;
+        $carryForwardExpired = $leaveTypeCode === self::ANNUAL_LEAVE_CODE
+            ? $this->expiredCarryForwardAmount($carryForwardAmount, $usedAmount, $year)
+            : 0.0;
+        $carryForwardAvailable = $leaveTypeCode === self::ANNUAL_LEAVE_CODE
+            ? max(0.0, $carryForwardAmount - $carryForwardConsumed - $carryForwardExpired)
+            : 0.0;
+
+        $row['opening_balance'] = round((float) ($row['opening_balance'] ?? 0), 2);
+        $row['accrued'] = round((float) ($row['accrued'] ?? 0), 2);
+        $row['used_amount'] = $usedAmount;
+        $row['adjusted_amount'] = round((float) ($row['adjusted_amount'] ?? 0), 2);
+        $row['carry_forward_amount'] = $carryForwardAmount;
+        $row['carry_forward_consumed'] = round($carryForwardConsumed, 2);
+        $row['carry_forward_expired'] = round($carryForwardExpired, 2);
+        $row['carry_forward_available'] = round($carryForwardAvailable, 2);
+        $row['current_year_entitlement'] = round($row['opening_balance'] + $row['accrued'], 2);
+        $row['closing_balance'] = $this->calculateEffectiveClosingBalance($row, $year);
+
+        return $row;
+    }
+
+    private function calculateEffectiveClosingBalance(array $row, int $year): float
+    {
+        return $this->computeClosingBalance(
+            (float) ($row['opening_balance'] ?? 0),
+            (float) ($row['accrued'] ?? 0),
+            (float) ($row['used_amount'] ?? 0),
+            (float) ($row['adjusted_amount'] ?? 0),
+            (float) ($row['carry_forward_amount'] ?? 0),
+            $year,
+            (string) ($row['leave_type_code'] ?? '')
+        );
+    }
+
+    private function computeClosingBalance(
+        float $openingBalance,
+        float $accrued,
+        float $usedAmount,
+        float $adjustedAmount,
+        float $carryForwardAmount,
+        int $year,
+        string $leaveTypeCode
+    ): float {
+        $expiredCarryForward = $leaveTypeCode === self::ANNUAL_LEAVE_CODE
+            ? $this->expiredCarryForwardAmount($carryForwardAmount, $usedAmount, $year)
+            : 0.0;
+
+        return round($openingBalance + $accrued + $carryForwardAmount - $expiredCarryForward - $usedAmount + $adjustedAmount, 2);
+    }
+
+    private function expiredCarryForwardAmount(float $carryForwardAmount, float $usedAmount, int $year): float
+    {
+        $expiryDate = new \DateTimeImmutable(sprintf('%04d-03-31', $year));
+        $today = new \DateTimeImmutable(date('Y-m-d'));
+
+        if ($today <= $expiryDate) {
+            return 0.0;
+        }
+
+        return round(max(0.0, $carryForwardAmount - min($carryForwardAmount, $usedAmount)), 2);
     }
 
     public function createWeekendSetting(array $data): void
@@ -1102,6 +2112,36 @@ final class LeaveRepository
                 'is_weekend' => (int) $data['is_weekend'],
             ]
         );
+    }
+
+    /**
+     * Get up to 2 managers for an employee from employee_reporting_lines.
+     * Returns: ['level_1' => managerId, 'level_2' => managerId] (level_2 optional)
+     */
+    private function getEmployeeManagers(int $employeeId): array
+    {
+        $managers = $this->database->fetchAll(
+            'SELECT manager_employee_id, priority_order
+             FROM employee_reporting_lines
+             WHERE employee_id = :employee_id
+               AND relationship_type = :relationship_type
+               AND is_active = 1
+             ORDER BY priority_order ASC
+             LIMIT 2',
+            ['employee_id' => $employeeId, 'relationship_type' => 'line_manager']
+        );
+
+        $result = [];
+        foreach ($managers as $manager) {
+            $order = (int) $manager['priority_order'];
+            if ($order === 1) {
+                $result['level_1'] = (int) $manager['manager_employee_id'];
+            } elseif ($order === 2) {
+                $result['level_2'] = (int) $manager['manager_employee_id'];
+            }
+        }
+
+        return $result;
     }
 
     /**
@@ -1217,17 +2257,105 @@ final class LeaveRepository
         }
 
         $days = (float) $request['days_requested'];
-        $database->execute(
-            'UPDATE leave_balances
-             SET used_amount = used_amount + :days_add,
-                 closing_balance = closing_balance - :days_sub
-             WHERE employee_id = :employee_id AND leave_type_id = :leave_type_id AND balance_year = :balance_year',
+        $balance = $database->fetch(
+            'SELECT lb.opening_balance, lb.accrued, lb.used_amount, lb.adjusted_amount, lb.carry_forward_amount,
+                    lt.code AS leave_type_code
+             FROM leave_balances lb
+             INNER JOIN leave_types lt ON lt.id = lb.leave_type_id
+             WHERE lb.employee_id = :employee_id AND lb.leave_type_id = :leave_type_id AND lb.balance_year = :balance_year
+             LIMIT 1',
             [
-                'days_add' => $days,
-                'days_sub' => $days,
                 'employee_id' => (int) $request['employee_id'],
                 'leave_type_id' => (int) $request['leave_type_id'],
                 'balance_year' => (int) date('Y', strtotime((string) $request['start_date'])),
+            ]
+        );
+
+        if ($balance === null) {
+            return;
+        }
+
+        $newUsedAmount = (float) $balance['used_amount'] + $days;
+        $closingBalance = $this->computeClosingBalance(
+            (float) $balance['opening_balance'],
+            (float) $balance['accrued'],
+            $newUsedAmount,
+            (float) $balance['adjusted_amount'],
+            (float) ($balance['carry_forward_amount'] ?? 0),
+            (int) date('Y', strtotime((string) $request['start_date'])),
+            (string) ($balance['leave_type_code'] ?? '')
+        );
+
+        $database->execute(
+            'UPDATE leave_balances
+             SET used_amount = :used_amount,
+                 closing_balance = :closing_balance
+             WHERE employee_id = :employee_id AND leave_type_id = :leave_type_id AND balance_year = :balance_year',
+            [
+                'used_amount' => $newUsedAmount,
+                'closing_balance' => $closingBalance,
+                'employee_id' => (int) $request['employee_id'],
+                'leave_type_id' => (int) $request['leave_type_id'],
+                'balance_year' => (int) date('Y', strtotime((string) $request['start_date'])),
+            ]
+        );
+    }
+
+    private function applyApprovedLeaveBalanceDelta(
+        Database $database,
+        int $employeeId,
+        int $leaveTypeId,
+        int $year,
+        float $daysDelta,
+        bool $requiresBalance
+    ): void {
+        if (!$requiresBalance || abs($daysDelta) < 0.0001) {
+            return;
+        }
+
+        $leaveType = $this->findLeaveType($leaveTypeId);
+        if ($leaveType !== null && (string) ($leaveType['code'] ?? '') === self::ANNUAL_LEAVE_CODE) {
+            $this->ensureAnnualBalanceExists($employeeId, $year);
+        }
+
+        $balance = $database->fetch(
+            'SELECT lb.id, lb.opening_balance, lb.accrued, lb.used_amount, lb.adjusted_amount, lb.carry_forward_amount,
+                    lt.code AS leave_type_code
+             FROM leave_balances lb
+             INNER JOIN leave_types lt ON lt.id = lb.leave_type_id
+             WHERE lb.employee_id = :employee_id AND lb.leave_type_id = :leave_type_id AND lb.balance_year = :balance_year
+             LIMIT 1',
+            [
+                'employee_id' => $employeeId,
+                'leave_type_id' => $leaveTypeId,
+                'balance_year' => $year,
+            ]
+        );
+
+        if ($balance === null) {
+            throw new \RuntimeException('Leave balance record was not found for the selected leave type and year.');
+        }
+
+        $newUsedAmount = round(max(0.0, (float) $balance['used_amount'] + $daysDelta), 2);
+        $closingBalance = $this->computeClosingBalance(
+            (float) $balance['opening_balance'],
+            (float) $balance['accrued'],
+            $newUsedAmount,
+            (float) $balance['adjusted_amount'],
+            (float) ($balance['carry_forward_amount'] ?? 0),
+            $year,
+            (string) ($balance['leave_type_code'] ?? '')
+        );
+
+        $database->execute(
+            'UPDATE leave_balances
+             SET used_amount = :used_amount,
+                 closing_balance = :closing_balance
+             WHERE id = :id',
+            [
+                'id' => (int) $balance['id'],
+                'used_amount' => $newUsedAmount,
+                'closing_balance' => $closingBalance,
             ]
         );
     }
@@ -1618,15 +2746,20 @@ final class LeaveRepository
     private function notifyLeaveRequestStakeholders(array $employee, int $requestId, float $days, string $startDate, string $endDate): void
     {
         $employeeName = (string) ($employee['employee_name'] ?? 'An employee');
-        $title = 'New Leave Request';
-        $message = "{$employeeName} submitted a leave request for {$days} day(s) ({$startDate} - {$endDate}).";
         $actionUrl = '/leave/approvals';
         $mailEnabled = (bool) config('app.mail.enabled', false);
-        $bodyHtml = $mailEnabled
-            ? $this->buildLeaveEmailHtml((int) $employee['id'], $title, '<strong>' . e($employeeName) . '</strong> submitted a new leave request for <strong>' . $days . ' day(s)</strong> from <strong>' . e($startDate) . '</strong> to <strong>' . e($endDate) . '</strong>. Please review and take action.', $requestId)
-            : '';
-
         $recipientUserIds = $this->leaveStakeholderUserIds($employee);
+        $managerRouted = !empty($employee['manager_employee_id']) && !empty($employee['manager_user_id']);
+        $title = $managerRouted ? 'New Leave Request' : 'Leave Request Awaiting HR Approval';
+        $message = $managerRouted
+            ? "{$employeeName} submitted a leave request for {$days} day(s) ({$startDate} - {$endDate})."
+            : "{$employeeName} submitted a leave request for {$days} day(s) ({$startDate} - {$endDate}) and it is waiting for HR approval.";
+        $bodyText = $managerRouted
+            ? '<strong>' . e($employeeName) . '</strong> submitted a new leave request for <strong>' . $days . ' day(s)</strong> from <strong>' . e($startDate) . '</strong> to <strong>' . e($endDate) . '</strong>. Please review and take action.'
+            : '<strong>' . e($employeeName) . '</strong> submitted a new leave request for <strong>' . $days . ' day(s)</strong> from <strong>' . e($startDate) . '</strong> to <strong>' . e($endDate) . '</strong>. No direct manager is available, so this request was routed to HR for approval.';
+        $bodyHtml = $mailEnabled
+            ? $this->buildLeaveEmailHtml((int) $employee['id'], $title, $bodyText, $requestId)
+            : '';
 
         foreach ($recipientUserIds as $userId) {
             $this->notifications->create($userId, 'leave_request', $title, $message, 'leave_request', $requestId, $actionUrl);
@@ -1676,16 +2809,51 @@ final class LeaveRepository
         }
     }
 
-    private function leaveStakeholderUserIds(array $employee): array
+    /**
+     * Notify HR users that a leave request has been fully approved by all required managers.
+     */
+    private function notifyHrOfApprovedLeave(int $employeeId, int $requestId): void
     {
-        $userIds = $this->leaveHrEscalationUserIds();
-        $managerUserId = !empty($employee['manager_user_id']) ? (int) $employee['manager_user_id'] : null;
+        $empRow = $this->employeeContext($employeeId);
+        $employeeName = $empRow !== null ? (string) ($empRow['employee_name'] ?? 'An employee') : 'An employee';
+        $title = 'Leave Request Approved';
+        $message = "{$employeeName}'s leave request #{$requestId} has been fully approved.";
+        $actionUrl = '/leave/approvals';
+        $mailEnabled = (bool) config('app.mail.enabled', false);
 
-        if ($managerUserId !== null) {
-            $userIds[] = $managerUserId;
+        $bodyHtml = $mailEnabled
+            ? $this->buildLeaveEmailHtml($employeeId, $title, '<strong>' . e($employeeName) . '</strong>\'s leave request <strong>#' . $requestId . '</strong> has been <strong>fully approved</strong> by all required managers and is now registered in the system.')
+            : '';
+
+        $recipientUserIds = $this->leaveHrEscalationUserIds();
+
+        foreach ($recipientUserIds as $userId) {
+            $this->notifications->create($userId, 'leave_approved', $title, $message, 'leave_request', $requestId, $actionUrl);
+
+            if ($mailEnabled) {
+                $email = $this->notifications->userEmail($userId);
+                if ($email !== null) {
+                    $this->notifications->queueEmail($email, $title, $bodyHtml, $message, $userId, 'leave_request', $requestId);
+                }
+            }
         }
 
-        return array_values(array_unique(array_map('intval', $userIds)));
+        $adminEmail = $this->leaveAdminEmail();
+        if ($mailEnabled && $adminEmail !== null && !$this->recipientListContainsEmail($recipientUserIds, $adminEmail)) {
+            $this->notifications->queueEmail($adminEmail, $title, $bodyHtml, $message, null, 'leave_request', $requestId);
+        }
+    }
+
+    private function leaveStakeholderUserIds(array $employee): array
+    {
+        $managerEmployeeId = !empty($employee['manager_employee_id']) ? (int) $employee['manager_employee_id'] : null;
+        $managerUserId = !empty($employee['manager_user_id']) ? (int) $employee['manager_user_id'] : null;
+
+        if ($managerEmployeeId !== null && $managerUserId !== null) {
+            return [$managerUserId];
+        }
+
+        return $this->leaveHrEscalationUserIds();
     }
 
     private function leaveHrEscalationUserIds(): array
@@ -1729,5 +2897,93 @@ final class LeaveRepository
         }
 
         return false;
+    }
+
+    public function employeeOptions(): array
+    {
+        return $this->database->fetchAll(
+            "SELECT id, company_id, CONCAT(employee_code, ' - ', CONCAT_WS(' ', first_name, middle_name, last_name)) AS name
+             FROM employees
+             WHERE archived_at IS NULL AND employee_status NOT IN ('archived', 'resigned', 'terminated')
+             ORDER BY first_name ASC, last_name ASC"
+        );
+    }
+
+    public function findEmployee(int $employeeId): ?array
+    {
+        return $this->database->fetch(
+            'SELECT * FROM employees WHERE id = :id LIMIT 1',
+            ['id' => $employeeId]
+        );
+    }
+
+    private function notifyReplacementEmployee(
+        int $leaveRequestId,
+        int $replacementEmployeeId,
+        array $employee,
+        float $days,
+        string $startDate,
+        string $endDate
+    ): void {
+        try {
+            $replacementEmployee = $this->findEmployee($replacementEmployeeId);
+            if ($replacementEmployee === null) {
+                return;
+            }
+
+            $replacementUserId = !empty($replacementEmployee['user_id']) ? (int) $replacementEmployee['user_id'] : null;
+            if ($replacementUserId === null) {
+                return;
+            }
+
+            $employeeName = trim(sprintf('%s %s', (string) $employee['first_name'], (string) $employee['last_name']));
+            $dateRange = sprintf('%s to %s', $startDate, $endDate);
+
+            // Create in-app notification
+            $this->notifications->create(
+                $replacementUserId,
+                'leave_replacement',
+                'Replacement Assignment',
+                sprintf(
+                    'You have been assigned as replacement for %s\'s leave from %s (%s days)',
+                    $employeeName,
+                    $dateRange,
+                    number_format($days, 1)
+                ),
+                'leave_request',
+                $leaveRequestId,
+                url('/leave/my')
+            );
+
+            // Queue email notification
+            $replacementEmail = $this->notifications->userEmail($replacementUserId);
+            if ($replacementEmail !== null) {
+                $this->notifications->queueEmail(
+                    $replacementEmail,
+                    'Leave Replacement Assignment',
+                    sprintf(
+                        '<p>You have been assigned as replacement for <strong>%s</strong>\'s leave.</p>
+                        <p><strong>Leave Details:</strong></p>
+                        <ul>
+                            <li>Employee: %s (%s)</li>
+                            <li>Dates: %s</li>
+                            <li>Duration: %s days</li>
+                        </ul>',
+                        e($employeeName),
+                        e($employeeName),
+                        e((string) $employee['employee_code']),
+                        e($dateRange),
+                        number_format($days, 1)
+                    ),
+                    null,
+                    $replacementUserId,
+                    'leave_request',
+                    $leaveRequestId
+                );
+            }
+        } catch (\Throwable $e) {
+            // Log error but don't fail the leave request creation
+            error_log('Failed to notify replacement employee: ' . $e->getMessage());
+        }
     }
 }

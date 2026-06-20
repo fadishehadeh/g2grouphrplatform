@@ -40,6 +40,15 @@ a:hover { color: var(--brand-primary-dark); }
 .sidebar-sublink.active,.sidebar-sublink.active:visited { background: rgba(255,255,255,.19); color: #fff !important; font-weight: 640; }
 .sidebar-sublink i { margin-right: .45rem; font-size: .84rem; width: .95rem; text-align: center; }
 .sidebar-user { flex-shrink: 0; padding: .95rem .45rem 0; border-top: 1px solid var(--sidebar-border); line-height: 1.45; font-size: .79rem; }
+.sidebar-footer { flex-shrink: 0; padding: 1rem .45rem .9rem; border-top: 1px solid var(--sidebar-border); margin-top: auto; }
+.sidebar-footer .btn-outline-danger { color: #fff !important; border: 2px solid #fff !important; background: transparent !important; font-weight: 700; }
+.sidebar-footer .btn-outline-danger:hover { background: #fff !important; border-color: #fff !important; color: var(--brand-primary) !important; }
+.sidebar-footer .btn-outline-danger i { color: #fff !important; margin-right: 0.5rem; }
+.sidebar-footer .btn-outline-danger:hover i { color: var(--brand-primary) !important; }
+.sidebar-footer button.btn-logout { color: #fff !important; border: 2px solid #fff !important; background: transparent !important; font-weight: 700 !important; }
+.sidebar-footer button.btn-logout:hover { background: #fff !important; border-color: #fff !important; color: var(--brand-primary) !important; }
+.sidebar-footer button.btn-logout i { color: #fff !important; margin-right: 0.5rem !important; }
+.sidebar-footer button.btn-logout:hover i { color: var(--brand-primary) !important; }
 .app-main { flex: 1; display: flex; flex-direction: column; margin-left: 250px; }
 .topbar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 1rem 1.5rem; background: rgba(255,255,255,.94); border-bottom: 1px solid rgba(226,232,240,.85); box-shadow: 0 .25rem 1rem rgba(15,23,42,.035); backdrop-filter: blur(10px); }
 .topbar > .d-flex:first-child { min-width: 0; }
@@ -206,8 +215,13 @@ input[type="file"].form-control::file-selector-button { margin: -.45rem .75rem -
 input[type="file"].form-control:hover::file-selector-button { background: #eef2f7; color: #0f172a; }
 input.form-control:disabled, input.form-control[readonly], textarea.form-control:disabled, textarea.form-control[readonly], select.form-select:disabled { background-color: #f1f5f9; border-color: #d8e1eb; color: #64748b; box-shadow: inset 0 1px 2px rgba(15,23,42,.04); }
 input[name="employee_code"].form-control:not(:required) { background: linear-gradient(180deg, #f8fafc, #f3f6fa); border-style: dashed; color: #475569; }
-.dropdown-menu { border: 1px solid var(--border-soft); border-radius: .95rem; box-shadow: 0 1rem 2rem rgba(15,23,42,.1); padding: .45rem; background: rgba(255,255,255,.98); backdrop-filter: blur(10px); }
-.dropdown-item { border-radius: .6rem; padding: .58rem .72rem; font-size: .9rem; }
+.dropdown-menu { position: absolute; top: 100%; left: 0; z-index: 9999 !important; display: none !important; min-width: 10rem; margin-top: 0.5rem; padding: 0.5rem 0; border: 1px solid var(--border-soft); border-radius: .95rem; box-shadow: 0 1rem 2rem rgba(15,23,42,.1); background: rgba(255,255,255,.98) !important; backdrop-filter: blur(10px); list-style: none; }
+.dropdown-menu.show { display: block !important; opacity: 1 !important; visibility: visible !important; }
+.dropdown-menu-end { right: 0 !important; left: auto !important; }
+.dropdown-menu li { list-style: none; }
+.dropdown-item { display: block !important; width: 100%; padding: 0.5rem 1rem; clear: both; color: var(--text-strong); text-align: inherit; white-space: nowrap; background-color: transparent; border: 0; border-radius: .6rem; margin: 0.25rem; cursor: pointer; text-decoration: none; }
+.dropdown-item:hover, .dropdown-item:focus { color: var(--text-strong); background-color: rgba(15,23,42,.05); }
+.dropdown-divider { height: 0; margin: 0.5rem 0; overflow: hidden; border-top: 1px solid #e9ecef; }
 .list-group-item { border-color: var(--border-soft); }
 .list-group-item-action { transition: background-color .15s ease, color .15s ease; }
 .list-group-item-action:hover { background: #fff7f6; color: var(--text-strong); }

@@ -11,15 +11,30 @@
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label">Leave Type *</label>
-                            <select name="leave_type_id" class="form-select" required>
+                            <select name="leave_type_id" id="leaveTypeSelect" class="form-select" required>
                                 <option value="">Select leave type</option>
                                 <?php foreach (($leaveTypes ?? []) as $leaveType): ?>
-                                    <option value="<?= e((string) $leaveType['id']); ?>" <?= (string) old('leave_type_id', '') === (string) $leaveType['id'] ? 'selected' : ''; ?>>
+                                    <option value="<?= e((string) $leaveType['id']); ?>" data-requires-attachment="<?= (int) ($leaveType['requires_attachment'] ?? 0); ?>" <?= (string) old('leave_type_id', '') === (string) $leaveType['id'] ? 'selected' : ''; ?>>
                                         <?= e((string) $leaveType['name']); ?> (<?= e((string) $leaveType['code']); ?>)<?= (int) ($leaveType['requires_attachment'] ?? 0) === 1 ? ' · Attachment required' : ''; ?>
                                     </option>
                                 <?php endforeach; ?>
                             </select>
-                            <div class="form-text">Attachment-required leave types will be enabled once self-service file upload is added.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Replacement Employee *</label>
+                            <select name="replacement_employee_id" id="replacementEmployeeSelect" class="form-select" required>
+                                <option value="">Select replacement</option>
+                                <?php foreach (($replacementEmployeeOptions ?? []) as $value => $label): ?>
+                                    <option value="<?= e((string) $value); ?>" <?= (string) old('replacement_employee_id', '') === (string) $value ? 'selected' : ''; ?>>
+                                        <?= e((string) $label); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-12" id="attachmentField" style="display: none;">
+                            <label class="form-label">Supporting Document / Attachment *</label>
+                            <input type="file" name="attachment" id="attachmentInput" class="form-control" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" />
+                            <div class="form-text">Accepted formats: PDF, JPG, PNG, DOC, DOCX (Max 10 MB)</div>
                         </div>
                         <div class="col-md-3">
                             <label class="form-label">Start Date *</label>
@@ -88,3 +103,59 @@
         </div>
     </div>
 </form>
+
+<script>
+const leaveTypeSelect = document.getElementById('leaveTypeSelect');
+const attachmentField = document.getElementById('attachmentField');
+const attachmentInput = document.getElementById('attachmentInput');
+
+function updateAttachmentField() {
+    const selectedOption = leaveTypeSelect.options[leaveTypeSelect.selectedIndex];
+    const requiresAttachment = selectedOption.dataset.requiresAttachment === '1';
+
+    if (requiresAttachment) {
+        attachmentField.style.display = 'block';
+        attachmentInput.required = true;
+    } else {
+        attachmentField.style.display = 'none';
+        attachmentInput.required = false;
+        attachmentInput.value = '';
+    }
+}
+
+leaveTypeSelect.addEventListener('change', updateAttachmentField);
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', updateAttachmentField);
+
+// Form submission validation
+document.querySelector('form').addEventListener('submit', function(e) {
+    const selectedOption = leaveTypeSelect.options[leaveTypeSelect.selectedIndex];
+    const requiresAttachment = selectedOption.dataset.requiresAttachment === '1';
+
+    if (requiresAttachment && !attachmentInput.files.length) {
+        e.preventDefault();
+        alert('Please upload a supporting document for this leave type.');
+        return false;
+    }
+
+    // Validate file size (10 MB max)
+    if (attachmentInput.files.length > 0) {
+        const file = attachmentInput.files[0];
+        const maxSize = 10 * 1024 * 1024; // 10 MB
+        if (file.size > maxSize) {
+            e.preventDefault();
+            alert('File size exceeds 10 MB limit. Please upload a smaller file.');
+            return false;
+        }
+    }
+
+    // Validate replacement employee is not self
+    const replacementSelect = document.getElementById('replacementEmployeeSelect');
+    if (replacementSelect.value === '') {
+        e.preventDefault();
+        alert('Please select a replacement employee.');
+        return false;
+    }
+});
+</script>

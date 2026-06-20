@@ -29,7 +29,47 @@ $router->post('/admin/leave/balances/assign', [LeaveController::class, 'assignBa
     [PermissionMiddleware::class, ['leave.manage_types']],
 ]);
 
+$router->post('/admin/leave/balances/recalculate-annual', [LeaveController::class, 'recalculateAnnualBalances'], [
+    ...$leaveBaseMiddleware,
+    [PermissionMiddleware::class, ['leave.manage_types']],
+]);
+
 $router->post('/admin/leave/balances/adjust', [LeaveController::class, 'adjustBalance'], [
+    ...$leaveBaseMiddleware,
+    [PermissionMiddleware::class, ['leave.manage_types']],
+]);
+
+$router->get('/admin/leave/create', [LeaveController::class, 'createAdminLeave'], [
+    ...$leaveBaseMiddleware,
+    [PermissionMiddleware::class, ['leave.manage_types']],
+]);
+
+$router->post('/admin/leave/create', [LeaveController::class, 'storeAdminLeave'], [
+    ...$leaveBaseMiddleware,
+    [PermissionMiddleware::class, ['leave.manage_types']],
+]);
+
+$router->get('/admin/leave/employees/{id}', [LeaveController::class, 'employeeDetail'], [
+    ...$leaveBaseMiddleware,
+    [PermissionMiddleware::class, ['leave.manage_types']],
+]);
+
+$router->get('/admin/leave/requests/{id}/edit', [LeaveController::class, 'editAdminLeave'], [
+    ...$leaveBaseMiddleware,
+    [PermissionMiddleware::class, ['leave.manage_types']],
+]);
+
+$router->post('/admin/leave/requests/{id}/edit', [LeaveController::class, 'updateAdminLeave'], [
+    ...$leaveBaseMiddleware,
+    [PermissionMiddleware::class, ['leave.manage_types']],
+]);
+
+$router->post('/admin/leave/balances/import-annual-used', [LeaveController::class, 'importAnnualUsedDays'], [
+    ...$leaveBaseMiddleware,
+    [PermissionMiddleware::class, ['leave.manage_types']],
+]);
+
+$router->post('/admin/leave/balances/import-annual-used/confirm', [LeaveController::class, 'confirmAnnualUsedDaysImport'], [
     ...$leaveBaseMiddleware,
     [PermissionMiddleware::class, ['leave.manage_types']],
 ]);
@@ -95,6 +135,11 @@ $router->post('/admin/leave/types/{id}/update', [LeaveController::class, 'update
 ]);
 
 $router->post('/admin/leave/types', [LeaveController::class, 'storeType'], [
+    ...$leaveBaseMiddleware,
+    [PermissionMiddleware::class, ['leave.manage_types']],
+]);
+
+$router->post('/admin/leave/types/seed-defaults', [LeaveController::class, 'seedDefaultTypes'], [
     ...$leaveBaseMiddleware,
     [PermissionMiddleware::class, ['leave.manage_types']],
 ]);

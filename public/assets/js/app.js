@@ -83,4 +83,7 @@ document.addEventListener('DOMContentLoaded', function () {
             closeSidebar();
         }
     });
+
+    // Ensure Bootstrap dropdowns work with our CSS
+    // No need for custom logic - Bootstrap handles it, we just ensure CSS displays it
 });
