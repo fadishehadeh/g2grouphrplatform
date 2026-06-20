@@ -4,6 +4,8 @@
 
 This manual explains how admins and HR users should operate the main parts of the HR Management System.
 
+For server installation planning on a new cPanel environment with empty data, see [new-server-install-plan.md](new-server-install-plan.md).
+
 ## 1. Login and Access
 
 1. Open the app URL.

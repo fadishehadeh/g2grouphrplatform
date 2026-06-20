@@ -4,6 +4,8 @@
 
 This guide explains how to deploy the HR Management System to a new server using a full codebase backup and database dump.
 
+For the approved clean-install runbook for a new cPanel server with empty data, see [new-server-install-plan.md](new-server-install-plan.md).
+
 ## 1. Deployment Package
 
 A full deployment should include:
