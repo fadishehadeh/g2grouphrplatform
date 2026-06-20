@@ -7,6 +7,10 @@ namespace App\Modules\Settings;
 use App\Core\Application;
 use App\Core\Controller;
 use App\Core\Request;
+use App\Modules\Resilience\B2BackupUploader;
+use App\Modules\Resilience\BackupService;
+use App\Support\Mailer;
+use App\Support\OperationalSettings;
 use Throwable;
 
 final class SettingsController extends Controller
@@ -47,6 +51,11 @@ final class SettingsController extends Controller
             if ($setting === null) {
                 $this->app->session()->flash('error', 'Setting not found.');
                 $this->redirect($redirectPath);
+            }
+
+            if (OperationalSettings::isSystemManagedSetting((string) $setting['category_name'], (string) $setting['setting_key'])) {
+                $this->app->session()->flash('error', 'This setting is managed from System Settings.');
+                $this->redirect('/settings/system');
             }
 
             $normalizedValue = $this->normalizeValue($setting, $request->input('setting_value'));
@@ -374,6 +383,481 @@ final class SettingsController extends Controller
         }
 
         $this->redirect($redirectPath);
+    }
+
+    // ------------------------------------------------------------------
+    // System Settings — branding + module toggles (super_admin only)
+    // ------------------------------------------------------------------
+
+    public function systemSettings(Request $request): void
+    {
+        try {
+            $this->repository->ensureOperationalSettingsSeeded();
+            $tenant = $this->repository->getMainTenant();
+            $payrollEnabled = $this->repository->getPayrollEnabled();
+            $operationalSettings = $this->buildOperationalSettingsViewModel($this->repository->operationalSettings());
+            $recentOperationalChanges = array_map(function (array $row): array {
+                $definition = OperationalSettings::definitionByStorageKey(
+                    (string) ($row['category_name'] ?? ''),
+                    (string) ($row['setting_key'] ?? '')
+                );
+                $row['label'] = $definition['label'] ?? ucwords(str_replace('_', ' ', (string) ($row['setting_key'] ?? '')));
+                return $row;
+            }, $this->repository->recentOperationalSettingChanges(8));
+        } catch (Throwable $throwable) {
+            $this->app->session()->flash('error', 'Unable to load system settings: ' . $throwable->getMessage());
+            $tenant = null;
+            $payrollEnabled = false;
+            $operationalSettings = [];
+            $recentOperationalChanges = [];
+        }
+
+        $this->render('settings.system', [
+            'title'          => 'System Settings',
+            'pageTitle'      => 'System Settings',
+            'tenant'         => $tenant,
+            'payrollEnabled' => $payrollEnabled,
+            'operationalSettings' => $operationalSettings,
+            'recentOperationalChanges' => $recentOperationalChanges,
+        ]);
+    }
+
+    public function saveSystemSettings(Request $request): void
+    {
+        $redirectPath = '/settings/system';
+        $this->validateCsrf($request, $redirectPath);
+
+        $tenant = $this->repository->getMainTenant();
+
+        if ($tenant === null) {
+            $this->app->session()->flash('error', 'Main tenant record not found. Run the branding migration first.');
+            $this->redirect($redirectPath);
+        }
+
+        $tenantId  = (int) $tenant['id'];
+        $name      = trim((string) $request->input('name', ''));
+        $tagline   = trim((string) $request->input('tagline', ''));
+        $color     = trim((string) $request->input('brand_color', ''));
+
+        if ($name === '') {
+            $this->app->session()->flash('error', 'Organisation name is required.');
+            $this->redirect($redirectPath);
+        }
+
+        if (strlen($name) > 150) {
+            $this->app->session()->flash('error', 'Organisation name must be 150 characters or fewer.');
+            $this->redirect($redirectPath);
+        }
+
+        if ($color !== '' && !preg_match('/^#[0-9a-fA-F]{6}$/', $color)) {
+            $this->app->session()->flash('error', 'Brand colour must be a valid 6-digit hex code (e.g. #FF3D33).');
+            $this->redirect($redirectPath);
+        }
+
+        $this->repository->ensureOperationalSettingsSeeded();
+        $existingOperationalRows = $this->repository->operationalSettings();
+        $operationalPayload = $request->input('settings', []);
+        if (!is_array($operationalPayload)) {
+            $operationalPayload = [];
+        }
+
+        try {
+            $normalizedOperational = $this->normalizeOperationalSettingsPayload($operationalPayload, $existingOperationalRows);
+            $this->validateOperationalSettingsPayload($normalizedOperational);
+        } catch (Throwable $throwable) {
+            $this->app->session()->flash('error', 'Unable to save settings: ' . $throwable->getMessage());
+            $this->redirect($redirectPath);
+        }
+
+        $allowedExt  = ['png', 'jpg', 'jpeg', 'svg', 'gif'];
+        $maxBytes    = 2 * 1024 * 1024;
+        $logoDir     = base_path('public-hr/assets/uploads/logos');
+
+        $logoPath      = $tenant['logo_path']       !== '' ? $tenant['logo_path']       : null;
+        $logoPathWhite = $tenant['logo_path_white'] !== '' ? $tenant['logo_path_white'] : null;
+
+        foreach ([
+            ['field' => 'logo_file',       'key' => 'main_tenant',       'outVar' => &$logoPath],
+            ['field' => 'logo_file_white', 'key' => 'main_tenant_white', 'outVar' => &$logoPathWhite],
+        ] as $upload) {
+            $file = $request->file($upload['field']);
+            if (!is_array($file) || (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+                continue;
+            }
+
+            $ext = strtolower(pathinfo(basename((string) ($file['name'] ?? '')), PATHINFO_EXTENSION));
+
+            if (!in_array($ext, $allowedExt, true)) {
+                $this->app->session()->flash('error', 'Logo must be PNG, JPG, SVG, or GIF.');
+                $this->redirect($redirectPath);
+            }
+
+            if ((int) ($file['size'] ?? 0) > $maxBytes) {
+                $this->app->session()->flash('error', 'Logo file must be 2 MB or smaller.');
+                $this->redirect($redirectPath);
+            }
+
+            if (!is_dir($logoDir) && !mkdir($logoDir, 0775, true) && !is_dir($logoDir)) {
+                throw new \RuntimeException('Unable to create logo upload directory.');
+            }
+
+            $storedName = $upload['key'] . '_' . date('YmdHis') . '.' . $ext;
+            $storedPath = 'assets/uploads/logos/' . $storedName;
+
+            if (!move_uploaded_file((string) ($file['tmp_name'] ?? ''), base_path('public-hr/' . $storedPath))) {
+                $this->app->session()->flash('error', 'Unable to save uploaded logo file.');
+                $this->redirect($redirectPath);
+            }
+
+            $upload['outVar'] = $storedPath;
+        }
+
+        try {
+            $actorId = (int) $this->app->auth()->id();
+            $requestIp = (string) ($request->ip() ?? '');
+            $userAgent = (string) ($request->userAgent() ?? '');
+
+            $payrollEnabled = $request->input('payroll_enabled') === '1';
+            $this->app->database()->transaction(function () use (
+                $tenantId,
+                $name,
+                $tagline,
+                $logoPath,
+                $logoPathWhite,
+                $color,
+                $payrollEnabled,
+                $actorId,
+                $normalizedOperational
+            ): void {
+                $this->repository->saveMainTenant(
+                    $tenantId,
+                    $name,
+                    $tagline === '' ? null : $tagline,
+                    $logoPath,
+                    $logoPathWhite,
+                    $color === '' ? null : $color,
+                    $actorId
+                );
+
+                $this->repository->setPayrollEnabled($payrollEnabled, $actorId);
+
+                foreach ($normalizedOperational as $field) {
+                    if (!$field['changed']) {
+                        continue;
+                    }
+
+                    $this->repository->saveOperationalSetting(
+                        $field['definition']['category_name'],
+                        $field['definition']['setting_key'],
+                        $field['stored_value'],
+                        $field['definition']['value_type'],
+                        $actorId
+                    );
+                }
+            });
+
+            \App\Support\Branding::clearCache();
+            $this->auditLog(
+                'settings',
+                'system_settings',
+                null,
+                'updated',
+                $requestIp,
+                $userAgent,
+                null,
+                [
+                    'branding' => [
+                        'name' => $name,
+                        'tagline' => $tagline === '' ? null : $tagline,
+                        'brand_color' => $color === '' ? null : $color,
+                    ],
+                    'payroll_enabled' => $payrollEnabled,
+                    'operational_changed_fields' => array_values(array_map(
+                        static fn (array $field): string => (string) $field['definition']['label'],
+                        array_filter($normalizedOperational, static fn (array $field): bool => $field['changed'])
+                    )),
+                ]
+            );
+
+            $this->app->session()->flash('success', 'System settings saved successfully.');
+        } catch (Throwable $throwable) {
+            $this->app->session()->flash('error', 'Unable to save settings: ' . $throwable->getMessage());
+        }
+
+        $this->redirect($redirectPath);
+    }
+
+    public function testSystemEmail(Request $request): void
+    {
+        $redirectPath = '/settings/system';
+        $this->validateCsrf($request, $redirectPath);
+
+        $recipient = trim((string) ($this->app->auth()->user()['email'] ?? ''));
+        if ($recipient === '') {
+            $this->app->session()->flash('error', 'The signed-in super admin does not have an email address.');
+            $this->redirect($redirectPath);
+        }
+
+        try {
+            (new Mailer((array) config('app.mail', [])))->send(
+                $recipient,
+                'System Settings Test Email',
+                '<p>This is a test email from the HR Management System system-settings console.</p>'
+                . '<p>If you received this message, the current effective mail configuration is working.</p>'
+            );
+
+            $this->app->session()->flash('success', 'Test email sent successfully to ' . $recipient . '.');
+        } catch (Throwable $throwable) {
+            $this->app->session()->flash('error', 'Test email failed: ' . $throwable->getMessage());
+        }
+
+        $this->redirect($redirectPath);
+    }
+
+    public function testBackupConfiguration(Request $request): void
+    {
+        $redirectPath = '/settings/system';
+        $this->validateCsrf($request, $redirectPath);
+
+        try {
+            $result = (new BackupService($this->app))->validateConfiguration();
+            $this->app->session()->flash(
+                'success',
+                'Backup configuration looks valid. Storage: ' . $result['storage_dir']
+                . ' | Source directories found: ' . count((array) $result['source_directories'])
+            );
+        } catch (Throwable $throwable) {
+            $this->app->session()->flash('error', 'Backup configuration check failed: ' . $throwable->getMessage());
+        }
+
+        $this->redirect($redirectPath);
+    }
+
+    public function testB2Configuration(Request $request): void
+    {
+        $redirectPath = '/settings/system';
+        $this->validateCsrf($request, $redirectPath);
+
+        if (!filter_var(config('app.b2.enabled', false), FILTER_VALIDATE_BOOLEAN)) {
+            $this->app->session()->flash('error', 'B2 is currently disabled in the effective runtime configuration.');
+            $this->redirect($redirectPath);
+        }
+
+        try {
+            $result = (new B2BackupUploader(
+                (string) config('app.b2.key_id', ''),
+                (string) config('app.b2.application_key', ''),
+                (string) config('app.b2.bucket_name', ''),
+                60
+            ))->validateConnection();
+
+            $this->app->session()->flash(
+                'success',
+                'B2 connectivity verified for bucket ' . $result['bucket_name'] . ' (' . $result['bucket_id'] . ').'
+            );
+        } catch (Throwable $throwable) {
+            $this->app->session()->flash('error', 'B2 validation failed: ' . $throwable->getMessage());
+        }
+
+        $this->redirect($redirectPath);
+    }
+
+    private function buildOperationalSettingsViewModel(array $rowsByStorageKey): array
+    {
+        $sections = [];
+
+        foreach (OperationalSettings::sections() as $sectionKey => $sectionMeta) {
+            $sections[$sectionKey] = $sectionMeta + ['fields' => []];
+        }
+
+        foreach (OperationalSettings::definitions() as $alias => $definition) {
+            $storageKey = $definition['category_name'] . ':' . $definition['setting_key'];
+            $row = $rowsByStorageKey[$storageKey] ?? null;
+            $effective = $row !== null && $row['setting_value'] !== null
+                ? OperationalSettings::castStoredValue((string) $row['setting_value'], $definition)
+                : config((string) $definition['config_path'], null);
+            $hasFallbackValue = !in_array($effective, [null, ''], true);
+
+            $sections[(string) $definition['section']]['fields'][] = [
+                'alias' => $alias,
+                'definition' => $definition,
+                'row' => $row,
+                'effective_value' => $effective,
+                'display_value' => is_bool($effective) ? ($effective ? 'Enabled' : 'Disabled') : (string) ($effective ?? ''),
+                'has_secret_value' => !empty($definition['secret']) && $hasFallbackValue,
+                'uses_override' => $row !== null && $row['setting_value'] !== null,
+                'updated_at' => $row['updated_at'] ?? null,
+                'updated_by_name' => $row['updated_by_name'] ?? null,
+            ];
+        }
+
+        return $sections;
+    }
+
+    private function normalizeOperationalSettingsPayload(array $payload, array $existingRows): array
+    {
+        $normalized = [];
+
+        foreach (OperationalSettings::definitions() as $alias => $definition) {
+            $storageKey = $definition['category_name'] . ':' . $definition['setting_key'];
+            $existingStoredValue = isset($existingRows[$storageKey]) ? $existingRows[$storageKey]['setting_value'] : null;
+            $rawValue = $payload[$alias] ?? null;
+
+            if (!empty($definition['secret'])) {
+                $newStoredValue = is_string($rawValue) && trim($rawValue) !== ''
+                    ? $this->normalizeOperationalFieldValue($definition, $rawValue)
+                    : $existingStoredValue;
+            } else {
+                $newStoredValue = $this->normalizeOperationalFieldValue($definition, $rawValue);
+            }
+
+            $normalized[$alias] = [
+                'definition' => $definition,
+                'stored_value' => $newStoredValue,
+                'existing_stored_value' => $existingStoredValue,
+                'changed' => $newStoredValue !== $existingStoredValue,
+                'effective_value' => $newStoredValue !== null
+                    ? OperationalSettings::castStoredValue($newStoredValue, $definition)
+                    : config((string) $definition['config_path'], null),
+            ];
+        }
+
+        return $normalized;
+    }
+
+    private function normalizeOperationalFieldValue(array $definition, mixed $rawValue): ?string
+    {
+        $type = (string) ($definition['value_type'] ?? 'string');
+
+        if ($type === 'boolean') {
+            return in_array((string) $rawValue, ['1', 'true', 'on'], true) ? 'true' : 'false';
+        }
+
+        if ($rawValue === null) {
+            return null;
+        }
+
+        if ($type === 'integer') {
+            $trimmed = trim((string) $rawValue);
+            if ($trimmed === '') {
+                return null;
+            }
+
+            if (filter_var($trimmed, FILTER_VALIDATE_INT) === false) {
+                throw new \RuntimeException(((string) ($definition['label'] ?? 'Field')) . ' must be an integer.');
+            }
+
+            return $trimmed;
+        }
+
+        $trimmed = trim((string) $rawValue);
+        if ($trimmed === '') {
+            return null;
+        }
+
+        if ($trimmed === '__EMPTY__') {
+            return '';
+        }
+
+        return $trimmed;
+    }
+
+    private function validateOperationalSettingsPayload(array $normalized): void
+    {
+        foreach ($normalized as $field) {
+            $definition = $field['definition'];
+            $label = (string) ($definition['label'] ?? 'Field');
+            $effective = $field['effective_value'];
+
+            switch ((string) ($definition['validator'] ?? '')) {
+                case 'url':
+                    if (!is_string($effective) || filter_var($effective, FILTER_VALIDATE_URL) === false) {
+                        throw new \RuntimeException($label . ' must be a valid URL.');
+                    }
+                    break;
+                case 'timezone':
+                    if (!is_string($effective) || !in_array($effective, \DateTimeZone::listIdentifiers(), true)) {
+                        throw new \RuntimeException($label . ' must be a valid PHP timezone identifier.');
+                    }
+                    break;
+                case 'email':
+                    if ($effective !== null && $effective !== '' && (!is_string($effective) || filter_var($effective, FILTER_VALIDATE_EMAIL) === false)) {
+                        throw new \RuntimeException($label . ' must be a valid email address.');
+                    }
+                    break;
+                case 'port':
+                    if ($effective !== null && ((int) $effective < 1 || (int) $effective > 65535)) {
+                        throw new \RuntimeException($label . ' must be between 1 and 65535.');
+                    }
+                    break;
+                case 'positive_integer':
+                    if ($effective === null || (int) $effective <= 0) {
+                        throw new \RuntimeException($label . ' must be greater than zero.');
+                    }
+                    break;
+                case 'security_timeout':
+                    if ($effective === null || (int) $effective < 60) {
+                        throw new \RuntimeException($label . ' must be at least 60 seconds.');
+                    }
+                    break;
+            }
+        }
+
+        $mailEnabled = (bool) ($normalized['mail_enabled']['effective_value'] ?? false);
+        $mailTransport = (string) ($normalized['mail_transport']['effective_value'] ?? 'smtp');
+        $mailFromAddress = trim((string) ($normalized['mail_from_address']['effective_value'] ?? ''));
+        $mailFromName = trim((string) ($normalized['mail_from_name']['effective_value'] ?? ''));
+        $mailHost = trim((string) ($normalized['mail_host']['effective_value'] ?? ''));
+        $mailPort = (int) ($normalized['mail_port']['effective_value'] ?? 0);
+        $mailUsername = trim((string) ($normalized['mail_username']['effective_value'] ?? ''));
+        $mailPassword = trim((string) ($normalized['mail_password']['effective_value'] ?? ''));
+        $mailEncryption = (string) ($normalized['mail_encryption']['effective_value'] ?? 'tls');
+
+        if ($mailEnabled) {
+            if (!in_array($mailTransport, ['smtp', 'mailjet', 'mail'], true)) {
+                throw new \RuntimeException('Mail transport must be SMTP, Mailjet API, or PHP mail().');
+            }
+
+            if ($mailFromAddress === '' || filter_var($mailFromAddress, FILTER_VALIDATE_EMAIL) === false) {
+                throw new \RuntimeException('From Address is required when mail is enabled.');
+            }
+
+            if ($mailFromName === '') {
+                throw new \RuntimeException('From Name is required when mail is enabled.');
+            }
+
+            if (!in_array($mailEncryption, ['tls', 'ssl', ''], true)) {
+                throw new \RuntimeException('Mail encryption must be TLS, SSL, or None.');
+            }
+
+            if ($mailTransport === 'smtp') {
+                if ($mailHost === '') {
+                    throw new \RuntimeException('Mail Host is required for SMTP transport.');
+                }
+                if ($mailPort < 1 || $mailPort > 65535) {
+                    throw new \RuntimeException('Mail Port must be between 1 and 65535 for SMTP transport.');
+                }
+            }
+
+            if ($mailTransport === 'mailjet') {
+                if ($mailUsername === '' || $mailPassword === '') {
+                    throw new \RuntimeException('Mailjet API key and secret are required for Mailjet transport.');
+                }
+            }
+        }
+
+        $b2Enabled = (bool) ($normalized['b2_enabled']['effective_value'] ?? false);
+        if ($b2Enabled) {
+            if (trim((string) ($normalized['b2_key_id']['effective_value'] ?? '')) === '') {
+                throw new \RuntimeException('B2 Key ID is required when B2 is enabled.');
+            }
+            if (trim((string) ($normalized['b2_application_key']['effective_value'] ?? '')) === '') {
+                throw new \RuntimeException('B2 Application Key is required when B2 is enabled.');
+            }
+            if (trim((string) ($normalized['b2_bucket_name']['effective_value'] ?? '')) === '') {
+                throw new \RuntimeException('B2 Bucket Name is required when B2 is enabled.');
+            }
+        }
     }
 
     private function groupedSettings(): array

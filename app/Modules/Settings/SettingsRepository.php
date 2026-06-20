@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Settings;
 
 use App\Core\Database;
+use App\Support\OperationalSettings;
 
 final class SettingsRepository
 {
@@ -14,11 +15,19 @@ final class SettingsRepository
 
     public function listSettings(): array
     {
-        return $this->database->fetchAll(
+        $rows = $this->database->fetchAll(
             'SELECT id, category_name, setting_key, setting_value, value_type, updated_by, updated_at
              FROM settings
              ORDER BY category_name ASC, setting_key ASC'
         );
+
+        return array_values(array_filter(
+            $rows,
+            static fn (array $row): bool => !OperationalSettings::isSystemManagedSetting(
+                (string) ($row['category_name'] ?? ''),
+                (string) ($row['setting_key'] ?? '')
+            )
+        ));
     }
 
     public function findSetting(int $id): ?array
@@ -27,6 +36,87 @@ final class SettingsRepository
             'SELECT id, category_name, setting_key, setting_value, value_type FROM settings WHERE id = :id LIMIT 1',
             ['id' => $id]
         );
+    }
+
+    public function ensureOperationalSettingsSeeded(): void
+    {
+        foreach (OperationalSettings::definitions() as $definition) {
+            $this->database->execute(
+                'INSERT IGNORE INTO settings (category_name, setting_key, setting_value, value_type)
+                 VALUES (:category_name, :setting_key, NULL, :value_type)',
+                [
+                    'category_name' => $definition['category_name'],
+                    'setting_key' => $definition['setting_key'],
+                    'value_type' => $definition['value_type'],
+                ]
+            );
+        }
+    }
+
+    public function operationalSettings(): array
+    {
+        $rows = $this->database->fetchAll(
+            'SELECT s.id, s.category_name, s.setting_key, s.setting_value, s.value_type, s.updated_by, s.updated_at,
+                    CONCAT_WS(\' \', u.first_name, u.last_name) AS updated_by_name
+             FROM settings s
+             LEFT JOIN users u ON u.id = s.updated_by
+             WHERE s.category_name IN (' . implode(',', array_fill(0, count(OperationalSettings::categories()), '?')) . ')
+             ORDER BY s.category_name ASC, s.setting_key ASC',
+            OperationalSettings::categories()
+        );
+
+        $map = [];
+        foreach ($rows as $row) {
+            $map[(string) $row['category_name'] . ':' . (string) $row['setting_key']] = $row;
+        }
+
+        return $map;
+    }
+
+    public function saveOperationalSetting(
+        string $categoryName,
+        string $settingKey,
+        ?string $settingValue,
+        string $valueType,
+        int $actorId
+    ): void {
+        $this->database->execute(
+            'INSERT INTO settings (category_name, setting_key, setting_value, value_type, updated_by)
+             VALUES (:category_name, :setting_key, :setting_value, :value_type, :updated_by)
+             ON DUPLICATE KEY UPDATE
+                setting_value = VALUES(setting_value),
+                value_type = VALUES(value_type),
+                updated_by = VALUES(updated_by)',
+            [
+                'category_name' => $categoryName,
+                'setting_key' => $settingKey,
+                'setting_value' => $settingValue,
+                'value_type' => $valueType,
+                'updated_by' => $actorId,
+            ]
+        );
+    }
+
+    public function recentOperationalSettingChanges(int $limit = 10): array
+    {
+        $rows = $this->database->fetchAll(
+            'SELECT s.category_name, s.setting_key, s.updated_at, CONCAT_WS(\' \', u.first_name, u.last_name) AS updated_by_name
+             FROM settings s
+             LEFT JOIN users u ON u.id = s.updated_by
+             WHERE s.category_name IN (' . implode(',', array_fill(0, count(OperationalSettings::categories()), '?')) . ')
+               AND s.updated_by IS NOT NULL
+             ORDER BY s.updated_at DESC
+             LIMIT ' . max(1, min($limit, 20)),
+            OperationalSettings::categories()
+        );
+
+        return array_values(array_filter(
+            $rows,
+            static fn (array $row): bool => OperationalSettings::definitionByStorageKey(
+                (string) ($row['category_name'] ?? ''),
+                (string) ($row['setting_key'] ?? '')
+            ) !== null
+        ));
     }
 
     public function updateSetting(int $id, ?string $value, ?int $actorId): void
@@ -38,6 +128,77 @@ final class SettingsRepository
                 'updated_by' => $actorId,
                 'id' => $id,
             ]
+        );
+    }
+
+    // ------------------------------------------------------------------
+    // Main tenant branding (companies.is_main_tenant = 1)
+    // ------------------------------------------------------------------
+
+    public function getMainTenant(): ?array
+    {
+        return $this->database->fetch(
+            'SELECT id, name, tagline, logo_path, logo_path_white, brand_color
+             FROM companies
+             WHERE is_main_tenant = 1
+             LIMIT 1'
+        );
+    }
+
+    public function saveMainTenant(
+        int $id,
+        string $name,
+        ?string $tagline,
+        ?string $logoPath,
+        ?string $logoPathWhite,
+        ?string $brandColor,
+        int $actorId
+    ): void {
+        $this->database->execute(
+            'UPDATE companies
+             SET name            = :name,
+                 tagline         = :tagline,
+                 logo_path       = :logo_path,
+                 logo_path_white = :logo_path_white,
+                 brand_color     = :brand_color
+             WHERE id = :id
+               AND is_main_tenant = 1',
+            [
+                'name'            => $name,
+                'tagline'         => $tagline,
+                'logo_path'       => $logoPath,
+                'logo_path_white' => $logoPathWhite,
+                'brand_color'     => $brandColor,
+                'id'              => $id,
+            ]
+        );
+    }
+
+    // ------------------------------------------------------------------
+    // Payroll module toggle
+    // ------------------------------------------------------------------
+
+    public function getPayrollEnabled(): bool
+    {
+        $row = $this->database->fetch(
+            "SELECT setting_value
+             FROM settings
+             WHERE category_name = 'modules'
+               AND setting_key   = 'payroll_enabled'
+             LIMIT 1"
+        );
+
+        return $row !== null && $row['setting_value'] === 'true';
+    }
+
+    public function setPayrollEnabled(bool $enabled, int $actorId): void
+    {
+        $this->database->execute(
+            "UPDATE settings
+             SET setting_value = :val, updated_by = :by
+             WHERE category_name = 'modules'
+               AND setting_key   = 'payroll_enabled'",
+            ['val' => $enabled ? 'true' : 'false', 'by' => $actorId]
         );
     }
 

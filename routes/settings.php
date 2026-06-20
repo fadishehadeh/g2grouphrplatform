@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Middleware\AccountStatusMiddleware;
 use App\Middleware\AuthMiddleware;
 use App\Middleware\PermissionMiddleware;
+use App\Middleware\RoleMiddleware;
 use App\Modules\Settings\SettingsController;
 
 $router = $app->router();
@@ -29,3 +30,15 @@ $router->post('/settings/schedules', [SettingsController::class, 'storeSchedule'
 $router->post('/settings/schedules/{id}/update', [SettingsController::class, 'updateSchedule'], $settingsBaseMiddleware);
 $router->get('/settings/attendance-statuses', [SettingsController::class, 'attendanceStatuses'], $settingsBaseMiddleware);
 $router->post('/settings/attendance-statuses', [SettingsController::class, 'storeAttendanceStatus'], $settingsBaseMiddleware);
+
+// System settings — super_admin only
+$systemSettingsMiddleware = [
+    AuthMiddleware::class,
+    AccountStatusMiddleware::class,
+    [RoleMiddleware::class, ['super_admin']],
+];
+$router->get('/settings/system', [SettingsController::class, 'systemSettings'], $systemSettingsMiddleware);
+$router->post('/settings/system', [SettingsController::class, 'saveSystemSettings'], $systemSettingsMiddleware);
+$router->post('/settings/system/test-email', [SettingsController::class, 'testSystemEmail'], $systemSettingsMiddleware);
+$router->post('/settings/system/test-backups', [SettingsController::class, 'testBackupConfiguration'], $systemSettingsMiddleware);
+$router->post('/settings/system/test-b2', [SettingsController::class, 'testB2Configuration'], $systemSettingsMiddleware);

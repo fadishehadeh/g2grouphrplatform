@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Core;
 
+use App\Support\OperationalSettings;
+
 final class Application
 {
     private static ?self $instance = null;
@@ -22,10 +24,11 @@ final class Application
         $this->basePath = $basePath;
 
         $this->loadConfig();
+        $this->database = new Database((array) $this->config('database', []));
+        $this->applyAppSettingOverrides();
         date_default_timezone_set((string) $this->config('app.timezone', 'UTC'));
 
         $this->session = new Session();
-        $this->database = new Database((array) $this->config('database', []));
         $this->auth = new Auth($this->database, $this->session);
         $this->csrf = new Csrf($this->session);
         $this->router = new Router($this);
@@ -98,6 +101,52 @@ final class Application
             'app' => require $this->basePath('config/app.php'),
             'database' => require $this->basePath('config/database.php'),
         ];
+    }
+
+    private function applyAppSettingOverrides(): void
+    {
+        try {
+            $rows = $this->database->fetchAll(
+                'SELECT category_name, setting_key, setting_value
+                 FROM settings
+                 WHERE category_name IN (' . implode(',', array_fill(0, count(OperationalSettings::categories()), '?')) . ')',
+                OperationalSettings::categories()
+            );
+        } catch (\Throwable) {
+            return;
+        }
+
+        foreach ($rows as $row) {
+            $definition = OperationalSettings::definitionByStorageKey(
+                (string) ($row['category_name'] ?? ''),
+                (string) ($row['setting_key'] ?? '')
+            );
+
+            if ($definition === null || $row['setting_value'] === null) {
+                continue;
+            }
+
+            $this->setConfigValue(
+                (string) $definition['config_path'],
+                OperationalSettings::castStoredValue((string) $row['setting_value'], $definition)
+            );
+        }
+    }
+
+    private function setConfigValue(string $key, mixed $value): void
+    {
+        $segments = explode('.', $key);
+        $config =& $this->config;
+
+        foreach ($segments as $segment) {
+            if (!isset($config[$segment]) || !is_array($config[$segment])) {
+                $config[$segment] = [];
+            }
+
+            $config =& $config[$segment];
+        }
+
+        $config = $value;
     }
 
     private function applySecurityHeaders(): void
