@@ -8,7 +8,7 @@ $careersUser = (new CareersAuth(app()->session()))->user();
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#FF3D33">
-    <title><?= e($title ?? 'Careers Portal'); ?> — <?= e((string) config('app.brand.display_name', 'HR System')); ?></title>
+    <title><?= e($title ?? 'Careers Portal'); ?> — <?= e(\App\Support\Branding::name()); ?></title>
     <link href="<?= e(asset('css/bootstrap.min.css')); ?>" rel="stylesheet">
     <link href="<?= e(asset('css/bootstrap-icons.min.css')); ?>" rel="stylesheet">
     <link href="<?= e(asset('css/app.css')); ?>" rel="stylesheet">
@@ -69,7 +69,7 @@ $careersUser = (new CareersAuth(app()->session()))->user();
 
 <nav class="navbar navbar-expand-lg careers-topbar px-3 px-lg-4">
     <a class="navbar-brand" href="<?= e(url('/careers')); ?>">
-        <img src="<?= e(asset((string) config('app.brand.logo_asset', 'images/g2group.svg'))); ?>" alt="Logo" height="32" class="me-2">
+        <img src="<?= e(\App\Support\Branding::logoUrl()); ?>" alt="Logo" height="32" class="me-2">
         Careers
     </a>
     <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#careersNav">
@@ -115,7 +115,7 @@ $careersUser = (new CareersAuth(app()->session()))->user();
 </main>
 
 <footer class="mt-5 py-4 border-top bg-white text-center text-muted small">
-    &copy; <?= date('Y'); ?> <?= e((string) config('app.brand.display_name', 'G2 Group')); ?> — Careers Portal
+    &copy; <?= date('Y'); ?> <?= e(\App\Support\Branding::name()); ?> — Careers Portal
 </footer>
 
 <script src="<?= e(asset('js/bootstrap.bundle.min.js')); ?>"></script>

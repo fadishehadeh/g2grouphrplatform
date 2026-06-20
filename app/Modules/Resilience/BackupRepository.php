@@ -242,6 +242,23 @@ final class BackupRepository
         );
     }
 
+    public function updateArtifactB2Status(int $artifactId, bool $uploaded, ?string $objectKey, ?string $error): void
+    {
+        $this->database->execute(
+            'UPDATE backup_artifacts
+             SET b2_uploaded     = :uploaded,
+                 b2_object_key   = :object_key,
+                 b2_upload_error = :error
+             WHERE id = :id',
+            [
+                'uploaded'   => $uploaded ? 1 : 0,
+                'object_key' => $objectKey,
+                'error'      => $error !== null ? substr($error, 0, 2000) : null,
+                'id'         => $artifactId,
+            ]
+        );
+    }
+
     public function superAdminRecipients(): array
     {
         return $this->database->fetchAll(

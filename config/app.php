@@ -38,11 +38,23 @@ return [
         'retention_days' => (int) env('BACKUP_RETENTION_DAYS', '30'),
         'link_ttl_days' => (int) env('BACKUP_LINK_TTL_DAYS', '7'),
     ],
+    'b2' => [
+        'enabled'         => filter_var(env('B2_ENABLED', 'false'), FILTER_VALIDATE_BOOLEAN),
+        'key_id'          => env('B2_KEY_ID', ''),
+        'application_key' => env('B2_APPLICATION_KEY', ''),
+        'bucket_name'     => env('B2_BUCKET_NAME', ''),
+        'endpoint'        => env('B2_ENDPOINT', ''),   // S3-compatible endpoint (informational; native API auto-discovers)
+    ],
     'recaptcha' => [
         'enabled'   => filter_var(env('RECAPTCHA_ENABLED', 'false'), FILTER_VALIDATE_BOOLEAN),
         'site_key'  => env('RECAPTCHA_SITE_KEY', ''),
         'secret_key'=> env('RECAPTCHA_SECRET_KEY', ''),
         'min_score' => (float) env('RECAPTCHA_MIN_SCORE', '0.5'),
+    ],
+    'jwt' => [
+        'secret'             => env('JWT_SECRET', ''),
+        'access_ttl_seconds' => (int) env('JWT_ACCESS_TTL', '3600'),
+        'refresh_ttl_days'   => (int) env('JWT_REFRESH_TTL_DAYS', '30'),
     ],
     'security' => [
         'login_lockout_attempts' => (int) env('LOGIN_LOCKOUT_ATTEMPTS', '5'),

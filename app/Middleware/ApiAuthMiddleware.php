@@ -45,10 +45,12 @@ final class ApiAuthMiddleware implements MiddlewareInterface
             $row = $this->app->database()->fetch(
                 'SELECT t.id AS token_id, t.user_id, t.expires_at, t.is_active,
                         u.username, u.email, u.first_name, u.last_name, u.status AS user_status,
-                        r.code AS role_code, r.name AS role_name
+                        r.code AS role_code, r.name AS role_name,
+                        e.id AS employee_id, e.company_id
                  FROM api_tokens t
                  INNER JOIN users u ON u.id = t.user_id
                  INNER JOIN roles r ON r.id = u.role_id
+                 LEFT JOIN employees e ON e.user_id = u.id
                  WHERE t.token_hash = :token_hash LIMIT 1',
                 ['token_hash' => $tokenHash]
             );
@@ -90,6 +92,8 @@ final class ApiAuthMiddleware implements MiddlewareInterface
             'last_name'   => (string) $row['last_name'],
             'role_code'   => (string) $row['role_code'],
             'role_name'   => (string) $row['role_name'],
+            'employee_id' => isset($row['employee_id']) ? (int) $row['employee_id'] : null,
+            'company_id'  => isset($row['company_id'])  ? (int) $row['company_id']  : null,
             'permissions' => $permissionCodes,
         ]);
 

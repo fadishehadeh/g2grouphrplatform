@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title><?= e($title ?? 'Employee Registration'); ?> — <?= e((string) config('app.brand.display_name', 'HR System')); ?></title>
+    <title><?= e($title ?? 'Employee Registration'); ?> — <?= e(\App\Support\Branding::name()); ?></title>
     <link href="<?= e(asset('css/bootstrap.min.css')); ?>" rel="stylesheet">
     <link href="<?= e(asset('css/bootstrap-icons.min.css')); ?>" rel="stylesheet">
     <style>
@@ -38,7 +38,7 @@
 
 <nav class="navbar intake-topbar px-3 px-lg-4 py-2">
     <span class="navbar-brand">
-        <img src="<?= e(asset((string) config('app.brand.logo_asset', 'images/g2group.svg'))); ?>" alt="Logo" height="30" class="me-2">
+        <img src="<?= e(\App\Support\Branding::logoUrl()); ?>" alt="Logo" height="30" class="me-2">
         Employee Registration
     </span>
 </nav>
@@ -58,7 +58,7 @@
 </main>
 
 <footer class="py-3 text-center text-muted small border-top bg-white mt-4">
-    &copy; <?= date('Y'); ?> <?= e((string) config('app.brand.display_name', 'G2 Group')); ?>
+    &copy; <?= date('Y'); ?> <?= e(\App\Support\Branding::name()); ?>
 </footer>
 
 <script src="<?= e(asset('js/bootstrap.bundle.min.js')); ?>"></script>

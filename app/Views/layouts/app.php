@@ -5,10 +5,13 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#FF3D33">
-    <title><?= e($title ?? config('app.brand.display_name', config('app.name'))); ?></title>
+    <title><?= e($title ?? \App\Support\Branding::name()); ?></title>
     <link href="<?= e(asset('css/bootstrap.min.css')); ?>" rel="stylesheet">
     <link href="<?= e(asset('css/bootstrap-icons.min.css')); ?>" rel="stylesheet">
     <link href="<?= e(asset('css/app.css')); ?>" rel="stylesheet">
+    <?php $__bc = \App\Support\Branding::brandColor(); if ($__bc !== '' && $__bc !== '#ff3d33'): ?>
+    <style>:root { --brand-primary: <?= e($__bc); ?>; }</style>
+    <?php endif; ?>
 </head>
 <body class="app-body">
     <div class="sidebar-overlay" id="sidebarOverlay"></div>

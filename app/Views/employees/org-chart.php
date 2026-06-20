@@ -103,7 +103,7 @@ $nodesJson = json_encode($nodes ?? [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCA
 
         return {
             id: 0,
-            name: '<?= e((string) config('app.brand.display_name', config('app.name'))); ?>',
+            name: '<?= e(\App\Support\Branding::name()); ?>',
             title: 'Organisation',
             department: '',
             status: 'active',

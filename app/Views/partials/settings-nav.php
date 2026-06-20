@@ -8,5 +8,8 @@
         <a href="<?= e(url('/settings/shifts')); ?>" class="btn btn-outline-secondary btn-sm">Shifts</a>
         <a href="<?= e(url('/settings/schedules')); ?>" class="btn btn-outline-secondary btn-sm">Schedules</a>
         <a href="<?= e(url('/settings/attendance-statuses')); ?>" class="btn btn-outline-secondary btn-sm">Statuses</a>
+        <?php if (has_role('super_admin')): ?>
+        <a href="<?= e(url('/settings/system')); ?>" class="btn btn-outline-secondary btn-sm">System Settings</a>
+        <?php endif; ?>
     </div>
 </div>

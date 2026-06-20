@@ -162,6 +162,33 @@ function decrypt_field(?string $stored): ?string
     return $enc->decrypt($stored);
 }
 
+/**
+ * Check whether the Payroll module is enabled.
+ * Reads from the settings table with a static per-request cache.
+ * Defaults to false if the row is missing.
+ */
+function is_payroll_enabled(): bool
+{
+    static $result = null;
+
+    if ($result === null) {
+        try {
+            $row = app()->database()->fetch(
+                "SELECT setting_value
+                 FROM settings
+                 WHERE category_name = 'modules'
+                   AND setting_key   = 'payroll_enabled'
+                 LIMIT 1"
+            );
+            $result = ($row !== null && $row['setting_value'] === 'true');
+        } catch (\Throwable) {
+            $result = false;
+        }
+    }
+
+    return $result;
+}
+
 function notification_unread_count(): int
 {
     if (!auth()->check() || !can('notifications.view_self')) {

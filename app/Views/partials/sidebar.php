@@ -24,7 +24,7 @@ $nextId = static function () use (&$collapseId): string {
 <aside class="sidebar" id="appSidebar">
     <button class="sidebar-close" id="sidebarClose" aria-label="Close menu"><i class="bi bi-x-lg"></i></button>
     <div class="sidebar-brand">
-        <img src="<?= e(asset((string) config('app.brand.logo_asset', 'images/g2group.svg'))); ?>" alt="<?= e((string) config('app.brand.display_name', config('app.name'))); ?>" class="brand-logo">
+        <img src="<?= e(\App\Support\Branding::logoUrl()); ?>" alt="<?= e(\App\Support\Branding::name()); ?>" class="brand-logo">
         <div class="sidebar-brand-text">
             <h5>HR Management System</h5>
             <small>People operations platform</small>
@@ -76,6 +76,7 @@ $nextId = static function () use (&$collapseId): string {
                 <a href="<?= e(url('/admin/structure')); ?>" class="sidebar-sublink"><i class="bi bi-diagram-3"></i> Structure</a>
                 <?php if (has_role('super_admin')): ?>
                 <a href="<?= e(url('/admin/resilience')); ?>" class="sidebar-sublink"><i class="bi bi-database-check"></i> Resilience</a>
+                <a href="<?= e(url('/settings/system')); ?>" class="sidebar-sublink"><i class="bi bi-palette"></i> System Settings</a>
                 <?php endif; ?>
             </div>
         </div>
@@ -184,6 +185,23 @@ $nextId = static function () use (&$collapseId): string {
                 <?php if (can('notifications.view_self')): ?>
                 <a href="<?= e(url('/notifications')); ?>" class="sidebar-sublink"><i class="bi bi-bell"></i> Notifications</a>
                 <?php endif; ?>
+            </div>
+        </div>
+        <?php endif; ?>
+
+        <?php if (is_payroll_enabled() && has_role(['super_admin', 'hr_only'])): ?>
+        <?php
+            $payrollId = $nextId();
+            $payrollOpen = $groupOpen(['/payroll']);
+        ?>
+        <div class="sidebar-group">
+            <a class="sidebar-group-toggle<?= $payrollOpen === 'show' ? '' : ' collapsed'; ?>" href="#<?= e($payrollId); ?>" data-bs-toggle="collapse" aria-expanded="<?= $payrollOpen === 'show' ? 'true' : 'false'; ?>">
+                <i class="bi bi-cash-stack"></i> Payroll
+                <i class="bi bi-chevron-down sidebar-chevron ms-auto"></i>
+            </a>
+            <div class="collapse <?= e($payrollOpen); ?>" id="<?= e($payrollId); ?>" data-bs-parent="#sidebarNavAccordion">
+                <a href="<?= e(url('/payroll/salary-structures')); ?>" class="sidebar-sublink"><i class="bi bi-person-badge"></i> Salary Structures</a>
+                <a href="<?= e(url('/payroll/runs')); ?>" class="sidebar-sublink"><i class="bi bi-calendar2-check"></i> Payroll Runs</a>
             </div>
         </div>
         <?php endif; ?>

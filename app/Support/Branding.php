@@ -8,14 +8,109 @@ use Throwable;
 
 final class Branding
 {
+    /** @var array<string,mixed>|null */
+    private static ?array $tenantCache = null;
+
+    /**
+     * Fetch (and cache per-request) the is_main_tenant=1 row.
+     * Returns an empty array if the row doesn't exist yet.
+     *
+     * @return array<string,mixed>
+     */
+    private static function tenant(): array
+    {
+        if (self::$tenantCache === null) {
+            try {
+                $row = app()->database()->fetch(
+                    'SELECT name, tagline, logo_path, logo_path_white, brand_color
+                     FROM companies
+                     WHERE is_main_tenant = 1
+                     LIMIT 1'
+                );
+                self::$tenantCache = is_array($row) ? $row : [];
+            } catch (Throwable) {
+                self::$tenantCache = [];
+            }
+        }
+
+        return self::$tenantCache;
+    }
+
+    /** Invalidate the per-request tenant cache after saving branding. */
+    public static function clearCache(): void
+    {
+        self::$tenantCache = null;
+    }
+
+    // ------------------------------------------------------------------
+    // Main-tenant branding (DB-backed, fall back to config/env)
+    // ------------------------------------------------------------------
+
+    /** Display name of the main tenant, e.g. "G2 Group". */
+    public static function name(): string
+    {
+        $v = self::tenant()['name'] ?? null;
+
+        return ($v !== null && $v !== '')
+            ? (string) $v
+            : self::appName();
+    }
+
+    /** Tagline of the main tenant. */
+    public static function tagline(): string
+    {
+        $v = self::tenant()['tagline'] ?? null;
+
+        return ($v !== null && $v !== '')
+            ? (string) $v
+            : (string) config('app.brand.tagline', 'People operations platform');
+    }
+
+    /** Web URL of the main tenant's primary (coloured) logo. */
+    public static function logoUrl(): string
+    {
+        $path = self::tenant()['logo_path'] ?? null;
+
+        if ($path !== null && $path !== '') {
+            $clean = ltrim((string) $path, '/');
+            if (is_file(base_path('public-hr/' . $clean))) {
+                return url('/' . $clean);
+            }
+        }
+
+        return self::defaultLogoUrl();
+    }
+
+    /** Web URL of the main tenant's white/reversed logo. */
+    public static function logoWhiteUrl(): string
+    {
+        $path = self::tenant()['logo_path_white'] ?? null;
+
+        if ($path !== null && $path !== '') {
+            $clean = ltrim((string) $path, '/');
+            if (is_file(base_path('public-hr/' . $clean))) {
+                return url('/' . $clean);
+            }
+        }
+
+        return url('/assets/images/g2group-white.svg');
+    }
+
+    /** Hex brand colour, e.g. "#FF3D33", or the default if not configured. */
+    public static function brandColor(): string
+    {
+        $v = self::tenant()['brand_color'] ?? null;
+
+        return ($v !== null && $v !== '') ? (string) $v : '#ff3d33';
+    }
+
+    // ------------------------------------------------------------------
+    // Legacy / config-only accessors (kept for backward compat)
+    // ------------------------------------------------------------------
+
     public static function appName(): string
     {
         return (string) config('app.brand.display_name', config('app.name', 'HR Management System'));
-    }
-
-    public static function brandColor(): string
-    {
-        return '#ff3d33';
     }
 
     public static function defaultLogoUrl(): string
